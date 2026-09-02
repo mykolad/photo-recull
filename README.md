@@ -30,12 +30,15 @@ Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download) and a Google
 client — see **[docs/SETUP.md](docs/SETUP.md)** for the one-time Google Cloud setup and
 `credentials.json`.
 
-```bash
-# 1. Dry run — pick surviving photos in the browser, review the report, cache the pick
-dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --dry-run --report --cache 2026-08.json
+Caching and the review report are automatic, so the normal flow needs no extra flags:
 
-# 2. Stage the candidates for review (reuses the cache — no re-picking)
-dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --stage --cache 2026-08.json
+```bash
+# 1. Dry run — pick surviving photos in the browser. Auto-saves the pick and
+#    opens an HTML report to review.
+dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --dry-run
+
+# 2. Stage the candidates for review (reuses the cached pick — no re-picking)
+dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --stage
 
 # 3. Once you're happy with the staged folder, delete it yourself,
 #    or re-run with --delete (permanent).
