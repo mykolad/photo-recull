@@ -1,0 +1,26 @@
+## .NET
+bin/
+obj/
+*.user
+
+## Google OAuth tokens and secrets — never commit these
+credentials.json
+token_store/
+token_store_picker/
+
+## Generated review artifacts at the repo root (may contain personal photo data):
+## HTML reports (--report) and picker cache files (--cache).
+/*.html
+/*.json
+## Staging folders (--stage)
+_staged*/
+
+## VS / Rider
+.vs/
+.idea/
+*.suo
+*.sln.docstates
+
+## OS
+Thumbs.db
+.DS_Store

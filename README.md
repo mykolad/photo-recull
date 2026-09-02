@@ -1,0 +1,63 @@
+# PhotoCleanup
+
+Find and remove OneDrive Camera Roll photos that you've already deleted from Google Photos.
+
+## Why
+
+iPhone photos back up to Google Photos, iCloud, **and** OneDrive. Deleting a photo
+from Google Photos also removes it from iCloud (they sync) — but OneDrive keeps its
+copy forever. Over years, OneDrive accumulates thousands of stale duplicates you
+already curated out of Google Photos. PhotoCleanup finds them.
+
+## How it works
+
+1. You select the photos you **still have** in Google Photos using the Google Photos
+   Picker (opens in your browser, multi-select).
+2. PhotoCleanup scans your local OneDrive folder, identifies iPhone photos, and reads
+   each one's capture time.
+3. It matches OneDrive photos to Google photos by UTC timestamp (±2s, **one-to-one** —
+   so a culled burst doesn't keep every frame).
+4. OneDrive iPhone photos with **no** match were deleted from Google Photos → they're
+   flagged as removal candidates.
+5. Review them in an HTML report, then **stage** (move for review) or **delete**.
+
+> Note: because of a 2025 Google API change, the whole-library read API is gone — you
+> pick the surviving photos manually. See [docs/SETUP.md](docs/SETUP.md).
+
+## Quick start
+
+Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download) and a Google OAuth
+client — see **[docs/SETUP.md](docs/SETUP.md)** for the one-time Google Cloud setup and
+`credentials.json`.
+
+```bash
+# 1. Dry run — pick surviving photos in the browser, review the report, cache the pick
+dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --dry-run --report --cache 2026-08.json
+
+# 2. Stage the candidates for review (reuses the cache — no re-picking)
+dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --stage --cache 2026-08.json
+
+# 3. Once you're happy with the staged folder, delete it yourself,
+#    or re-run with --delete (permanent).
+```
+
+Work **one month at a time** so the manual pick stays manageable, and prefer
+`--dry-run`/`--stage` over `--delete`.
+
+## Documentation
+
+- **[docs/SETUP.md](docs/SETUP.md)** — Google Cloud / OAuth setup
+- **[docs/USAGE.md](docs/USAGE.md)** — full command-line reference and workflows
+
+## Tests
+
+```bash
+dotnet test
+```
+
+The two sample images under `PhotoCleanup.Tests/TestData/` are neutral stock photos
+stamped with only the EXIF the tests need (no location or personal data).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
