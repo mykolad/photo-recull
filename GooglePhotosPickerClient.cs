@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Util.Store;
 
 namespace PhotoCleanup;
@@ -41,6 +42,11 @@ public class GooglePhotosPickerClient
     /// <summary>
     /// Runs the OAuth2 flow (browser on first run, cached token afterwards)
     /// and returns an authorized HttpClient scoped to the Picker API.
+    ///
+    /// If the cached refresh token has expired or been revoked — common for
+    /// OAuth apps in "Testing" status, whose refresh tokens expire after 7 days
+    /// (invalid_grant) — the stale token is cleared automatically and the
+    /// consent flow is re-run, so the caller never has to delete it by hand.
     /// </summary>
     public async Task<HttpClient> AuthorizeAsync()
     {
@@ -48,20 +54,43 @@ public class GooglePhotosPickerClient
         await using (var stream = File.OpenRead(_credentialsPath))
             secrets = await GoogleClientSecrets.FromStreamAsync(stream);
 
-        var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-            secrets.Secrets,
-            [PickerScope],
-            "user",
-            CancellationToken.None,
-            new FileDataStore(_tokenStorePath, true));
+        var dataStore = new FileDataStore(_tokenStorePath, true);
 
-        if (credential.Token.IsStale)
-            await credential.RefreshTokenAsync(CancellationToken.None);
+        UserCredential credential;
+        try
+        {
+            credential = await AuthorizeAndRefreshAsync(secrets, dataStore);
+        }
+        catch (TokenResponseException ex) when (ex.Error?.Error == "invalid_grant")
+        {
+            Console.WriteLine("Cached Google token has expired or was revoked — re-authenticating...");
+            await dataStore.ClearAsync();
+            credential = await AuthorizeAndRefreshAsync(secrets, dataStore);
+        }
 
         var client = new HttpClient();
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", credential.Token.AccessToken);
         return client;
+    }
+
+    private static async Task<UserCredential> AuthorizeAndRefreshAsync(
+        GoogleClientSecrets secrets, IDataStore dataStore)
+    {
+        var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+            secrets.Secrets,
+            [PickerScope],
+            "user",
+            CancellationToken.None,
+            dataStore);
+
+        // Force the refresh here so an expired/revoked refresh token surfaces as
+        // invalid_grant at this point (where the caller clears and retries),
+        // rather than later on the first API call.
+        if (credential.Token.IsStale)
+            await credential.RefreshTokenAsync(CancellationToken.None);
+
+        return credential;
     }
 
     /// <summary>
