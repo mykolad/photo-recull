@@ -37,13 +37,19 @@ huge). Process one month at a time.
 
 ### Picker cache
 
+Caching is **on by default**: your pick is saved to `<range>.json` (e.g.
+`2026-08.json`) and reused automatically on later runs, so the picker and Google
+sign-in are skipped. This is what lets `--dry-run` → `--stage` → `--delete` run from a
+single pick with no re-picking.
+
 | Flag | Description |
 |------|-------------|
-| `--cache <file.json>` | On the first run, save the picked Google timestamps here. On later runs, reuse them and **skip the picker** (and Google sign-in). Lets you run dry-run → stage → delete from one pick. |
-| `--repick` | Ignore an existing cache and open the picker again, overwriting the cache. Use when your Google Photos have changed. |
+| `--cache <file.json>` | Override the default cache file path. |
+| `--repick` | Ignore the cache and open the picker again, overwriting it. Use when your Google Photos have changed. |
+| `--no-cache` | Don't save or reuse any cache — open the picker every run. |
 
-The cache stores only timestamps (no image data). If the cache's date range differs
-from `--from`/`--to`, the tool warns you to `--repick`.
+The cache stores only timestamps (no image data). If a cache's date range differs from
+`--from`/`--to`, the tool warns you to `--repick`.
 
 ### Authentication
 
@@ -56,7 +62,8 @@ from `--from`/`--to`, the tool warns you to `--repick`.
 
 | Flag | Description |
 |------|-------------|
-| `--report [file.html]` | Generate a visual HTML review with thumbnails (HEIC decoded to JPEG). `file` is optional and defaults to `<range>.html` (e.g. `2026-08.html`). Opens automatically. Cards are clickable to open the original file. |
+| `--report [file.html]` | Generate a visual HTML review with thumbnails (HEIC decoded to JPEG). **Generated automatically on `--dry-run`.** `file` is optional and defaults to `<range>.html` (e.g. `2026-08.html`). Opens in your default browser. Cards are clickable to open the original file. |
+| `--no-report` | Suppress the automatic dry-run report. |
 | `--output <file.csv>` | Write the candidate list to CSV. |
 
 ### Confirmation
@@ -73,23 +80,23 @@ from `--from`/`--to`, the tool warns you to `--repick`.
 
 ## Recommended workflow (safe → destructive)
 
-```bash
-# 1. Pick once, review with thumbnails, and cache the selection
-dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 \
-  --dry-run --report --cache 2026-08.json --browser chrome
+Caching and the review report are on by default, so a normal flow needs no extra flags:
 
-# 2. Reuse the cache to stage candidates for review (no re-picking)
+```bash
+# 1. Pick once. Auto-saves the pick to 2026-08.json and opens 2026-08.html to review.
 dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 \
-  --stage --cache 2026-08.json
+  --dry-run --browser chrome
+
+# 2. Stage candidates. Reuses 2026-08.json automatically — no re-picking.
+dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 --stage
 
 # 3. Inspect _staged_2026-08, drag anything wrong back into Camera Roll,
 #    then delete the staged folder yourself — or, if fully confident:
-dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 \
-  --delete --cache 2026-08.json --yes
+dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 --delete --yes
 ```
 
-After a dry run with candidates, the tool prints the exact command to proceed with
-staging, pre-filled with your paths, range, and cache.
+After a dry run with candidates, the tool prints the exact stage command, pre-filled with
+your paths, range, and cache.
 
 ## How matching works
 

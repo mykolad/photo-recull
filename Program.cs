@@ -15,6 +15,8 @@ DateOnly? toDate        = null;
 string? browser         = null;
 string? cachePath       = null;
 bool repick             = false;
+bool noCache            = false;
+bool noReport           = false;
 bool dryRun             = false;
 bool deleteMode         = false;
 bool assumeYes          = false;
@@ -39,6 +41,8 @@ for (int i = 0; i < args.Length; i++)
         case "--browser":     browser         = args[++i]; break;
         case "--cache":       cachePath       = args[++i]; break;
         case "--repick":      repick          = true;      break;
+        case "--no-cache":    noCache         = true;      break;
+        case "--no-report":   noReport        = true;      break;
         case "--dry-run":     dryRun          = true;      break;
         case "--delete":      deleteMode      = true;      break;
         case "--yes":
@@ -76,8 +80,13 @@ if (fromDate.HasValue && toDate.HasValue && fromDate > toDate)
     return 1;
 }
 
+// Caching is on by default: the pick is saved to (and reused from) a file named
+// after the date range, unless --no-cache. --cache overrides the path; --repick
+// forces a fresh pick.
+string? effectiveCache = noCache ? null : (cachePath ?? $"{DefaultLabel(fromDate, toDate)}.json");
+
 // When reusing a cache we never touch Google, so credentials aren't required.
-bool useCache = cachePath is not null && File.Exists(cachePath) && !repick;
+bool useCache = effectiveCache is not null && File.Exists(effectiveCache) && !repick;
 
 if (!useCache && !File.Exists(credentialsPath))
 {
@@ -107,16 +116,17 @@ if (useCache)
     // Reuse a previous pick — no picker, no Google auth.
     try
     {
-        var cache = PickCache.Load(cachePath!);
+        var cache = PickCache.Load(effectiveCache!);
         googleTimestamps = cache.Timestamps;
-        Console.WriteLine($"Loaded {googleTimestamps.Count} Google timestamps from cache: {cachePath}");
+        Console.WriteLine($"Loaded {googleTimestamps.Count} Google timestamps from cache: {effectiveCache}");
         Console.WriteLine($"  captured {cache.CapturedAtUtc:yyyy-MM-dd HH:mm} UTC for range {DescribeRange(cache.From, cache.To)}");
+        Console.WriteLine("  (use --repick to select photos again)");
         if (cache.From != fromDate || cache.To != toDate)
             Console.WriteLine($"  WARNING: cache range differs from current --from/--to ({rangeLabel}). Re-run with --repick to refresh.");
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"ERROR: Failed to read cache {cachePath}: {ex.Message}");
+        Console.Error.WriteLine($"ERROR: Failed to read cache {effectiveCache}: {ex.Message}");
         return 1;
     }
 }
@@ -161,17 +171,17 @@ else
         return 1;
     }
 
-    // Persist for subsequent review/stage/delete runs.
-    if (cachePath is not null)
+    // Persist for subsequent review/stage/delete runs (on by default).
+    if (effectiveCache is not null)
     {
         try
         {
-            PickCache.Save(cachePath, new PickCacheData(DateTimeOffset.UtcNow, fromDate, toDate, googleTimestamps));
-            Console.WriteLine($"Cached {googleTimestamps.Count} Google timestamps to: {cachePath}");
+            PickCache.Save(effectiveCache, new PickCacheData(DateTimeOffset.UtcNow, fromDate, toDate, googleTimestamps));
+            Console.WriteLine($"Cached {googleTimestamps.Count} Google timestamps to: {effectiveCache} (reused on the next run; --repick to refresh)");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"(Warning: could not write cache {cachePath}: {ex.Message})");
+            Console.Error.WriteLine($"(Warning: could not write cache {effectiveCache}: {ex.Message})");
         }
     }
 }
@@ -268,8 +278,8 @@ if (outputCsv is not null)
     Console.WriteLine($"\nCSV report saved to: {outputCsv}");
 }
 
-// Optional HTML report
-if (wantHtml)
+// HTML report: explicit via --report, or automatic on a dry run (unless --no-report).
+if (wantHtml || (dryRun && !noReport))
 {
     var htmlPath = outputHtml ?? $"{DefaultLabel(fromDate, toDate)}.html";
     Console.Write("Generating HTML report (decoding HEIC thumbnails)... ");
@@ -292,7 +302,7 @@ if (dryRun)
 {
     Console.WriteLine("\nDry run complete. No files were moved or deleted.");
     if (result.Unmatched.Count > 0)
-        PrintStageHint(oneDriveFolder, fromDate, toDate, cachePath, stageFolder);
+        PrintStageHint(oneDriveFolder, fromDate, toDate, effectiveCache, stageFolder);
     return 0;
 }
 
@@ -438,17 +448,22 @@ static void PrintHelp()
           --delete               Permanently delete candidates (requires confirmation)
           --yes, --force         Skip the confirmation prompt for --stage/--delete
 
-        PICKER CACHE (optional — pick once, then review/stage/delete offline):
-          --cache <file.json>    Save the picked Google timestamps here on the
-                                 first run, and reuse them on later runs so the
-                                 picker (and Google sign-in) is skipped.
-          --repick               Ignore an existing cache and open the picker
-                                 again, overwriting the cache file.
+        PICKER CACHE (on by default — pick once, then review/stage/delete offline):
+          By default the pick is saved to <range>.json (e.g. 2026-08.json) and
+          reused automatically on later runs, so the picker and Google sign-in
+          are skipped. This means the very next command (e.g. --stage) reuses
+          your selection with no re-picking.
+          --cache <file.json>    Override the cache file path.
+          --repick               Ignore the cache and open the picker again,
+                                 overwriting it (use when Google Photos changed).
+          --no-cache             Don't save or reuse a cache (pick every run).
 
         OUTPUT:
-          --report [file.html]   Generate visual HTML review (thumbnails).
-                                 File is optional; defaults to <range>.html
-                                 (e.g. 2026-08.html).
+          --report [file.html]   Generate a visual HTML review (thumbnails).
+                                 Generated automatically on --dry-run; file is
+                                 optional and defaults to <range>.html
+                                 (e.g. 2026-08.html). Opens in your default browser.
+          --no-report            Don't generate the automatic dry-run report.
           --output <file.csv>    Write candidates list to CSV
           --help                 Show this help
         """);
@@ -495,19 +510,21 @@ static bool IsWholeMonth(DateOnly from, DateOnly to) =>
 
 // After a dry run, print the exact command to move the candidates to staging.
 static void PrintStageHint(string oneDriveFolder, DateOnly? from, DateOnly? to,
-    string? cachePath, string? stageFolder)
+    string? effectiveCache, string? stageFolder)
 {
     var stageDir = stageFolder ?? $"_staged_{DefaultLabel(from, to)}";
 
     var cmd = $"dotnet run -- --onedrive \"{oneDriveFolder}\"";
     if (from.HasValue) cmd += $" --from {from:yyyy-MM-dd}";
     if (to.HasValue)   cmd += $" --to {to:yyyy-MM-dd}";
-    if (cachePath is not null) cmd += $" --cache \"{cachePath}\"";
+    if (effectiveCache is not null) cmd += $" --cache \"{effectiveCache}\"";
     cmd += $" --stage \"{stageDir}\"";
 
     Console.WriteLine();
     Console.WriteLine("To move these candidates to a staging folder for review, run:");
     Console.WriteLine($"  {cmd}");
-    if (cachePath is null)
-        Console.WriteLine("  (tip: add --cache <file.json> to this dry run and the stage run to avoid re-opening the picker)");
+    if (effectiveCache is not null)
+        Console.WriteLine($"  (reuses the cached pick in {effectiveCache} — no re-picking)");
+    else
+        Console.WriteLine("  (you used --no-cache, so this re-opens the picker; drop --no-cache to reuse the pick)");
 }
