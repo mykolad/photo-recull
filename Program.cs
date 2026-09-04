@@ -336,7 +336,7 @@ if (wantStage)
 if (deleteMode)
 {
     Console.WriteLine($"\nAbout to PERMANENTLY DELETE {result.Unmatched.Count} file(s).");
-    Console.WriteLine("This cannot be undone! Consider using --dry-run --report first.");
+    Console.WriteLine("This cannot be undone! Review the report first (run without --delete), or use --stage to move them instead.");
     if (assumeYes)
     {
         Console.WriteLine("--yes given: skipping confirmation.");
