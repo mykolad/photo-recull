@@ -33,9 +33,9 @@ client — see **[docs/SETUP.md](docs/SETUP.md)** for the one-time Google Cloud 
 Caching and the review report are automatic, so the normal flow needs no extra flags:
 
 ```bash
-# 1. Dry run — pick surviving photos in the browser. Auto-saves the pick and
-#    opens an HTML report to review.
-dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --dry-run
+# 1. Dry run (the default) — pick surviving photos in the browser. Auto-saves the
+#    pick and opens an HTML report to review. Prints the stage/delete commands.
+dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08
 
 # 2. Stage the candidates for review (reuses the cached pick — no re-picking)
 dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --stage

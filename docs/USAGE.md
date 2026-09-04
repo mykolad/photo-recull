@@ -4,8 +4,8 @@
 dotnet run -- --onedrive <folder> [options] <mode>
 ```
 
-You must supply `--onedrive` and exactly one **mode** (`--dry-run`, `--stage`, or
-`--delete`).
+You must supply `--onedrive`. The **mode** defaults to a dry run; pass `--stage` or
+`--delete` to act on the candidates.
 
 ## Parameters
 
@@ -15,13 +15,17 @@ You must supply `--onedrive` and exactly one **mode** (`--dry-run`, `--stage`, o
 |------|-------------|
 | `--onedrive <folder>` | Path to your local (synced) OneDrive Camera Roll folder. |
 
-### Mode (pick one)
+### Mode (default: dry run)
 
 | Flag | Description |
 |------|-------------|
-| `--dry-run` | Show candidates and write reports; change nothing. |
+| *(none)* | **Default.** Dry run — show candidates and write the report; change nothing. |
+| `--dry-run` | Explicit dry run (same as the default). |
 | `--stage [dir]` | Move candidates to a folder for manual review. `dir` is optional and defaults to `_staged_<range>` (e.g. `_staged_2026-08`). Nothing is deleted — review the folder, then delete it yourself. |
 | `--delete` | **Permanently** delete candidates. Prompts for confirmation unless `--yes`. |
+
+After a dry run with candidates, the tool prints the ready-to-run `--stage` and
+`--delete` commands, pre-filled with your paths, range, and cache.
 
 ### Date range
 
