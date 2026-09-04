@@ -67,12 +67,8 @@ if (oneDriveFolder is null)
     return 1;
 }
 
-if (!dryRun && !wantStage && !deleteMode)
-{
-    Console.Error.WriteLine("ERROR: specify one of --dry-run, --stage [dir], or --delete.");
-    PrintHelp();
-    return 1;
-}
+// Dry run is the default. An action mode (--stage / --delete) overrides it.
+dryRun = !wantStage && !deleteMode;
 
 if (fromDate.HasValue && toDate.HasValue && fromDate > toDate)
 {
@@ -302,7 +298,7 @@ if (dryRun)
 {
     Console.WriteLine("\nDry run complete. No files were moved or deleted.");
     if (result.Unmatched.Count > 0)
-        PrintStageHint(oneDriveFolder, fromDate, toDate, effectiveCache, stageFolder);
+        PrintNextSteps(oneDriveFolder, fromDate, toDate, effectiveCache, stageFolder);
     return 0;
 }
 
@@ -440,8 +436,10 @@ static void PrintHelp()
                                  default (e.g. --browser chrome). The HTML report
                                  always opens in your default browser.
 
-        MODE (pick one):
-          --dry-run              Show candidates, make no changes
+        MODE (default: dry run):
+          (no mode flag)         Dry run — show candidates and write the report;
+                                 change nothing. This is the default.
+          --dry-run              Explicit dry run (same as the default).
           --stage [dir]          Move candidates to a folder for manual review.
                                  Folder is optional; defaults to _staged_<range>
                                  (e.g. _staged_2026-08).
@@ -509,22 +507,27 @@ static bool IsWholeMonth(DateOnly from, DateOnly to) =>
     && to.Day == DateTime.DaysInMonth(to.Year, to.Month);
 
 // After a dry run, print the exact command to move the candidates to staging.
-static void PrintStageHint(string oneDriveFolder, DateOnly? from, DateOnly? to,
+static void PrintNextSteps(string oneDriveFolder, DateOnly? from, DateOnly? to,
     string? effectiveCache, string? stageFolder)
 {
     var stageDir = stageFolder ?? $"_staged_{DefaultLabel(from, to)}";
 
-    var cmd = $"dotnet run -- --onedrive \"{oneDriveFolder}\"";
-    if (from.HasValue) cmd += $" --from {from:yyyy-MM-dd}";
-    if (to.HasValue)   cmd += $" --to {to:yyyy-MM-dd}";
-    if (effectiveCache is not null) cmd += $" --cache \"{effectiveCache}\"";
-    cmd += $" --stage \"{stageDir}\"";
+    string BaseCmd()
+    {
+        var c = $"dotnet run -- --onedrive \"{oneDriveFolder}\"";
+        if (from.HasValue) c += $" --from {from:yyyy-MM-dd}";
+        if (to.HasValue)   c += $" --to {to:yyyy-MM-dd}";
+        if (effectiveCache is not null) c += $" --cache \"{effectiveCache}\"";
+        return c;
+    }
 
     Console.WriteLine();
-    Console.WriteLine("To move these candidates to a staging folder for review, run:");
-    Console.WriteLine($"  {cmd}");
-    if (effectiveCache is not null)
-        Console.WriteLine($"  (reuses the cached pick in {effectiveCache} — no re-picking)");
-    else
-        Console.WriteLine("  (you used --no-cache, so this re-opens the picker; drop --no-cache to reuse the pick)");
+    Console.WriteLine("Next steps:");
+    Console.WriteLine("  Move the candidates to a staging folder for review:");
+    Console.WriteLine($"    {BaseCmd()} --stage \"{stageDir}\"");
+    Console.WriteLine("  Or delete them permanently (irreversible; add --yes to skip the prompt):");
+    Console.WriteLine($"    {BaseCmd()} --delete");
+    Console.WriteLine(effectiveCache is not null
+        ? $"  Both reuse the cached pick in {effectiveCache} — no re-picking (use --repick to refresh)."
+        : "  (you used --no-cache, so these re-open the picker; drop --no-cache to reuse the pick.)");
 }
