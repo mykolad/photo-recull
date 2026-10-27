@@ -3,6 +3,10 @@
 Repeat your Google Photos culls on your other copies: find and remove OneDrive
 Camera Roll photos that you've already deleted from Google Photos.
 
+🌐 **Website:** [mykolad.github.io/photo-recull](https://mykolad.github.io/photo-recull/)
+(setup and usage guides, [privacy policy](https://mykolad.github.io/photo-recull/privacy),
+[terms of service](https://mykolad.github.io/photo-recull/terms))
+
 ## Why
 
 iPhone photos back up to Google Photos, iCloud, **and** OneDrive. Deleting a photo
