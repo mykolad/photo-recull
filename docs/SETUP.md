@@ -10,9 +10,14 @@ setup.
 2. Create a project (or reuse one).
 3. **APIs & Services → Library** → search **"Photos Picker API"** → **Enable**.
 4. **APIs & Services → OAuth consent screen**:
-   - User type: **External**, publishing status **Testing**.
+   - User type: **External**.
    - Under **Test users**, add the Google account whose photo library you'll compare
      against. (Only test users can use an unverified app — no Google verification needed.)
+   - Recommended: **Audience → Publish app** to move it from **Testing** to
+     **In production**. Google expires a Testing app's sign-in after 7 days, so you'd
+     sign in again every week. An unverified app in production keeps working for your
+     own account; you'll just keep seeing the "unverified app" warning when signing in.
+   - **Branding** links (home page, privacy policy, terms of service) are optional.
 5. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type: **Desktop app**.
    - Download the JSON.

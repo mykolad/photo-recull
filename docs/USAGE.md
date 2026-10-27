@@ -60,7 +60,7 @@ The cache stores only timestamps (no image data). If a cache's date range differ
 | Flag | Description |
 |------|-------------|
 | `--credentials <file>` | Path to the Google OAuth `credentials.json`. Default: `credentials.json` in the working directory. Not needed when reusing a `--cache`. |
-| `--browser <name\|path>` | Browser used to open the Google Photos picker: `chrome`, `edge`, `firefox`, an executable name, or a full path. Default: system default. Handy to sign in to Google via a browser that isn't your default. The HTML report always opens in your default browser. |
+| `--browser <name\|path>` | Browser used for Google sign-in and the Google Photos picker: `chrome`, `edge`, `firefox`, an executable name, or a full path. Default: system default. Handy to sign in to Google via a browser that isn't your default. The HTML report always opens in your default browser. |
 
 ### Output
 
