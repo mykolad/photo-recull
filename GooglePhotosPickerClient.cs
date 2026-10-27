@@ -74,7 +74,7 @@ public class GooglePhotosPickerClient
         return client;
     }
 
-    private static async Task<UserCredential> AuthorizeAndRefreshAsync(
+    private async Task<UserCredential> AuthorizeAndRefreshAsync(
         GoogleClientSecrets secrets, IDataStore dataStore)
     {
         var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
@@ -82,7 +82,8 @@ public class GooglePhotosPickerClient
             [PickerScope],
             "user",
             CancellationToken.None,
-            dataStore);
+            dataStore,
+            new BrowserCodeReceiver(_browser));
 
         // Force the refresh here so an expired/revoked refresh token surfaces as
         // invalid_grant at this point (where the caller clears and retries),
@@ -91,6 +92,16 @@ public class GooglePhotosPickerClient
             await credential.RefreshTokenAsync(CancellationToken.None);
 
         return credential;
+    }
+
+    /// <summary>
+    /// Loopback OAuth receiver that opens the consent page via
+    /// <see cref="BrowserLauncher"/>, so --browser applies to sign-in too
+    /// (the stock receiver always uses the system default browser).
+    /// </summary>
+    private sealed class BrowserCodeReceiver(string? browser) : LocalServerCodeReceiver
+    {
+        protected override bool OpenBrowser(string url) => BrowserLauncher.Open(url, browser);
     }
 
     /// <summary>

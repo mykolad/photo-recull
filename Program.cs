@@ -429,7 +429,7 @@ static void PrintHelp()
         AUTHENTICATION:
           --credentials <file>   Path to Google OAuth credentials JSON
                                  (default: credentials.json in current directory)
-          --browser <name|path>  Browser used to open the Google Photos picker:
+          --browser <name|path>  Browser used for Google sign-in and the picker:
                                  chrome, edge, firefox, an executable name, or a
                                  full path. Default: system default. Use this to
                                  sign in to Google via a browser other than your
