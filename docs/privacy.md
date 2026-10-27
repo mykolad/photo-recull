@@ -1,5 +1,5 @@
 ---
-title: Privacy Policy · PhotoRecull
+title: Privacy Policy
 ---
 
 # Privacy Policy
