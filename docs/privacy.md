@@ -1,5 +1,5 @@
 ---
-title: Privacy Policy · PhotoRecull
+title: Privacy Policy
 ---
 
 # Privacy Policy
@@ -68,5 +68,6 @@ history is on [GitHub](https://github.com/mykolad/photo-recull/commits/master/do
 
 ## Contact
 
-Questions: open an issue at
+Questions: email [photorecull-support@googlegroups.com](mailto:photorecull-support@googlegroups.com),
+or open an issue at
 [github.com/mykolad/photo-recull/issues](https://github.com/mykolad/photo-recull/issues).

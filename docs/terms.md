@@ -1,5 +1,5 @@
 ---
-title: Terms of Service · PhotoRecull
+title: Terms of Service
 ---
 
 # Terms of Service
@@ -49,5 +49,6 @@ Changes to these terms are published on this page with a new effective date.
 
 ## Contact
 
-Questions: open an issue at
+Questions: email [photorecull-support@googlegroups.com](mailto:photorecull-support@googlegroups.com),
+or open an issue at
 [github.com/mykolad/photo-recull/issues](https://github.com/mykolad/photo-recull/issues).
