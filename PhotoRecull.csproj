@@ -15,9 +15,9 @@
 
   <!-- Prevent the test project subfolder from being compiled into the main app -->
   <ItemGroup>
-    <Compile Remove="PhotoCleanup.Tests\**" />
-    <None Remove="PhotoCleanup.Tests\**" />
-    <EmbeddedResource Remove="PhotoCleanup.Tests\**" />
+    <Compile Remove="PhotoRecull.Tests\**" />
+    <None Remove="PhotoRecull.Tests\**" />
+    <EmbeddedResource Remove="PhotoRecull.Tests\**" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,6 @@
 # Setup
 
-PhotoCleanup reads which photos are still in your Google Photos account through the
+PhotoRecull reads which photos are still in your Google Photos account through the
 **Google Photos Picker API**, which requires a Google OAuth client. This is a one-time
 setup.
 
@@ -20,7 +20,7 @@ setup.
 ## 2. Add credentials to the project
 
 Rename the downloaded file to **`credentials.json`** and place it in the project folder
-(next to `PhotoCleanup.csproj`), or pass its path with `--credentials <file>`.
+(next to `PhotoRecull.csproj`), or pass its path with `--credentials <file>`.
 
 `credentials.json` and the cached OAuth token are **git-ignored** — never commit them.
 
@@ -38,7 +38,7 @@ Google), use `--browser chrome`. See [USAGE.md](USAGE.md).
 
 Before 2025-03-31 an app could read a user's entire library via the Library API. Google
 removed the `photoslibrary.readonly` scope, so that approach now returns
-`403 PERMISSION_DENIED`. PhotoCleanup uses the **Picker API** instead: you select the
+`403 PERMISSION_DENIED`. PhotoRecull uses the **Picker API** instead: you select the
 surviving photos yourself. Consequence: **completeness is on you** — any photo still in
 Google Photos that you forget to select will make its OneDrive twin look like a deletion
 candidate. That's why the tool defaults to non-destructive `--dry-run` / `--stage`, and

@@ -1,19 +1,20 @@
-# PhotoCleanup
+# PhotoRecull
 
-Find and remove OneDrive Camera Roll photos that you've already deleted from Google Photos.
+Repeat your Google Photos culls on your other copies: find and remove OneDrive
+Camera Roll photos that you've already deleted from Google Photos.
 
 ## Why
 
 iPhone photos back up to Google Photos, iCloud, **and** OneDrive. Deleting a photo
 from Google Photos also removes it from iCloud (they sync) — but OneDrive keeps its
 copy forever. Over years, OneDrive accumulates thousands of stale duplicates you
-already curated out of Google Photos. PhotoCleanup finds them.
+already curated out of Google Photos. PhotoRecull finds them.
 
 ## How it works
 
 1. You select the photos you **still have** in Google Photos using the Google Photos
    Picker (opens in your browser, multi-select).
-2. PhotoCleanup scans your local OneDrive folder, identifies iPhone photos, and reads
+2. PhotoRecull scans your local OneDrive folder, identifies iPhone photos, and reads
    each one's capture time.
 3. It matches OneDrive photos to Google photos by UTC timestamp (±2s, **one-to-one** —
    so a culled burst doesn't keep every frame).
@@ -58,7 +59,7 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 dotnet test
 ```
 
-The two sample images under `PhotoCleanup.Tests/TestData/` are neutral stock photos
+The two sample images under `PhotoRecull.Tests/TestData/` are neutral stock photos
 stamped with only the EXIF the tests need (no location or personal data).
 
 ## License

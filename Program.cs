@@ -1,5 +1,5 @@
 using System.Globalization;
-using PhotoCleanup;
+using PhotoRecull;
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -404,7 +404,7 @@ static string DescribeRange(DateOnly? from, DateOnly? to) => (from, to) switch
 static void PrintHelp()
 {
     Console.WriteLine("""
-        PhotoCleanup — Remove OneDrive photos already deleted from Google Photos
+        PhotoRecull — Remove OneDrive photos already deleted from Google Photos
 
         USAGE:
           dotnet run -- --onedrive <folder> [options] <mode>

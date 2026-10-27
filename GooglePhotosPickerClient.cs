@@ -5,7 +5,7 @@ using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Util.Store;
 
-namespace PhotoCleanup;
+namespace PhotoRecull;
 
 /// <summary>
 /// Obtains photo creation timestamps via the Google Photos Picker API.

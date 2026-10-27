@@ -1,6 +1,6 @@
-using PhotoCleanup;
+using PhotoRecull;
 
-namespace PhotoCleanup.Tests;
+namespace PhotoRecull.Tests;
 
 /// <summary>
 /// Tests that the date range filter correctly includes/excludes OneDrive photos

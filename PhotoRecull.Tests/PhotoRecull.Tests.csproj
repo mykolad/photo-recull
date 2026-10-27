@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PhotoCleanup.csproj" />
+    <ProjectReference Include="..\PhotoRecull.csproj" />
   </ItemGroup>
 
   <!-- Copy test HEIC files to output so tests can reference them by relative path -->

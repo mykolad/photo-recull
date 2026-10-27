@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text;
 using ImageMagick;
 
-namespace PhotoCleanup;
+namespace PhotoRecull;
 
 /// <summary>
 /// Generates a self-contained HTML review page.
@@ -44,7 +44,7 @@ public static class HtmlReportGenerator
             <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1">
-              <title>PhotoCleanup Review — {{rangeLabel}}</title>
+              <title>PhotoRecull Review — {{rangeLabel}}</title>
               <style>
                 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
                 body {
@@ -113,7 +113,7 @@ public static class HtmlReportGenerator
               </style>
             </head>
             <body>
-              <h1>PhotoCleanup Review</h1>
+              <h1>PhotoRecull Review</h1>
               <p class="meta">
                 Date range: <strong>{{rangeLabel}}</strong> &nbsp;|&nbsp;
                 OneDrive folder: <code>{{HtmlEncode(oneDriveFolder)}}</code>

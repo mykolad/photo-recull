@@ -1,4 +1,4 @@
-namespace PhotoCleanup;
+namespace PhotoRecull;
 
 public record MatchResult(
     List<OneDrivePhoto> Matched,

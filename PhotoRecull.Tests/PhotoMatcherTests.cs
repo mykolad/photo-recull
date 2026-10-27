@@ -1,6 +1,6 @@
-using PhotoCleanup;
+using PhotoRecull;
 
-namespace PhotoCleanup.Tests;
+namespace PhotoRecull.Tests;
 
 /// <summary>
 /// Unit tests for PhotoMatcher.Match.

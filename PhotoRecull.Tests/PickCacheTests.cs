@@ -1,7 +1,7 @@
-using PhotoCleanup;
+using PhotoRecull;
 using Xunit;
 
-namespace PhotoCleanup.Tests;
+namespace PhotoRecull.Tests;
 
 public class PickCacheTests
 {

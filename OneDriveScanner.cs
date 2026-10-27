@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 
-namespace PhotoCleanup;
+namespace PhotoRecull;
 
 public record OneDrivePhoto(
     string Path,

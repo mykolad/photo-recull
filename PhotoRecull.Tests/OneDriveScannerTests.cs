@@ -1,6 +1,6 @@
-using PhotoCleanup;
+using PhotoRecull;
 
-namespace PhotoCleanup.Tests;
+namespace PhotoRecull.Tests;
 
 /// <summary>
 /// Tests for OneDriveScanner using the two real sample HEIC files in TestData/.

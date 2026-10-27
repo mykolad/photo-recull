@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="PhotoRecull.csproj" />
+  <Project Path="PhotoRecull.Tests/PhotoRecull.Tests.csproj" />
+</Solution>
