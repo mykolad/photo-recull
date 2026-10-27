@@ -1,0 +1,5 @@
+# GitHub Pages site (https://mykolad.github.io/photo-recull/), built from this folder on master.
+# The home page, privacy policy and terms are what the Google OAuth consent screen links to.
+title: PhotoRecull
+description: Repeat your Google Photos culls on your other copies.
+theme: jekyll-theme-primer
