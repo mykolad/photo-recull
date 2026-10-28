@@ -58,8 +58,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     // Burst position text ("Frame 3 of 5, within 3 s"), set when grouped.
     public string BurstPositionText { get; set; } = "No";
 
-    public long SizeBytes => _sizeBytes ??= File.Exists(Photo.Path) ? new FileInfo(Photo.Path).Length : 0;
-    private long? _sizeBytes;
+    public long SizeBytes => Photo.SizeBytes;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KeepButtonText), nameof(KeptVeilOpacity))]

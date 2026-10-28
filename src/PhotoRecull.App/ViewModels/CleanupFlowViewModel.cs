@@ -575,11 +575,16 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             action == CleanupAction.Deleted ? r.Result.SucceededBytes : 0)).ToList();
         int succeeded = runs.Sum(r => r.SucceededCount);
 
+        int failed = runs.Sum(r => r.FailedCount);
         if (succeeded > 0)
         {
+            // Only a complete run moves the cleanup on: with failures left it stays
+            // Ready to act, so Library can reopen it and the rest can be retried.
             _cleanup = _cleanup! with
             {
-                State = action == CleanupAction.Staged ? CleanupState.Staged : CleanupState.Done,
+                State = failed > 0 ? CleanupState.ReadyToAct
+                    : action == CleanupAction.Staged ? CleanupState.Staged : CleanupState.Done,
+                ToRemoveCount = failed > 0 ? failed : _cleanup.ToRemoveCount,
                 StagedCount = action == CleanupAction.Staged ? _cleanup.StagedCount + succeeded : _cleanup.StagedCount,
                 RemovedCount = action == CleanupAction.Deleted ? _cleanup.RemovedCount + succeeded : _cleanup.RemovedCount,
                 FreedBytes = _cleanup.FreedBytes + runs.Sum(r => r.FreedBytes),
@@ -603,7 +608,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(PickAgainCommand), nameof(BackToLibraryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PickAgainCommand), nameof(BackToLibraryCommand), nameof(ViewHistoryCommand))]
     public partial bool IsActing { get; set; }
 
     // Leaving mid-run would let the same cleanup be reopened and scanned or acted
@@ -637,10 +642,9 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         int failed = perTarget.Sum(r => r.Result.Failures.Count);
         var verb = action == CleanupAction.Staged ? "Staged" : "Deleted";
         ResultTitle = $"{verb} {FileCount(succeeded)}.";
-        ResultMessage = (succeeded > 0
-                ? $"{Title} is now marked {(action == CleanupAction.Staged ? "Staged" : "Done")} in Library."
-                : "Nothing changed in Library.")
-            + (failed > 0 ? $" {FileCount(failed)} failed." : "");
+        ResultMessage = failed > 0
+            ? $"{FileCount(failed)} failed. {Title} stays Ready to act in Library, so you can retry them now or later."
+            : $"{Title} is now marked {(action == CleanupAction.Staged ? "Staged" : "Done")} in Library.";
         ResultHasFailures = failed > 0;
 
         ResultTargets.Clear();
@@ -665,8 +669,33 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     private static string FileCount(int count) => count == 1 ? "1 file" : $"{count:N0} files";
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanLeave))]
     private void ViewHistory() => ShellPage.Current?.ShowHistory();
+
+    // A scan with nothing to remove, or a review where every candidate was kept,
+    // still finishes the cleanup; nothing is moved or deleted.
+    [RelayCommand]
+    private void MarkAsDone()
+    {
+        if (_cleanup is null)
+            return;
+        _cleanup = _cleanup with
+        {
+            State = CleanupState.Done,
+            ToRemoveCount = 0,
+            KeptByUserCount = Review?.KeptByUserCount ?? _cleanup.KeptByUserCount,
+            LastActivityAt = DateTimeOffset.Now,
+        };
+        SaveCleanup();
+        ResultTitle = "Nothing to remove.";
+        ResultMessage = $"{Title} is now marked Done in Library. No files were moved or deleted.";
+        ResultHasFailures = false;
+        ResultTargets.Clear();
+        ResultFailures.Clear();
+        _lastFailures = [];
+        NotifyTitleChanged();
+        Step = CleanupFlowStep.Result;
+    }
 
     [RelayCommand(CanExecute = nameof(CanLeave))]
     private void BackToLibrary()

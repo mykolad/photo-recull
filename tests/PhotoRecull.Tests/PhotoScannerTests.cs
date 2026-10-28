@@ -137,6 +137,14 @@ public class PhotoScannerTests
     }
 
     [Fact]
+    public void ScanFolder_RecordsEachFilesSize()
+    {
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
+
+        Assert.All(photos, p => Assert.Equal(new FileInfo(p.Path).Length, p.SizeBytes));
+    }
+
+    [Fact]
     public void ScanFolder_AlreadyCancelled_Throws()
     {
         Assert.Throws<OperationCanceledException>(

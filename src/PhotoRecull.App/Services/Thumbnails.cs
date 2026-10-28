@@ -16,7 +16,9 @@ internal static class Thumbnails
 {
     private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase) { ".mp4", ".mov" };
     private static readonly SemaphoreSlim DecodeSlots = new(Math.Max(2, Environment.ProcessorCount / 2));
-    private static readonly Dictionary<(string Path, int Size), byte[]> EncodedCache = [];
+    // Keyed by the file's version too, so a photo replaced at the same path (and
+    // scanned again) never shows the previous file's picture.
+    private static readonly Dictionary<(string Path, DateTime LastWriteUtc, long Length, int Size), byte[]> EncodedCache = [];
     private const int MaxCachedThumbnails = 600;
 
     public static bool IsVideo(string path) => VideoExtensions.Contains(Path.GetExtension(path));
@@ -46,8 +48,10 @@ internal static class Thumbnails
 
     private static async Task<byte[]?> LoadPhotoThumbnailAsync(string path, int longestSidePixels)
     {
+        var file = new FileInfo(path);
+        var cacheKey = (path, file.LastWriteTimeUtc, file.Length, longestSidePixels);
         lock (EncodedCache)
-            if (EncodedCache.TryGetValue((path, longestSidePixels), out var cached))
+            if (EncodedCache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
         await DecodeSlots.WaitAsync();
@@ -66,7 +70,7 @@ internal static class Thumbnails
             {
                 if (EncodedCache.Count >= MaxCachedThumbnails)
                     EncodedCache.Clear();
-                EncodedCache[(path, longestSidePixels)] = encoded;
+                EncodedCache[cacheKey] = encoded;
             }
             return encoded;
         }

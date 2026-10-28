@@ -593,7 +593,14 @@
                     </StackPanel>
                     <Button
                         Grid.Column="1"
+                        Content="Mark as done"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Command="{x:Bind ViewModel.MarkAsDoneCommand}"
+                        Visibility="{x:Bind ViewModel.Review.HasNothingToActOn, Mode=OneWay}" />
+                    <Button
+                        Grid.Column="1"
                         Click="OnDeleteClick"
+                        Visibility="{x:Bind ViewModel.Review.HasCandidatesToActOn, Mode=OneWay}"
                         IsEnabled="{x:Bind views:XamlFunctions.CanAct(ViewModel.Review.HasCandidatesToActOn, ViewModel.IsActing), Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE74D;" FontSize="14" />
@@ -604,6 +611,7 @@
                         Grid.Column="2"
                         Style="{StaticResource AccentButtonStyle}"
                         Click="OnStageClick"
+                        Visibility="{x:Bind ViewModel.Review.HasCandidatesToActOn, Mode=OneWay}"
                         IsEnabled="{x:Bind views:XamlFunctions.CanAct(ViewModel.Review.HasCandidatesToActOn, ViewModel.IsActing), Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE8B7;" FontSize="14" />

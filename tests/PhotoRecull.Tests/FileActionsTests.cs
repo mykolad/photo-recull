@@ -117,6 +117,36 @@ public class FileActionsTests : IDisposable
 
     [Fact]
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void MoveToRecycleBin_PutsTheFileInTheRecycleBin_OnCiOnly()
+    {
+        // Runs only in GitHub Actions: it really recycles a file, which on a
+        // developer's PC would leave test files behind in their Recycle Bin.
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            return;
+        var photo = CreatePhoto($"photorecull-recycle-test-{Guid.NewGuid():N}.heic");
+
+        var result = FileActions.MoveToRecycleBin([photo]);
+
+        Assert.Equal(1, result.SucceededCount);
+        Assert.Empty(result.Failures);
+        Assert.False(File.Exists(photo.Path));
+        // Explorer may hide extensions in the Recycle Bin's display names.
+        Assert.Contains(RecycleBinDisplayNames(), name => name.StartsWith(Path.GetFileNameWithoutExtension(photo.FileName)));
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static List<string> RecycleBinDisplayNames()
+    {
+        const int RecycleBinFolder = 10;
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!)!;
+        var names = new List<string>();
+        foreach (dynamic item in shell.NameSpace(RecycleBinFolder).Items())
+            names.Add((string)item.Name);
+        return names;
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public void HasRecycleBin_LocalDriveYes_NetworkShareNo()
     {
         Assert.True(FileActions.HasRecycleBin(Path.Combine(_targetFolder, "a.heic")));

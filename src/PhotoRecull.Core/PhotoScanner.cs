@@ -13,7 +13,10 @@ public record PhotoFile(
     DateTimeOffset? Timestamp,
     bool IsIphone,
     string? TimestampSource   // "filename", "exif", or null if unknown
-);
+)
+{
+    public long SizeBytes { get; init; }
+}
 
 /// <summary>
 /// Scans a local folder for photos, identifies iPhone-origin files, and
@@ -55,7 +58,7 @@ public static class PhotoScanner
             progress?.Report(new ScanProgress(FilesChecked: i + 1, FilesTotal: photoFiles.Count, CurrentFile: file));
             var fileName = Path.GetFileName(file);
             var (isIphone, timestamp, source) = ClassifyFile(file, fileName);
-            results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source));
+            results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source) { SizeBytes = new FileInfo(file).Length });
         }
 
         return results;

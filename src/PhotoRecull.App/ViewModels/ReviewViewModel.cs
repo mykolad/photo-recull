@@ -178,6 +178,8 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     public bool HasCandidatesToActOn => CandidatesToActOn.Count > 0;
 
+    public bool HasNothingToActOn => !HasCandidatesToActOn;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ToggleKeepInPreviewCommand))]
     public partial bool IsActionRunning { get; set; }
@@ -197,6 +199,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         OnPropertyChanged(nameof(ActionSummaryTitle));
         OnPropertyChanged(nameof(ActionSummaryDetail));
         OnPropertyChanged(nameof(HasCandidatesToActOn));
+        OnPropertyChanged(nameof(HasNothingToActOn));
     }
 
     // ---------------------------------------------------------------- export
