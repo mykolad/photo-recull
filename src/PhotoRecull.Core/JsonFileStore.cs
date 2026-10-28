@@ -24,8 +24,9 @@ public sealed class JsonFileStore<T>(string filePath) where T : new()
         {
             json = File.ReadAllText(FilePath);
         }
-        catch (FileNotFoundException)
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
+            // On first launch even the app's data folder doesn't exist yet.
             return new T();
         }
 

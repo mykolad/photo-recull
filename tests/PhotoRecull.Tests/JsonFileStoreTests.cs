@@ -20,6 +20,15 @@ public class JsonFileStoreTests : IDisposable
     }
 
     [Fact]
+    public void LoadOrCreateDefault_FirstLaunchWithoutTheDataFolder_ReturnsDefault()
+    {
+        var settings = new JsonFileStore<AppSettings>(Path.Combine(_folder, "not-created-yet", "settings.json"))
+            .LoadOrCreateDefault();
+
+        Assert.Null(settings.SetupCompletedAt);
+    }
+
+    [Fact]
     public void LoadOrCreateDefault_DamagedFile_BacksUpItsContentsAndReturnsDefault()
     {
         var path = Path.Combine(_folder, "library.json");
