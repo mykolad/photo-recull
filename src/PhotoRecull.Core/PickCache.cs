@@ -18,8 +18,21 @@ public static class PickCache
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
-    public static void Save(string path, PickCacheData data) =>
-        File.WriteAllText(path, JsonSerializer.Serialize(data, Options));
+    // Written to a temporary file next to it and then swapped in, so an
+    // interrupted save (e.g. while picking again) leaves the previous pick intact.
+    public static void Save(string path, PickCacheData data)
+    {
+        var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(data, Options));
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporaryPath);
+        }
+    }
 
     public static PickCacheData Load(string path) =>
         JsonSerializer.Deserialize<PickCacheData>(File.ReadAllText(path))
