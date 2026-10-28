@@ -1,14 +1,10 @@
-using PhotoRecull.Core;
-using PhotoRecull.Core.Library;
-using PhotoRecull.Core.Settings;
+using PhotoRecull.Core.Storage;
 
 namespace PhotoRecull.App.Services;
 
 internal static class AppServices
 {
-    public static JsonFileStore<AppSettings> SettingsStore { get; } = new(AppDataPaths.SettingsFile);
+    public static AppStateDatabase Database { get; } = new(AppDataPaths.DatabaseFile);
 
-    public static JsonFileStore<LibraryData> LibraryStore { get; } = new(AppDataPaths.LibraryFile);
-
-    public static GoogleAccount Google { get; } = new();
+    public static GoogleAccount Google { get; } = new(Database);
 }

@@ -32,9 +32,12 @@ your OneDrive Camera Roll) to find copies of photos you've deleted from Google P
 
 **Where it's stored.** On your computer only:
 
-- the capture times, with the date range and when you picked them, in a cache file (for
-  example `2026-08.json`) in the folder you run PhotoRecull from;
-- the sign-in token Google issues, in a `token_store_picker` folder next to the app.
+- **Windows app:** the capture times, with the date range and when you picked them, and the
+  sign-in token Google issues, in the app's database (`photorecull.db` in
+  `%LOCALAPPDATA%\PhotoRecull`), together with your settings and cleanup history.
+- **Command-line app:** the capture times in a cache file (for example `2026-08.json`) in
+  the folder you run it from, and the sign-in token in a `token_store_picker` folder next
+  to the app.
 
 You can delete these files at any time.
 

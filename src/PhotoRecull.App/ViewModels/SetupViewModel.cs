@@ -154,14 +154,14 @@ public sealed partial class SetupViewModel : ObservableObject
     [RelayCommand]
     private void FinishSetup()
     {
-        var settings = AppServices.SettingsStore.LoadOrCreateDefault() with
+        var settings = AppServices.Database.LoadSettings() with
         {
             SignInBrowser = SignInBrowser,
             Targets = [new TargetSettings(TargetKind.OneDrive, FolderPath.Trim())],
             DeveloperCredentialsPath = NullIfEmpty(DeveloperCredentialsPath),
             SetupCompletedAt = DateTimeOffset.Now,
         };
-        AppServices.SettingsStore.Save(settings);
+        AppServices.Database.SaveSettings(settings);
         App.MainWindow.ShowShell("Setup complete. Start your first cleanup.");
     }
 

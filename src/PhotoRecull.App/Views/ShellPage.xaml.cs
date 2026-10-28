@@ -30,7 +30,7 @@ public sealed partial class ShellPage : Page
 #if DEBUG
         if (DebugScreenshot.RequestedCleanupStep() is { } debugRequest)
             OpenCleanupFlow(new CleanupFlowRequest(debugRequest.CleanupId,
-                AppServices.SettingsStore.LoadOrCreateDefault().Targets));
+                AppServices.Database.LoadSettings().Targets));
 #endif
     }
 
@@ -52,7 +52,7 @@ public sealed partial class ShellPage : Page
 
     public void RefreshConnectedServices()
     {
-        var settings = AppServices.SettingsStore.LoadOrCreateDefault();
+        var settings = AppServices.Database.LoadSettings();
         var rows = new List<ConnectedServiceRow>
         {
             new("", "Google Photos", AppServices.Google.IsSignedIn ? "Source · Signed in" : "Source · Not signed in"),

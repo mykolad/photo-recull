@@ -8,11 +8,5 @@ internal static class AppDataPaths
         Environment.GetEnvironmentVariable("PHOTORECULL_DATA_FOLDER")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoRecull");
 
-    public static string SettingsFile => Path.Combine(Root, "settings.json");
-
-    public static string LibraryFile => Path.Combine(Root, "library.json");
-
-    public static string GoogleTokenFolder => Path.Combine(Root, "google-token");
-
-    public static string PicksFolder => Path.Combine(Root, "picks");
+    public static string DatabaseFile => Path.Combine(Root, "photorecull.db");
 }

@@ -18,7 +18,7 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     public LibraryViewModel()
     {
-        var cleanups = _cleanups = AppServices.LibraryStore.LoadOrCreateDefault().Cleanups;
+        var cleanups = _cleanups = AppServices.Database.LoadCleanups();
 
         foreach (var entry in LibraryTimeline.CleanupsAndGapsNewestFirst(cleanups, _today))
             Cards.Add(entry switch
@@ -109,7 +109,7 @@ public sealed partial class LibraryViewModel : ObservableObject
     // whose targets have all been removed since) use the current ones.
     private static List<TargetSettings> TargetsToReopen(Cleanup cleanup)
     {
-        var configured = AppServices.SettingsStore.LoadOrCreateDefault().Targets;
+        var configured = AppServices.Database.LoadSettings().Targets;
         var stillConfigured = cleanup.Targets?.Where(configured.Contains).ToList() ?? [];
         return stillConfigured.Count > 0 ? stillConfigured : configured;
     }

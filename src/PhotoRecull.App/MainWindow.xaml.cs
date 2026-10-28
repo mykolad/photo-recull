@@ -29,7 +29,7 @@ public sealed partial class MainWindow : Window
 
     public void ShowStartPage()
     {
-        if (AppServices.SettingsStore.LoadOrCreateDefault().SetupCompletedAt is null)
+        if (AppServices.Database.LoadSettings().SetupCompletedAt is null)
             RootFrame.Navigate(typeof(SetupPage));
         else
             ShowShell();

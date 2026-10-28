@@ -71,8 +71,8 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 | `src/PhotoRecull.App` | The Windows app (WinUI 3), in progress: setup, the Library, and a cleanup up to scanning (pick, date range, scan) |
 | `tests/PhotoRecull.Tests` | xUnit tests |
 
-To run the Windows app: `dotnet run --project src/PhotoRecull.App`. It keeps its data in
-`%LOCALAPPDATA%\PhotoRecull`. See [docs/SETUP.md](docs/SETUP.md#windows-app-built-in-google-client)
+To run the Windows app: `dotnet run --project src/PhotoRecull.App`. It keeps its settings,
+cleanups, picks and Google sign-in in a SQLite database, `%LOCALAPPDATA%\PhotoRecull\photorecull.db`. See [docs/SETUP.md](docs/SETUP.md#windows-app-built-in-google-client)
 for giving it a built-in Google client.
 
 ## Tests

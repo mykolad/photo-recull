@@ -27,11 +27,11 @@ public sealed partial class NewCleanupDialog : ContentDialog, INotifyPropertyCha
 
     public NewCleanupDialog()
     {
-        var settings = AppServices.SettingsStore.LoadOrCreateDefault();
+        var settings = AppServices.Database.LoadSettings();
         TargetChoices = settings.Targets
             .Select(t => new TargetChoice(t, () => OnPropertyChanged(nameof(HasSelectedTarget))))
             .ToList();
-        var lastCleanupEnd = CleanupNeighbors.For(AppServices.LibraryStore.LoadOrCreateDefault().Cleanups, null).PreviousCleanupEnd;
+        var lastCleanupEnd = CleanupNeighbors.For(AppServices.Database.LoadCleanups(), null).PreviousCleanupEnd;
         PickerStartHint = lastCleanupEnd is { } end
             ? $"Your last cleanup ends on {end:d MMM yyyy}. In the picker, start from {end.AddDays(1):d MMM yyyy}."
             : null;
