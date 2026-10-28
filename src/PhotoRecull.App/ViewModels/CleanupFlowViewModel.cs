@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Data.Sqlite;
 using Microsoft.UI.Dispatching;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
@@ -23,7 +24,7 @@ public enum CleanupFlowStep
 public sealed partial class CleanupFlowViewModel : ObservableObject
 {
     private readonly DispatcherQueue _uiThread = DispatcherQueue.GetForCurrentThread();
-    private readonly AppSettings _settings = AppServices.SettingsStore.LoadOrCreateDefault();
+    private readonly AppSettings _settings = AppServices.Database.LoadSettings();
     // Read each time: the app can stay open past midnight.
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
     private Cleanup? _cleanup;
@@ -36,11 +37,11 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     {
         Targets = request.Targets;
         _cleanup = request.ExistingCleanupId is { } id
-            ? AppServices.LibraryStore.LoadOrCreateDefault().Cleanups.FirstOrDefault(c => c.Id == id)
+            ? AppServices.Database.LoadCleanups().FirstOrDefault(c => c.Id == id)
             : null;
         SignInBrowserName = SignInBrowserChoice.DisplayNameFor(_settings.SignInBrowser);
         TargetsLine = string.Join(", ", Targets.Select(t => SyncTargets.DisplayName(t.Kind)));
-        IsSavedPickVisible = _cleanup is not null && PickStore.LoadOrNull(_cleanup.Id) is not null;
+        IsSavedPickVisible = _cleanup is not null && AppServices.Database.LoadPick(_cleanup.Id) is not null;
     }
 
     public IReadOnlyList<TargetSettings> Targets { get; }
@@ -131,7 +132,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             await PickInBrowserAsync();
             return;
         }
-        if (_cleanup is null || PickStore.LoadOrNull(_cleanup.Id) is not { } savedPick)
+        if (_cleanup is null || AppServices.Database.LoadPick(_cleanup.Id) is not { } savedPick)
         {
             IsSavedPickVisible = false;
             PickError = "The saved pick couldn't be read. Pick again.";
@@ -145,7 +146,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     private void CancelPick()
     {
         _pickCancellation?.Cancel();
-        if (_cleanup is not null && PickStore.LoadOrNull(_cleanup.Id) is not null)
+        if (_cleanup is not null && AppServices.Database.LoadPick(_cleanup.Id) is not null)
         {
             IsSavedPickVisible = true;
             ShellPage.Current?.ShowToast("Pick cancelled. The saved pick is unchanged.");
@@ -224,8 +225,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         }
     }
 
-    // The new pick replaces the cleanup's details only once its file is saved, so
-    // a failed save leaves the old pick and the details that describe it together.
+    // The pick and the cleanup details that describe it are saved in one
+    // transaction, and only then replace what this flow shows.
     private void SavePick(List<DateTimeOffset> timestamps)
     {
         var pickedDays = timestamps.Select(t => DateRangeFilter.CaptureDay(t, TimeZoneInfo.Local)).ToList();
@@ -255,16 +256,15 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
         try
         {
-            PickStore.Save(pickedCleanup.Id, new PickCacheData(DateTimeOffset.UtcNow, earliest, latest, timestamps));
+            AppServices.Database.SavePickWithCleanup(pickedCleanup, timestamps);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (SqliteException ex)
         {
             PickError = $"Couldn't save the pick: {ex.Message}";
             return;
         }
         _cleanup = pickedCleanup;
         _pickedTimestamps = timestamps;
-        SaveCleanup();
         OnPropertyChanged(nameof(SavedPickTitle));
         OnPropertyChanged(nameof(SavedPickDetail));
         OnPropertyChanged(nameof(WaitingHeadline));
@@ -509,14 +509,9 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         TitleChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void SaveCleanup()
-    {
-        var library = AppServices.LibraryStore.LoadOrCreateDefault();
-        var cleanups = library.Cleanups.Where(c => c.Id != _cleanup!.Id).Append(_cleanup!).OrderBy(c => c.From).ToList();
-        AppServices.LibraryStore.Save(library with { Cleanups = cleanups });
-    }
+    private void SaveCleanup() => AppServices.Database.SaveCleanup(_cleanup!);
 
-    private static List<Cleanup> AllCleanups() => AppServices.LibraryStore.LoadOrCreateDefault().Cleanups;
+    private static List<Cleanup> AllCleanups() => AppServices.Database.LoadCleanups();
 
     private static string FormatDay(DateOnly day) => day.ToString("d MMM yyyy");
 

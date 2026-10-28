@@ -29,13 +29,13 @@ public class GooglePhotosPickerClient
     private const int PageSize = 100;
 
     private readonly ClientSecrets _oauthClient;
-    private readonly string _tokenStoreFolder;
+    private readonly IDataStore _tokenStore;
     private readonly string? _browser;
 
-    public GooglePhotosPickerClient(ClientSecrets oauthClient, string tokenStoreFolder, string? browser = null)
+    public GooglePhotosPickerClient(ClientSecrets oauthClient, IDataStore tokenStore, string? browser = null)
     {
         _oauthClient = oauthClient;
-        _tokenStoreFolder = tokenStoreFolder;
+        _tokenStore = tokenStore;
         _browser = browser;
     }
 
@@ -57,18 +57,16 @@ public class GooglePhotosPickerClient
     public async Task<HttpClient> AuthorizeAsync(
         Action? onReauthenticatingAfterExpiredToken = null, CancellationToken cancellationToken = default)
     {
-        var dataStore = new FileDataStore(_tokenStoreFolder, true);
-
         UserCredential credential;
         try
         {
-            credential = await AuthorizeAndRefreshAsync(dataStore, cancellationToken);
+            credential = await AuthorizeAndRefreshAsync(cancellationToken);
         }
         catch (TokenResponseException ex) when (ex.Error?.Error == "invalid_grant")
         {
             onReauthenticatingAfterExpiredToken?.Invoke();
-            await dataStore.ClearAsync();
-            credential = await AuthorizeAndRefreshAsync(dataStore, cancellationToken);
+            await _tokenStore.ClearAsync();
+            credential = await AuthorizeAndRefreshAsync(cancellationToken);
         }
 
         var client = new HttpClient();
@@ -77,15 +75,14 @@ public class GooglePhotosPickerClient
         return client;
     }
 
-    private async Task<UserCredential> AuthorizeAndRefreshAsync(
-        IDataStore dataStore, CancellationToken cancellationToken)
+    private async Task<UserCredential> AuthorizeAndRefreshAsync(CancellationToken cancellationToken)
     {
         var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
             _oauthClient,
             [PickerScope],
             "user",
             cancellationToken,
-            dataStore,
+            _tokenStore,
             new BrowserCodeReceiver(_browser));
 
         // Force the refresh here so an expired/revoked refresh token surfaces as
