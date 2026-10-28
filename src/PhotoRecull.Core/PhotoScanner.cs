@@ -56,9 +56,20 @@ public static class PhotoScanner
             var file = photoFiles[i];
 
             progress?.Report(new ScanProgress(FilesChecked: i + 1, FilesTotal: photoFiles.Count, CurrentFile: file));
+            long sizeBytes;
+            try
+            {
+                sizeBytes = new FileInfo(file).Length;
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                // OneDrive (or the user) removed or renamed it since the folder was
+                // listed; it's no longer there to keep or remove, so skip it.
+                continue;
+            }
             var fileName = Path.GetFileName(file);
             var (isIphone, timestamp, source) = ClassifyFile(file, fileName);
-            results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source) { SizeBytes = new FileInfo(file).Length });
+            results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source) { SizeBytes = sizeBytes });
         }
 
         return results;
