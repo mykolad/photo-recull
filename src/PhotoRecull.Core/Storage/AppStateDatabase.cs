@@ -12,7 +12,6 @@ namespace PhotoRecull.Core.Storage;
 // sees, say, a new pick next to the old cleanup details after an interruption.
 public sealed class AppStateDatabase
 {
-    private const int CurrentSchemaVersion = 1;
     private const string DayFormat = "yyyy-MM-dd";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { Converters = { new JsonStringEnumConverter() } };
@@ -174,6 +173,90 @@ public sealed class AppStateDatabase
         transaction.Commit();
     }
 
+    // ------------------------------------------------------------------ photos the user chose to keep
+
+    public HashSet<string> LoadKeptPhotoPaths(Guid cleanupId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT file_path FROM kept_photos WHERE cleanup_id = $cleanupId";
+        command.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
+        using var reader = command.ExecuteReader();
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read())
+            paths.Add(reader.GetString(0));
+        return paths;
+    }
+
+    // Windows paths are case-insensitive for all letters, not only ASCII as SQLite's
+    // NOCASE is, so photos are keyed by the same upper-casing OrdinalIgnoreCase uses.
+    public void SetPhotoKept(Guid cleanupId, string filePath, bool isKept) =>
+        Execute(isKept
+                ? "INSERT OR IGNORE INTO kept_photos (cleanup_id, path_key, file_path) VALUES ($cleanupId, $key, $path)"
+                : "DELETE FROM kept_photos WHERE cleanup_id = $cleanupId AND path_key = $key",
+            ("$cleanupId", cleanupId.ToString()), ("$key", filePath.ToUpperInvariant()), ("$path", filePath));
+
+    // ------------------------------------------------------------------ stage and delete runs
+
+    // The runs and the cleanup's new state (Staged or Done, counts) belong together.
+    public void RecordRunsWithCleanup(Cleanup cleanup, IReadOnlyCollection<CleanupRun> runs)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        UpsertCleanup(transaction, cleanup);
+        using var insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = """
+            INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, destination,
+                              succeeded_count, failed_count, freed_bytes)
+            VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination,
+                    $succeeded, $failed, $freed)
+            """;
+        foreach (var run in runs)
+        {
+            insert.Parameters.Clear();
+            insert.Parameters.AddWithValue("$cleanupId", run.CleanupId.ToString());
+            // Stored in UTC so that sorting the text sorts by time, even across a
+            // daylight-saving change.
+            insert.Parameters.AddWithValue("$ranAt", run.RanAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            insert.Parameters.AddWithValue("$action", run.Action.ToString());
+            insert.Parameters.AddWithValue("$targetKind", run.Target.Kind.ToString());
+            insert.Parameters.AddWithValue("$targetFolder", run.Target.FolderPath);
+            insert.Parameters.AddWithValue("$destination", (object?)run.Destination ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$succeeded", run.SucceededCount);
+            insert.Parameters.AddWithValue("$failed", run.FailedCount);
+            insert.Parameters.AddWithValue("$freed", run.FreedBytes);
+            insert.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+
+    public List<CleanupRun> LoadRunsNewestFirst()
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT cleanup_id, ran_at, action, target_kind, target_folder, destination,
+                   succeeded_count, failed_count, freed_bytes
+            FROM runs ORDER BY ran_at DESC, id DESC
+            """;
+        using var reader = command.ExecuteReader();
+        var runs = new List<CleanupRun>();
+        while (reader.Read())
+        {
+            runs.Add(new CleanupRun(
+                Guid.Parse(reader.GetString(0)),
+                DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture),
+                Enum.Parse<CleanupAction>(reader.GetString(2)),
+                new TargetSettings(Enum.Parse<TargetKind>(reader.GetString(3)), reader.GetString(4)),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetInt32(6),
+                reader.GetInt32(7),
+                reader.GetInt64(8)));
+        }
+        return runs;
+    }
+
     // ------------------------------------------------------------------ key/value used by the Google token store
 
     public string? GetGoogleTokenValue(string key) =>
@@ -249,48 +332,73 @@ public sealed class AppStateDatabase
         }
 
         int version = Convert.ToInt32(ScalarOrNull(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture);
-        if (version >= CurrentSchemaVersion)
-            return;
-
-        using var transaction = connection.BeginTransaction();
-        using var create = connection.CreateCommand();
-        create.Transaction = transaction;
-        create.CommandText = $"""
-            CREATE TABLE settings (
-                key   TEXT PRIMARY KEY,
-                value TEXT NOT NULL);
-
-            CREATE TABLE cleanups (
-                id                  TEXT PRIMARY KEY,
-                from_day            TEXT NOT NULL,
-                to_day              TEXT NOT NULL,
-                state               TEXT NOT NULL,
-                picked_count        INTEGER NOT NULL,
-                picked_at           TEXT NOT NULL,
-                last_activity_at    TEXT NOT NULL,
-                targets             TEXT,
-                earliest_picked_day TEXT,
-                latest_picked_day   TEXT,
-                to_remove_count     INTEGER,
-                kept_by_user_count  INTEGER NOT NULL DEFAULT 0,
-                staged_count        INTEGER NOT NULL DEFAULT 0,
-                removed_count       INTEGER NOT NULL DEFAULT 0,
-                freed_bytes         INTEGER NOT NULL DEFAULT 0);
-
-            CREATE TABLE picked_photos (
-                cleanup_id            TEXT NOT NULL REFERENCES cleanups(id) ON DELETE CASCADE,
-                captured_at_utc_ticks INTEGER NOT NULL);
-            CREATE INDEX picked_photos_by_cleanup ON picked_photos (cleanup_id);
-
-            CREATE TABLE google_token (
-                key   TEXT PRIMARY KEY,
-                value TEXT NOT NULL);
-
-            PRAGMA user_version = {CurrentSchemaVersion};
-            """;
-        create.ExecuteNonQuery();
-        transaction.Commit();
+        for (; version < SchemaMigrations.Length; version++)
+        {
+            using var transaction = connection.BeginTransaction();
+            using var migrate = connection.CreateCommand();
+            migrate.Transaction = transaction;
+            migrate.CommandText = $"{SchemaMigrations[version]}{Environment.NewLine}PRAGMA user_version = {version + 1};";
+            migrate.ExecuteNonQuery();
+            transaction.Commit();
+        }
     }
+
+    // Applied in order; a database at user_version n runs migrations n.. onwards.
+    // Never edit a released migration: add a new one instead.
+    private static readonly string[] SchemaMigrations =
+    [
+        """
+        CREATE TABLE settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL);
+
+        CREATE TABLE cleanups (
+            id                  TEXT PRIMARY KEY,
+            from_day            TEXT NOT NULL,
+            to_day              TEXT NOT NULL,
+            state               TEXT NOT NULL,
+            picked_count        INTEGER NOT NULL,
+            picked_at           TEXT NOT NULL,
+            last_activity_at    TEXT NOT NULL,
+            targets             TEXT,
+            earliest_picked_day TEXT,
+            latest_picked_day   TEXT,
+            to_remove_count     INTEGER,
+            kept_by_user_count  INTEGER NOT NULL DEFAULT 0,
+            staged_count        INTEGER NOT NULL DEFAULT 0,
+            removed_count       INTEGER NOT NULL DEFAULT 0,
+            freed_bytes         INTEGER NOT NULL DEFAULT 0);
+
+        CREATE TABLE picked_photos (
+            cleanup_id            TEXT NOT NULL REFERENCES cleanups(id) ON DELETE CASCADE,
+            captured_at_utc_ticks INTEGER NOT NULL);
+        CREATE INDEX picked_photos_by_cleanup ON picked_photos (cleanup_id);
+
+        CREATE TABLE google_token (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL);
+        """,
+        """
+        CREATE TABLE kept_photos (
+            cleanup_id TEXT NOT NULL REFERENCES cleanups(id) ON DELETE CASCADE,
+            path_key   TEXT NOT NULL,
+            file_path  TEXT NOT NULL,
+            PRIMARY KEY (cleanup_id, path_key));
+
+        CREATE TABLE runs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            cleanup_id      TEXT NOT NULL REFERENCES cleanups(id) ON DELETE CASCADE,
+            ran_at          TEXT NOT NULL,
+            action          TEXT NOT NULL,
+            target_kind     TEXT NOT NULL,
+            target_folder   TEXT NOT NULL,
+            destination     TEXT,
+            succeeded_count INTEGER NOT NULL,
+            failed_count    INTEGER NOT NULL,
+            freed_bytes     INTEGER NOT NULL);
+        CREATE INDEX runs_by_time ON runs (ran_at);
+        """,
+    ];
 
     private static void UpsertCleanup(SqliteTransaction transaction, Cleanup cleanup)
     {

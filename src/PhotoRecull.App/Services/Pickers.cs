@@ -20,6 +20,18 @@ internal static class Pickers
         return (await picker.PickSingleFileAsync())?.Path;
     }
 
+    public static async Task<string?> PickSaveFileAsync(string suggestedName, string extension, string fileTypeLabel)
+    {
+        var picker = new FileSavePicker
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            SuggestedFileName = suggestedName,
+        };
+        picker.FileTypeChoices.Add(fileTypeLabel, [extension]);
+        AttachToMainWindow(picker);
+        return (await picker.PickSaveFileAsync())?.Path;
+    }
+
     // An unpackaged desktop app has no CoreWindow, so WinRT pickers must be told
     // which window owns them or they fail to open.
     private static void AttachToMainWindow(object picker) =>

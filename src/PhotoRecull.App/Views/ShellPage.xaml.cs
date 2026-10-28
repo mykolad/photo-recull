@@ -34,10 +34,11 @@ public sealed partial class ShellPage : Page
 #endif
     }
 
-    public async void ShowToast(string message)
+    public async void ShowToast(string message, InfoBarSeverity severity = InfoBarSeverity.Success)
     {
         _toastTimer?.Cancel();
         var timer = _toastTimer = new CancellationTokenSource();
+        Toast.Severity = severity;
         Toast.Message = message;
         Toast.IsOpen = true;
         try
@@ -95,6 +96,19 @@ public sealed partial class ShellPage : Page
         Navigation.SelectedItem = LibraryItem;
         ContentFrame.Navigate(typeof(LibraryPage));
         Navigation.IsPaneOpen = true;
+    }
+
+    public void SetNavigationLocked(bool isLocked)
+    {
+        LibraryItem.IsEnabled = HistoryItem.IsEnabled = ManageTargetsButton.IsEnabled = !isLocked;
+        if (Navigation.SettingsItem is NavigationViewItem settingsItem)
+            settingsItem.IsEnabled = !isLocked;
+    }
+
+    public void ShowHistory()
+    {
+        Navigation.IsPaneOpen = true;
+        Navigation.SelectedItem = HistoryItem;
     }
 
     // WinUI allows one open ContentDialog; a quick second click on New cleanup

@@ -70,7 +70,97 @@ public class FileActionsTests : IDisposable
             result = FileActions.DeletePermanently([locked, unlocked]);
 
         Assert.Equal(1, result.SucceededCount);
-        Assert.Equal(locked, Assert.Single(result.Failures).Photo);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(locked, failure.Photo);
+        Assert.Equal("Locked: another app or OneDrive sync is using it", failure.Reason);
         Assert.False(File.Exists(unlocked.Path));
+    }
+
+    [Fact]
+    public void Results_CountTheBytesOfFilesThatSucceeded()
+    {
+        var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("bb.heic") };
+
+        var result = FileActions.DeletePermanently(photos);
+
+        Assert.Equal("a.heic".Length + "bb.heic".Length, result.SucceededBytes);
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void MissingFile_IsReportedAsMissing()
+    {
+        var missing = new PhotoFile(Path.Combine(_targetFolder, "gone.heic"), "gone.heic",
+            DateTimeOffset.UtcNow, IsIphone: true, TimestampSource: "filename");
+
+        var stageResult = FileActions.MoveToStageFolder([missing], _stageFolder);
+        var recycleResult = FileActions.MoveToRecycleBin([missing]);
+
+        Assert.Equal("Missing: moved or deleted since the scan", Assert.Single(stageResult.Failures).Reason);
+        Assert.Equal("Missing: moved or deleted since the scan", Assert.Single(recycleResult.Failures).Reason);
+    }
+
+    [Fact]
+    public void MoveToStageFolder_UnusableFolder_FailsEveryPhotoWithoutThrowing()
+    {
+        var notAFolder = Path.Combine(_targetFolder, "taken-by-a-file");
+        File.WriteAllText(notAFolder, "a file where the stage folder should go");
+        var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
+
+        var result = FileActions.MoveToStageFolder(photos, notAFolder);
+
+        Assert.Equal(0, result.SucceededCount);
+        Assert.Equal(2, result.Failures.Count);
+        Assert.All(result.Failures, f => Assert.StartsWith("Can't use the stage folder", f.Reason));
+        Assert.All(photos, p => Assert.True(File.Exists(p.Path)));
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void MoveToRecycleBin_PutsTheFileInTheRecycleBin_OnCiOnly()
+    {
+        // Runs only in GitHub Actions: it really recycles a file, which on a
+        // developer's PC would leave test files behind in their Recycle Bin.
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true")
+            return;
+        var photo = CreatePhoto($"photorecull-recycle-test-{Guid.NewGuid():N}.heic");
+
+        var result = FileActions.MoveToRecycleBin([photo]);
+
+        Assert.Equal(1, result.SucceededCount);
+        Assert.Empty(result.Failures);
+        Assert.False(File.Exists(photo.Path));
+        // Explorer may hide extensions in the Recycle Bin's display names.
+        Assert.Contains(RecycleBinDisplayNames(), name => name.StartsWith(Path.GetFileNameWithoutExtension(photo.FileName)));
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static List<string> RecycleBinDisplayNames()
+    {
+        const int RecycleBinFolder = 10;
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!)!;
+        var names = new List<string>();
+        foreach (dynamic item in shell.NameSpace(RecycleBinFolder).Items())
+            names.Add((string)item.Name);
+        return names;
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void HasRecycleBin_LocalDriveYes_NetworkShareNo()
+    {
+        Assert.True(FileActions.HasRecycleBin(Path.Combine(_targetFolder, "a.heic")));
+        Assert.False(FileActions.HasRecycleBin(@"\\server\share\Camera Roll\a.heic"));
+    }
+
+    [Fact]
+    public void MoveToStageFolder_ExplainsANameAlreadyInTheStageFolder()
+    {
+        Directory.CreateDirectory(_stageFolder);
+        File.WriteAllText(Path.Combine(_stageFolder, "a.heic"), "already staged");
+
+        var result = FileActions.MoveToStageFolder([CreatePhoto("a.heic")], _stageFolder);
+
+        Assert.Equal("A file with this name is already in the stage folder", Assert.Single(result.Failures).Reason);
     }
 }
