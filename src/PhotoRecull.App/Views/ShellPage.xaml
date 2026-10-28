@@ -58,7 +58,7 @@
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
-                <HyperlinkButton Content="Manage targets" Padding="0" Click="OnManageTargetsClick" />
+                <HyperlinkButton x:Name="ManageTargetsButton" Content="Manage targets" Padding="0" Click="OnManageTargetsClick" />
             </StackPanel>
         </NavigationView.PaneFooter>
 

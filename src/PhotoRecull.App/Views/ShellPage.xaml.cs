@@ -97,6 +97,13 @@ public sealed partial class ShellPage : Page
         Navigation.IsPaneOpen = true;
     }
 
+    public void SetNavigationLocked(bool isLocked)
+    {
+        LibraryItem.IsEnabled = HistoryItem.IsEnabled = ManageTargetsButton.IsEnabled = !isLocked;
+        if (Navigation.SettingsItem is NavigationViewItem settingsItem)
+            settingsItem.IsEnabled = !isLocked;
+    }
+
     public void ShowHistory()
     {
         Navigation.IsPaneOpen = true;

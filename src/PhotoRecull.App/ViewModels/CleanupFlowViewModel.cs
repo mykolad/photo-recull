@@ -193,6 +193,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     private bool CanPickAgain() => !IsActing;
 
+    private bool CanLeave() => !IsActing;
+
     private async Task PickInBrowserAsync()
     {
         _pickCancellation?.Cancel();
@@ -601,13 +603,16 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(PickAgainCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PickAgainCommand), nameof(BackToLibraryCommand))]
     public partial bool IsActing { get; set; }
 
+    // Leaving mid-run would let the same cleanup be reopened and scanned or acted
+    // on again while files are still moving, with two screens saving its state.
     partial void OnIsActingChanged(bool value)
     {
         if (Review is not null)
             Review.IsActionRunning = value;
+        ShellPage.Current?.SetNavigationLocked(value);
     }
 
     public ObservableCollection<ResultTargetRow> ResultTargets { get; } = [];
@@ -663,7 +668,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     [RelayCommand]
     private void ViewHistory() => ShellPage.Current?.ShowHistory();
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanLeave))]
     private void BackToLibrary()
     {
         CancelRunningWork();
