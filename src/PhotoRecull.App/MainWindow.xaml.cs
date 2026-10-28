@@ -38,6 +38,13 @@ public sealed partial class MainWindow : Window
     public void ShowShell(string? toastMessage = null) =>
         RootFrame.Navigate(typeof(ShellPage), toastMessage);
 
+    public void BringToFront()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter)
+            presenter.Restore();
+        Activate();
+    }
+
     private void SizeToDesignSize()
     {
         // AppWindow sizes are in physical pixels, so scale the design size by the
