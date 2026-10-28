@@ -44,6 +44,13 @@ public sealed partial class MainWindow : Window
         TitleText.Text = Title;
     }
 
+    public void BringToFront()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter)
+            presenter.Restore();
+        Activate();
+    }
+
     private void SizeToDesignSize()
     {
         // AppWindow sizes are in physical pixels, so scale the design size by the
