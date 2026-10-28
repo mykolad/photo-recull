@@ -1,3 +1,5 @@
+<img src="src/PhotoRecull.App/Assets/AppIcon.256.png" alt="PhotoRecull logo" width="96" height="96">
+
 # PhotoRecull
 
 Repeat your Google Photos culls on your other copies: find and remove OneDrive
