@@ -25,8 +25,25 @@ public sealed class JsonFileStore<T>(string filePath) where T : new()
         }
         catch (JsonException)
         {
-            File.Move(FilePath, $"{FilePath}.damaged-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
+            MoveDamagedFileAside();
             return new T();
+        }
+        catch (FileNotFoundException)
+        {
+            return new T();
+        }
+    }
+
+    // Another app window starting at the same moment may have moved it aside
+    // already (or still be moving it); either way it's no longer in the way.
+    private void MoveDamagedFileAside()
+    {
+        try
+        {
+            File.Move(FilePath, $"{FilePath}.damaged-{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}", overwrite: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
         }
     }
 

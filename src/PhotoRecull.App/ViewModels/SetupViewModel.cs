@@ -185,12 +185,18 @@ public sealed partial class SetupViewModel : ObservableObject
         bool isValid;
         try
         {
-            int? fileCount = await Task.Run(() =>
-                Directory.Exists(folderPath) ? Directory.EnumerateFiles(folderPath).Count() : (int?)null);
+            // Wait for typing to pause, then stop counting as soon as a newer path
+            // supersedes this one, so a slow mapped drive isn't listed once per keystroke.
+            await Task.Delay(TimeSpan.FromMilliseconds(300), validation.Token);
+            int? fileCount = await Task.Run(() => CountFilesOrNullIfMissing(folderPath, validation.Token), validation.Token);
             isValid = fileCount is not null;
             resultText = fileCount is { } count
                 ? $"Folder found · {count:N0} files"
                 : "Folder not found. Check the path, or that the drive is mapped.";
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -203,6 +209,19 @@ public sealed partial class SetupViewModel : ObservableObject
         IsFolderValid = isValid;
         IsCheckingFolder = false;
         FolderValidationText = resultText;
+    }
+
+    private static int? CountFilesOrNullIfMissing(string folderPath, CancellationToken cancellationToken)
+    {
+        if (!Directory.Exists(folderPath))
+            return null;
+        int count = 0;
+        foreach (var _ in Directory.EnumerateFiles(folderPath))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            count++;
+        }
+        return count;
     }
 
     private static string SuggestedOneDriveCameraRollOrEmpty()

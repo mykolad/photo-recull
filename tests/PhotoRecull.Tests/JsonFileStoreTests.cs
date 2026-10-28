@@ -34,6 +34,19 @@ public class JsonFileStoreTests : IDisposable
     }
 
     [Fact]
+    public void LoadOrCreateDefault_DamagedFileLoadedByManyAtOnce_NoneThrowAndItIsKeptAsideOnce()
+    {
+        var path = Path.Combine(_folder, "library.json");
+        File.WriteAllText(path, "{ \"Cleanups\": [ { not json");
+        var store = new JsonFileStore<LibraryData>(path);
+
+        Parallel.For(0, 20, _ => Assert.Empty(store.LoadOrCreateDefault().Cleanups));
+
+        Assert.False(File.Exists(path));
+        Assert.Single(Directory.GetFiles(_folder, "library.json.damaged-*"));
+    }
+
+    [Fact]
     public void Save_CreatesFolderAndRoundTripsSettings()
     {
         var store = new JsonFileStore<AppSettings>(Path.Combine(_folder, "nested", "settings.json"));
