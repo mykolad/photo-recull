@@ -223,24 +223,25 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         }
     }
 
+    // The new pick replaces the cleanup's details only once its file is saved, so
+    // a failed save leaves the old pick and the details that describe it together.
     private void SavePick(List<DateTimeOffset> timestamps)
     {
-        _pickedTimestamps = timestamps;
         var pickedDays = timestamps.Select(t => DateRangeFilter.CaptureDay(t, TimeZoneInfo.Local)).ToList();
         var earliest = pickedDays.Min();
         var latest = pickedDays.Max();
         var now = DateTimeOffset.Now;
 
-        var library = AppServices.LibraryStore.LoadOrCreateDefault();
-        if (_cleanup is null)
+        var pickedCleanup = _cleanup;
+        if (pickedCleanup is null)
         {
-            var neighbors = CleanupNeighbors.For(library.Cleanups, null);
+            var neighbors = CleanupNeighbors.For(AllCleanups(), null);
             var suggested = RangeSuggestions.For(earliest, latest, neighbors, _today).FirstOrDefault()
                 ?? new RangeSuggestion("", earliest, latest);
-            _cleanup = new Cleanup(Guid.NewGuid(), suggested.From, suggested.To, CleanupState.Picked,
-                timestamps.Count, now, now);
+            pickedCleanup = new Cleanup(Guid.NewGuid(), suggested.From, suggested.To, CleanupState.Picked,
+                timestamps.Count, now, now) { Targets = Targets.ToList() };
         }
-        _cleanup = _cleanup with
+        pickedCleanup = pickedCleanup with
         {
             State = CleanupState.Picked,
             PickedCount = timestamps.Count,
@@ -250,7 +251,18 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             LatestPickedDay = latest,
             ToRemoveCount = null,
         };
-        PickStore.Save(_cleanup.Id, new PickCacheData(DateTimeOffset.UtcNow, earliest, latest, timestamps));
+
+        try
+        {
+            PickStore.Save(pickedCleanup.Id, new PickCacheData(DateTimeOffset.UtcNow, earliest, latest, timestamps));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            PickError = $"Couldn't save the pick: {ex.Message}";
+            return;
+        }
+        _cleanup = pickedCleanup;
+        _pickedTimestamps = timestamps;
         SaveCleanup();
         OnPropertyChanged(nameof(SavedPickTitle));
         OnPropertyChanged(nameof(SavedPickDetail));

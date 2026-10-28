@@ -4,10 +4,11 @@ using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
 using PhotoRecull.Core.Library;
+using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
 
-public sealed record CoverageSegment(DateOnly From, DateOnly To, LibraryCardStatus Status, string Tooltip);
+public sealed record CoverageSegment(Guid CleanupId, DateOnly From, DateOnly To, LibraryCardStatus Status, string Tooltip);
 
 public sealed partial class LibraryViewModel : ObservableObject
 {
@@ -28,7 +29,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             });
 
         CoverageSegments = cleanups
-            .Select(c => new CoverageSegment(c.From, c.To, LibraryCardViewModel.StatusOf(c.State),
+            .Select(c => new CoverageSegment(c.Id, c.From, c.To, LibraryCardViewModel.StatusOf(c.State),
                 $"{DateRangeLabel.Format(c.From, c.To)} · {LibraryCardViewModel.StatusLabel(LibraryCardViewModel.StatusOf(c.State))}"))
             .ToList();
 
@@ -89,9 +90,9 @@ public sealed partial class LibraryViewModel : ObservableObject
             Open(cleanup);
     }
 
-    public void OpenCleanupAt(DateOnly from, DateOnly to)
+    public void OpenCleanup(Guid cleanupId)
     {
-        if (_cleanups.FirstOrDefault(c => c.From == from && c.To == to) is { } cleanup)
+        if (_cleanups.FirstOrDefault(c => c.Id == cleanupId) is { } cleanup)
             Open(cleanup);
     }
 
@@ -103,6 +104,16 @@ public sealed partial class LibraryViewModel : ObservableObject
             Open(cleanup);
     }
 
+    // A cleanup repeats the cull on the targets chosen when it started, as long as
+    // they're still configured; cleanups saved before targets were recorded (or
+    // whose targets have all been removed since) use the current ones.
+    private static List<TargetSettings> TargetsToReopen(Cleanup cleanup)
+    {
+        var configured = AppServices.SettingsStore.LoadOrCreateDefault().Targets;
+        var stillConfigured = cleanup.Targets?.Where(configured.Contains).ToList() ?? [];
+        return stillConfigured.Count > 0 ? stillConfigured : configured;
+    }
+
     // Reviewing staged files is part of the Review step, the next pull request;
     // every other state reopens the cleanup at its saved pick.
     private void Open(Cleanup cleanup)
@@ -112,7 +123,6 @@ public sealed partial class LibraryViewModel : ObservableObject
             ShellPage.Current?.ShowToast("Reviewing staged photos opens here in the next update.");
             return;
         }
-        var targets = AppServices.SettingsStore.LoadOrCreateDefault().Targets;
-        ShellPage.Current?.OpenCleanupFlow(new CleanupFlowRequest(cleanup.Id, targets));
+        ShellPage.Current?.OpenCleanupFlow(new CleanupFlowRequest(cleanup.Id, TargetsToReopen(cleanup)));
     }
 }

@@ -109,6 +109,22 @@ public class JsonFileStoreTests : IDisposable
     }
 
     [Fact]
+    public void Save_RoundTripsTheTargetsACleanupWasStartedFor()
+    {
+        var store = new JsonFileStore<LibraryData>(Path.Combine(_folder, "library.json"));
+        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Users\me\OneDrive\Pictures\Camera Roll");
+        var cleanup = new Cleanup(Guid.NewGuid(), new(2026, 8, 1), new(2026, 8, 31), CleanupState.Picked,
+            PickedCount: 10, PickedAt: DateTimeOffset.UtcNow, LastActivityAt: DateTimeOffset.UtcNow)
+        {
+            Targets = [oneDrive],
+        };
+
+        store.Save(new LibraryData { Cleanups = [cleanup] });
+
+        Assert.Equal([oneDrive], Assert.Single(store.LoadOrCreateDefault().Cleanups).Targets!);
+    }
+
+    [Fact]
     public void Save_ConcurrentSavesToTheSameFile_AllSucceedAndLeaveNoTemporaryFiles()
     {
         var store = new JsonFileStore<AppSettings>(Path.Combine(_folder, "settings.json"));
