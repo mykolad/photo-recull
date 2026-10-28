@@ -40,10 +40,10 @@ Caching and the review report are automatic, so the normal flow needs no extra f
 ```bash
 # 1. Dry run (the default) — pick surviving photos in the browser. Auto-saves the
 #    pick and opens an HTML report to review. Prints the stage/delete commands.
-dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08
+dotnet run --project src/PhotoRecull.Cli -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08
 
 # 2. Stage the candidates for review (reuses the cached pick — no re-picking)
-dotnet run -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --stage
+dotnet run --project src/PhotoRecull.Cli -- --onedrive "<Camera Roll folder>" --from 2026-08 --to 2026-08 --stage
 
 # 3. Once you're happy with the staged folder, delete it yourself,
 #    or re-run with --delete (permanent).
@@ -60,13 +60,21 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
   [privacy policy](https://mykolad.github.io/photo-recull/privacy) and
   [terms of service](https://mykolad.github.io/photo-recull/terms)
 
+## Repository layout
+
+| Folder | Contents |
+|---|---|
+| `src/PhotoRecull.Core` | Scanning, matching, the Google Photos Picker client, stage/delete. Shared by every front end. |
+| `src/PhotoRecull.Cli` | The command-line app, including the HTML review report |
+| `tests/PhotoRecull.Tests` | xUnit tests |
+
 ## Tests
 
 ```bash
 dotnet test
 ```
 
-The two sample images under `PhotoRecull.Tests/TestData/` are neutral stock photos
+The two sample images under `tests/PhotoRecull.Tests/TestData/` are neutral stock photos
 stamped with only the EXIF the tests need (no location or personal data).
 
 ## License

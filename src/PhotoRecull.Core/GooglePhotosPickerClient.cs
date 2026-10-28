@@ -5,7 +5,7 @@ using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Util.Store;
 
-namespace PhotoRecull;
+namespace PhotoRecull.Core;
 
 /// <summary>
 /// Obtains photo creation timestamps via the Google Photos Picker API.
@@ -19,7 +19,7 @@ namespace PhotoRecull;
 /// Consequence: there is no server-side date filter. The user is responsible
 /// for selecting every photo that still exists in Google Photos for the range
 /// being cleaned up. Anything they miss becomes a false deletion candidate,
-/// which is why the tool defaults to --dry-run / --stage.
+/// which is why PhotoRecull defaults to a dry run and staging.
 /// </summary>
 public class GooglePhotosPickerClient
 {
@@ -28,15 +28,21 @@ public class GooglePhotosPickerClient
     private const string MediaItemsUrl = "https://photospicker.googleapis.com/v1/mediaItems";
     private const int PageSize = 100;
 
-    private readonly string _credentialsPath;
-    private readonly string _tokenStorePath;
+    private readonly ClientSecrets _oauthClient;
+    private readonly string _tokenStoreFolder;
     private readonly string? _browser;
 
-    public GooglePhotosPickerClient(string credentialsPath, string tokenStorePath, string? browser = null)
+    public GooglePhotosPickerClient(ClientSecrets oauthClient, string tokenStoreFolder, string? browser = null)
     {
-        _credentialsPath = credentialsPath;
-        _tokenStorePath = tokenStorePath;
+        _oauthClient = oauthClient;
+        _tokenStoreFolder = tokenStoreFolder;
         _browser = browser;
+    }
+
+    public static async Task<ClientSecrets> LoadOAuthClientFromCredentialsFileAsync(string credentialsPath)
+    {
+        await using var stream = File.OpenRead(credentialsPath);
+        return (await GoogleClientSecrets.FromStreamAsync(stream)).Secrets;
     }
 
     /// <summary>
@@ -48,24 +54,21 @@ public class GooglePhotosPickerClient
     /// (invalid_grant) — the stale token is cleared automatically and the
     /// consent flow is re-run, so the caller never has to delete it by hand.
     /// </summary>
-    public async Task<HttpClient> AuthorizeAsync()
+    public async Task<HttpClient> AuthorizeAsync(
+        Action? onReauthenticatingAfterExpiredToken = null, CancellationToken cancellationToken = default)
     {
-        GoogleClientSecrets secrets;
-        await using (var stream = File.OpenRead(_credentialsPath))
-            secrets = await GoogleClientSecrets.FromStreamAsync(stream);
-
-        var dataStore = new FileDataStore(_tokenStorePath, true);
+        var dataStore = new FileDataStore(_tokenStoreFolder, true);
 
         UserCredential credential;
         try
         {
-            credential = await AuthorizeAndRefreshAsync(secrets, dataStore);
+            credential = await AuthorizeAndRefreshAsync(dataStore, cancellationToken);
         }
         catch (TokenResponseException ex) when (ex.Error?.Error == "invalid_grant")
         {
-            Console.WriteLine("Cached Google token has expired or was revoked — re-authenticating...");
+            onReauthenticatingAfterExpiredToken?.Invoke();
             await dataStore.ClearAsync();
-            credential = await AuthorizeAndRefreshAsync(secrets, dataStore);
+            credential = await AuthorizeAndRefreshAsync(dataStore, cancellationToken);
         }
 
         var client = new HttpClient();
@@ -75,13 +78,13 @@ public class GooglePhotosPickerClient
     }
 
     private async Task<UserCredential> AuthorizeAndRefreshAsync(
-        GoogleClientSecrets secrets, IDataStore dataStore)
+        IDataStore dataStore, CancellationToken cancellationToken)
     {
         var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-            secrets.Secrets,
+            _oauthClient,
             [PickerScope],
             "user",
-            CancellationToken.None,
+            cancellationToken,
             dataStore,
             new BrowserCodeReceiver(_browser));
 
@@ -89,7 +92,7 @@ public class GooglePhotosPickerClient
         // invalid_grant at this point (where the caller clears and retries),
         // rather than later on the first API call.
         if (credential.Token.IsStale)
-            await credential.RefreshTokenAsync(CancellationToken.None);
+            await credential.RefreshTokenAsync(cancellationToken);
 
         return credential;
     }
@@ -111,60 +114,49 @@ public class GooglePhotosPickerClient
     /// entry per picked photo) so burst frames match one-to-one.
     /// </summary>
     public async Task<List<DateTimeOffset>> PickTimestampsAsync(
-        HttpClient client, IProgress<int>? progress = null)
+        HttpClient client, IProgress<PickerProgress>? progress = null, CancellationToken cancellationToken = default)
     {
-        var session = await CreateSessionAsync(client);
-
-        Console.WriteLine();
-        Console.WriteLine("A Google Photos picker is opening in your browser.");
-        Console.WriteLine("Select ALL photos you STILL have in Google Photos for the range you're");
-        Console.WriteLine("cleaning up (tip: on photos.google.com you can select a whole day at once),");
-        Console.WriteLine("then return here — this tool continues automatically once you're done.");
-        Console.WriteLine();
-        Console.WriteLine("If the browser didn't open, paste this URL manually:");
-        Console.WriteLine($"  {session.PickerUri}");
-        Console.WriteLine();
+        var session = await CreateSessionAsync(client, cancellationToken);
 
         BrowserLauncher.Open(session.PickerUri, _browser);
+        progress?.Report(new PickerProgress.OpenedInBrowser(session.PickerUri));
 
-        await PollUntilItemsSetAsync(client, session);
+        await PollUntilItemsSetAsync(client, session, progress, cancellationToken);
 
-        return await FetchPickedTimestampsAsync(client, session.Id, progress);
+        return await FetchPickedTimestampsAsync(client, session.Id, progress, cancellationToken);
     }
 
-    private static async Task<PickerSession> CreateSessionAsync(HttpClient client)
+    private static async Task<PickerSession> CreateSessionAsync(HttpClient client, CancellationToken cancellationToken)
     {
         var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
-        var response = await client.PostAsync(SessionsUrl, content);
-        var json = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsync(SessionsUrl, content, cancellationToken);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException(
                 $"Failed to create picker session ({(int)response.StatusCode}): {json}");
         return ParseSession(json);
     }
 
-    private static async Task PollUntilItemsSetAsync(HttpClient client, PickerSession session)
+    private static async Task PollUntilItemsSetAsync(
+        HttpClient client, PickerSession session, IProgress<PickerProgress>? progress, CancellationToken cancellationToken)
     {
         var pollInterval = session.PollInterval ?? TimeSpan.FromSeconds(3);
         var deadline = DateTimeOffset.UtcNow + (session.Timeout ?? TimeSpan.FromMinutes(30));
 
-        Console.Write("Waiting for you to finish selecting photos");
         while (true)
         {
-            await Task.Delay(pollInterval);
-            Console.Write(".");
+            await Task.Delay(pollInterval, cancellationToken);
+            progress?.Report(new PickerProgress.StillWaitingForDone());
 
-            var response = await client.GetAsync($"{SessionsUrl}/{Uri.EscapeDataString(session.Id)}");
-            var json = await response.Content.ReadAsStringAsync();
+            var response = await client.GetAsync(
+                $"{SessionsUrl}/{Uri.EscapeDataString(session.Id)}", cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw new HttpRequestException(
                     $"Failed to poll picker session ({(int)response.StatusCode}): {json}");
 
             if (ParseSession(json).MediaItemsSet)
-            {
-                Console.WriteLine(" done.");
                 return;
-            }
 
             if (DateTimeOffset.UtcNow > deadline)
                 throw new TimeoutException("Timed out waiting for photo selection in the picker.");
@@ -172,7 +164,7 @@ public class GooglePhotosPickerClient
     }
 
     private static async Task<List<DateTimeOffset>> FetchPickedTimestampsAsync(
-        HttpClient client, string sessionId, IProgress<int>? progress)
+        HttpClient client, string sessionId, IProgress<PickerProgress>? progress, CancellationToken cancellationToken)
     {
         var timestamps = new List<DateTimeOffset>();
         string? pageToken = null;
@@ -184,8 +176,8 @@ public class GooglePhotosPickerClient
             if (pageToken is not null)
                 url += $"&pageToken={Uri.EscapeDataString(pageToken)}";
 
-            var response = await client.GetAsync(url);
-            var json = await response.Content.ReadAsStringAsync();
+            var response = await client.GetAsync(url, cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw new HttpRequestException(
                     $"Failed to list picked media items ({(int)response.StatusCode}): {json}");
@@ -207,7 +199,7 @@ public class GooglePhotosPickerClient
                 }
             }
 
-            progress?.Report(total);
+            progress?.Report(new PickerProgress.PickedItemsRead(total));
             pageToken = root.TryGetProperty("nextPageToken", out var npt) ? npt.GetString() : null;
         } while (pageToken is not null);
 
@@ -249,5 +241,13 @@ public class GooglePhotosPickerClient
             ? TimeSpan.FromSeconds(secs)
             : null;
     }
+}
 
+public abstract record PickerProgress
+{
+    public sealed record OpenedInBrowser(string PickerUri) : PickerProgress;
+
+    public sealed record StillWaitingForDone : PickerProgress;
+
+    public sealed record PickedItemsRead(int CountSoFar) : PickerProgress;
 }

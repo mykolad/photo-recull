@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace PhotoRecull;
+namespace PhotoRecull.Core;
 
 /// <summary>
 /// The picked Google Photos timestamps plus the context they were captured in,

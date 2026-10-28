@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 
-namespace PhotoRecull;
+namespace PhotoRecull.Core;
 
-public record OneDrivePhoto(
+public record PhotoFile(
     string Path,
     string FileName,
     DateTimeOffset? Timestamp,
@@ -14,10 +14,10 @@ public record OneDrivePhoto(
 );
 
 /// <summary>
-/// Scans a local OneDrive folder for photos, identifies iPhone-origin files,
-/// and extracts their capture timestamps.
+/// Scans a local folder for photos, identifies iPhone-origin files, and
+/// extracts their capture timestamps.
 /// </summary>
-public static class OneDriveScanner
+public static class PhotoScanner
 {
     // Matches OneDrive iOS camera upload format: 20260411_073333208_iOS.heic
     // Groups: year, month, day, hour, min, sec, ms, extension
@@ -28,22 +28,26 @@ public static class OneDriveScanner
     private static readonly HashSet<string> SupportedExtensions =
         [".heic", ".jpg", ".jpeg", ".png", ".mp4", ".mov"];
 
-    public static List<OneDrivePhoto> ScanFolder(string folderPath)
+    public static List<PhotoFile> ScanFolder(
+        string folderPath, IProgress<string>? fileBeingRead = null, CancellationToken cancellationToken = default)
     {
         if (!System.IO.Directory.Exists(folderPath))
-            throw new DirectoryNotFoundException($"OneDrive folder not found: {folderPath}");
+            throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
-        var results = new List<OneDrivePhoto>();
+        var results = new List<PhotoFile>();
 
         foreach (var file in System.IO.Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var ext = Path.GetExtension(file).ToLowerInvariant();
             if (!SupportedExtensions.Contains(ext))
                 continue;
 
+            fileBeingRead?.Report(file);
             var fileName = Path.GetFileName(file);
             var (isIphone, timestamp, source) = ClassifyFile(file, fileName);
-            results.Add(new OneDrivePhoto(file, fileName, timestamp, isIphone, source));
+            results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source));
         }
 
         return results;

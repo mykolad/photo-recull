@@ -19,7 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PhotoRecull.csproj" />
+    <ProjectReference Include="..\..\src\PhotoRecull.Core\PhotoRecull.Core.csproj" />
+    <ProjectReference Include="..\..\src\PhotoRecull.Cli\PhotoRecull.Cli.csproj" />
   </ItemGroup>
 
   <!-- Copy test HEIC files to output so tests can reference them by relative path -->

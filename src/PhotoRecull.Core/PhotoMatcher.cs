@@ -1,41 +1,41 @@
-namespace PhotoRecull;
+namespace PhotoRecull.Core;
 
 public record MatchResult(
-    List<OneDrivePhoto> Matched,
-    List<OneDrivePhoto> Unmatched,
-    List<OneDrivePhoto> Skipped    // non-iPhone or no timestamp
+    List<PhotoFile> Matched,
+    List<PhotoFile> Unmatched,
+    List<PhotoFile> Skipped    // non-iPhone or no timestamp
 );
 
 /// <summary>
-/// Matches OneDrive photos against the timestamps of photos currently in
+/// Matches a target's photos against the timestamps of photos currently in
 /// Google Photos.
 ///
-/// Matching is ONE-TO-ONE: each Google photo can keep at most one OneDrive
+/// Matching is ONE-TO-ONE: each Google photo can keep at most one target
 /// file. This is essential for bursts — if you shot several frames within a
 /// couple of seconds and later kept only one in Google Photos, only the
-/// OneDrive frame nearest that Google timestamp is kept; the others become
+/// target frame nearest that Google timestamp is kept; the others become
 /// removal candidates. A naive "any file within tolerance matches" would keep
 /// the whole burst.
 ///
 /// Google timestamps are supplied as a sequence (not a set) so duplicates are
 /// preserved: if two kept frames share the same whole-second time, both
-/// OneDrive files are kept.
+/// target files are kept.
 /// </summary>
 public static class PhotoMatcher
 {
     public static MatchResult Match(
         IEnumerable<DateTimeOffset> googleTimestamps,
-        List<OneDrivePhoto> oneDrivePhotos,
+        List<PhotoFile> photos,
         int toleranceSeconds = 2)
     {
-        var matched   = new List<OneDrivePhoto>();
-        var unmatched = new List<OneDrivePhoto>();
-        var skipped   = new List<OneDrivePhoto>();
+        var matched   = new List<PhotoFile>();
+        var unmatched = new List<PhotoFile>();
+        var skipped   = new List<PhotoFile>();
 
         // iPhone photos with a usable timestamp are match candidates;
         // everything else is skipped outright.
-        var candidates = new List<OneDrivePhoto>();
-        foreach (var p in oneDrivePhotos)
+        var candidates = new List<PhotoFile>();
+        foreach (var p in photos)
         {
             if (p.IsIphone && p.Timestamp.HasValue)
                 candidates.Add(p);
@@ -50,7 +50,7 @@ public static class PhotoMatcher
 
         double tol = toleranceSeconds;
 
-        // Each Google photo claims its nearest still-available OneDrive file
+        // Each Google photo claims its nearest still-available target file
         // within tolerance. Processing Google timestamps in order keeps the
         // assignment stable.
         foreach (var g in googleTimestamps.OrderBy(t => t))

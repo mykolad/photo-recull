@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using ImageMagick;
+using PhotoRecull.Core;
 
-namespace PhotoRecull;
+namespace PhotoRecull.Cli;
 
 /// <summary>
 /// Generates a self-contained HTML review page.
@@ -191,7 +192,7 @@ public static class HtmlReportGenerator
 
     private static readonly HashSet<string> VideoExtensions = [".mp4", ".mov"];
 
-    private static string PhotoCard(OneDrivePhoto p, string src)
+    private static string PhotoCard(PhotoFile p, string src)
     {
         var fileUri = "file:///" + p.Path.Replace('\\', '/').TrimStart('/');
         var ts = p.Timestamp.HasValue
