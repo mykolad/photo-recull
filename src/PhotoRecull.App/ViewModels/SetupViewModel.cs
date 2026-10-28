@@ -99,6 +99,7 @@ public sealed partial class SetupViewModel : ObservableObject
             return;
 
         DeveloperCredentialsPath = path;
+        IsDeveloperCredentialsFileValid = false;
         try
         {
             var oauthClient = await GooglePhotosPickerClient.LoadOAuthClientFromCredentialsFileAsync(path);
