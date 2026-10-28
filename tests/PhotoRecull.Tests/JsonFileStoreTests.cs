@@ -20,7 +20,7 @@ public class JsonFileStoreTests : IDisposable
     }
 
     [Fact]
-    public void LoadOrCreateDefault_DamagedFile_KeepsItAsideAndReturnsDefault()
+    public void LoadOrCreateDefault_DamagedFile_BacksUpItsContentsAndReturnsDefault()
     {
         var path = Path.Combine(_folder, "library.json");
         File.WriteAllText(path, "{ \"Cleanups\": [ { not json");
@@ -28,13 +28,28 @@ public class JsonFileStoreTests : IDisposable
         var library = new JsonFileStore<LibraryData>(path).LoadOrCreateDefault();
 
         Assert.Empty(library.Cleanups);
-        Assert.False(File.Exists(path));
-        var keptAside = Assert.Single(Directory.GetFiles(_folder, "library.json.damaged-*"));
-        Assert.Equal("{ \"Cleanups\": [ { not json", File.ReadAllText(keptAside));
+        var backup = Assert.Single(Directory.GetFiles(_folder, "library.json.damaged-*"));
+        Assert.Equal("{ \"Cleanups\": [ { not json", File.ReadAllText(backup));
     }
 
     [Fact]
-    public void LoadOrCreateDefault_DamagedFileLoadedByManyAtOnce_NoneThrowAndItIsKeptAsideOnce()
+    public void LoadOrCreateDefault_DamagedFile_NeverRemovesTheFileSoANewerSaveIsKept()
+    {
+        var path = Path.Combine(_folder, "library.json");
+        File.WriteAllText(path, "{ not json");
+        var store = new JsonFileStore<LibraryData>(path);
+        var cleanup = new Cleanup(Guid.NewGuid(), new(2026, 7, 6), new(2026, 7, 31), CleanupState.Picked,
+            PickedCount: 1, PickedAt: DateTimeOffset.UtcNow, LastActivityAt: DateTimeOffset.UtcNow);
+
+        store.LoadOrCreateDefault();
+        store.Save(new LibraryData { Cleanups = [cleanup] });
+        store.LoadOrCreateDefault();
+
+        Assert.Equal(cleanup, Assert.Single(store.LoadOrCreateDefault().Cleanups));
+    }
+
+    [Fact]
+    public void LoadOrCreateDefault_DamagedFileLoadedByManyAtOnce_NoneThrowAndOneBackupIsKept()
     {
         var path = Path.Combine(_folder, "library.json");
         File.WriteAllText(path, "{ \"Cleanups\": [ { not json");
@@ -42,7 +57,6 @@ public class JsonFileStoreTests : IDisposable
 
         Parallel.For(0, 20, _ => Assert.Empty(store.LoadOrCreateDefault().Cleanups));
 
-        Assert.False(File.Exists(path));
         Assert.Single(Directory.GetFiles(_folder, "library.json.damaged-*"));
     }
 

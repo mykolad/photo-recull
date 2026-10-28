@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,37 +15,47 @@ public sealed class JsonFileStore<T>(string filePath) where T : new()
 
     public string FilePath { get; } = filePath;
 
-    // A damaged file is moved aside rather than thrown on, so the app can still
-    // start; the original stays next to it for recovery.
+    // A damaged file doesn't stop the app from starting: its contents are kept in
+    // a backup and defaults are used until the next save replaces it.
     public T LoadOrCreateDefault()
     {
-        if (!File.Exists(FilePath))
-            return new T();
+        string json;
         try
         {
-            return JsonSerializer.Deserialize<T>(File.ReadAllText(FilePath), Options) ?? new T();
-        }
-        catch (JsonException)
-        {
-            MoveDamagedFileAside();
-            return new T();
+            json = File.ReadAllText(FilePath);
         }
         catch (FileNotFoundException)
         {
             return new T();
         }
-    }
 
-    // Another app window starting at the same moment may have moved it aside
-    // already (or still be moving it); either way it's no longer in the way.
-    private void MoveDamagedFileAside()
-    {
         try
         {
-            File.Move(FilePath, $"{FilePath}.damaged-{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}", overwrite: false);
+            return JsonSerializer.Deserialize<T>(json, Options) ?? new T();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (JsonException)
         {
+            BackUpDamagedContents(json);
+            return new T();
+        }
+    }
+
+    // The damaged file itself is never moved or deleted: another app window may
+    // have just saved a valid replacement, and removing that would lose data. The
+    // backup is named after its contents, so loading the same damaged file again
+    // (or from several windows at once) keeps a single copy.
+    private void BackUpDamagedContents(string damagedJson)
+    {
+        var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(damagedJson)))[..12];
+        var backupPath = $"{FilePath}.damaged-{contentHash}";
+        try
+        {
+            if (!File.Exists(backupPath))
+                File.WriteAllText(backupPath, damagedJson);
+        }
+        catch (IOException)
+        {
+            // Another window is writing the same backup.
         }
     }
 
