@@ -25,7 +25,12 @@ public sealed partial class SetupViewModel : ObservableObject
     public bool NeedsDeveloperCredentialsFile { get; } = !AppServices.Google.HasBuiltInOAuthClient;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFinishSetup))]
     public partial string DeveloperCredentialsPath { get; set; } = "";
+
+    // In a developer build the cached Google token can survive a restart while the
+    // chosen credentials file doesn't, so connected alone isn't enough to finish.
+    private bool HasUsableOAuthClient => !NeedsDeveloperCredentialsFile || File.Exists(DeveloperCredentialsPath);
 
     [ObservableProperty]
     public partial string? DeveloperCredentialsError { get; set; }
@@ -75,12 +80,13 @@ public sealed partial class SetupViewModel : ObservableObject
     public partial string? FolderValidationText { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanFinishSetup), nameof(IsFolderMissing))]
+    [NotifyPropertyChangedFor(nameof(CanFinishSetup))]
     public partial bool IsFolderValid { get; set; }
 
-    public bool IsFolderMissing => !IsFolderValid && !string.IsNullOrEmpty(FolderValidationText);
+    [ObservableProperty]
+    public partial bool IsCheckingFolder { get; set; }
 
-    public bool CanFinishSetup => IsConnected && IsFolderValid;
+    public bool CanFinishSetup => IsConnected && IsFolderValid && HasUsableOAuthClient;
 
     [RelayCommand]
     private async Task BrowseDeveloperCredentialsAsync()
@@ -147,22 +153,37 @@ public sealed partial class SetupViewModel : ObservableObject
         _folderValidation?.Cancel();
         var validation = _folderValidation = new CancellationTokenSource();
 
+        IsFolderValid = false;
         if (string.IsNullOrWhiteSpace(folderPath))
         {
-            IsFolderValid = false;
             FolderValidationText = null;
             return;
         }
+        FolderValidationText = "Checking folder…";
+        IsCheckingFolder = true;
 
-        int? fileCount = await Task.Run(() =>
-            Directory.Exists(folderPath) ? Directory.EnumerateFiles(folderPath).Count() : (int?)null);
+        string resultText;
+        bool isValid;
+        try
+        {
+            int? fileCount = await Task.Run(() =>
+                Directory.Exists(folderPath) ? Directory.EnumerateFiles(folderPath).Count() : (int?)null);
+            isValid = fileCount is not null;
+            resultText = fileCount is { } count
+                ? $"Folder found · {count:N0} files"
+                : "Folder not found. Check the path, or that the drive is mapped.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            isValid = false;
+            resultText = $"Can't read this folder: {ex.Message}";
+        }
+
         if (validation.IsCancellationRequested)
             return;
-
-        IsFolderValid = fileCount is not null;
-        FolderValidationText = fileCount is { } count
-            ? $"Folder found · {count:N0} files"
-            : "Folder not found. Check the path, or that the drive is mapped.";
+        IsFolderValid = isValid;
+        IsCheckingFolder = false;
+        FolderValidationText = resultText;
     }
 
     private static string SuggestedOneDriveCameraRollOrEmpty()

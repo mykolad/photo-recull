@@ -197,7 +197,7 @@
                             <TextBlock
                                 Text="{x:Bind ViewModel.FolderValidationText, Mode=OneWay}"
                                 Style="{StaticResource CaptionTextBlockStyle}"
-                                Foreground="{x:Bind views:XamlFunctions.SuccessOrCriticalBrush(ViewModel.IsFolderValid), Mode=OneWay}" />
+                                Foreground="{x:Bind views:XamlFunctions.ValidationResultBrush(ViewModel.IsFolderValid, ViewModel.IsCheckingFolder), Mode=OneWay}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

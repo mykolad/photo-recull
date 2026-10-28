@@ -31,7 +31,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                 $"{DateRangeLabel.Format(c.From, c.To)} · {LibraryCardViewModel.StatusLabel(LibraryCardViewModel.StatusOf(c.State))}"))
             .ToList();
 
-        var gaps = LibraryTimeline.FindNotCleanedGaps(cleanups, _today);
+        var gaps = NotCleanedGaps = LibraryTimeline.FindNotCleanedGaps(cleanups, _today);
         NotCleanedNote = gaps.Count == 0
             ? (cleanups.Count == 0 ? "No cleanups yet" : "Everything is cleaned up")
             : "Not cleaned up yet: " + string.Join(", ", gaps.Select(g =>
@@ -49,6 +49,8 @@ public sealed partial class LibraryViewModel : ObservableObject
     public ObservableCollection<LibraryCardViewModel> Cards { get; } = [];
 
     public IReadOnlyList<CoverageSegment> CoverageSegments { get; }
+
+    public IReadOnlyList<NotCleanedGap> NotCleanedGaps { get; }
 
     public DateOnly Today => _today;
 

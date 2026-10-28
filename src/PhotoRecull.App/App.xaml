@@ -48,6 +48,26 @@
                     <SolidColorBrush x:Key="PillDoneForeground" Color="#6CCB5F" />
                     <SolidColorBrush x:Key="PillDoneBackground" Color="#393D1B" />
                 </ResourceDictionary>
+                <!-- Contrast themes: states are told apart by their labels, so use the system's contrast colors. -->
+                <ResourceDictionary x:Key="HighContrast">
+                    <SolidColorBrush x:Key="CleanupDoneBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="CleanupStagedBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
+                    <SolidColorBrush x:Key="CleanupReadyToActBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="CleanupPickedBrush" Color="{ThemeResource SystemColorHotlightColor}" />
+                    <SolidColorBrush x:Key="NotCleanedHatchBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
+                    <SolidColorBrush x:Key="TodayLineBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
+                    <SolidColorBrush x:Key="PillNotCleanedForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PillNotCleanedBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="PillPickedForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PillPickedBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="PillReadyToActForeground" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="PillReadyToActBackground" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="PillStagedForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PillStagedBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="PillDoneForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PillDoneBackground" Color="{ThemeResource SystemColorWindowColor}" />
+                </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
             <Style x:Key="CardBorderStyle" TargetType="Border">
@@ -71,7 +91,6 @@
                 <Setter Property="Padding" Value="68,12,20,12" />
             </Style>
 
-            <x:Double Key="PageContentMaxWidth">1200</x:Double>
             <Thickness x:Key="PageHorizontalPadding">40,0,40,0</Thickness>
         </ResourceDictionary>
     </Application.Resources>

@@ -1,9 +1,12 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using PhotoRecull.App.ViewModels;
 using PhotoRecull.App.Views;
+using PhotoRecull.Core.Library;
 
 namespace PhotoRecull.App.Controls;
 
@@ -18,6 +21,7 @@ public sealed class CoverageStrip : UserControl
     private readonly Canvas _track = new() { Height = TrackHeight };
     private int _year = DateTime.Today.Year;
     private IReadOnlyList<CoverageSegment> _segments = [];
+    private IReadOnlyList<NotCleanedGap> _notCleanedGaps = [];
     private DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
 
     public CoverageStrip()
@@ -32,12 +36,25 @@ public sealed class CoverageStrip : UserControl
 
     public event EventHandler<CoverageSegment>? SegmentClicked;
 
-    public void Show(int year, IReadOnlyList<CoverageSegment> segments, DateOnly today)
+    public void Show(int year, IReadOnlyList<CoverageSegment> segments, IReadOnlyList<NotCleanedGap> notCleanedGaps, DateOnly today)
     {
         _year = year;
         _segments = segments;
+        _notCleanedGaps = notCleanedGaps;
         _today = today;
+        AutomationProperties.SetName(this, SpokenSummary());
         Redraw();
+    }
+
+    // The segments are only a pointer shortcut: every cleanup also has a card in
+    // the Library with a focusable action, so screen readers get this summary
+    // instead of one element per segment.
+    private string SpokenSummary()
+    {
+        var segmentsThisYear = _segments.Where(s => s.From.Year <= _year && s.To.Year >= _year).ToList();
+        return segmentsThisYear.Count == 0
+            ? $"Coverage {_year}: no cleanups"
+            : $"Coverage {_year}: " + string.Join("; ", segmentsThisYear.Select(s => s.Tooltip));
     }
 
     private void Redraw()
@@ -61,7 +78,13 @@ public sealed class CoverageStrip : UserControl
             : XOf(_today) + dayWidth;
 
         DrawMonthLabels(XOf);
-        DrawNotCleanedHatching(pastWidth);
+        DrawPastBackground(pastWidth);
+        foreach (var gap in _notCleanedGaps.Where(g => g.To >= firstDay && g.From <= lastDay))
+        {
+            double gapStart = XOf(gap.From < firstDay ? firstDay : gap.From);
+            double gapEnd = XOf(gap.To > lastDay ? lastDay : gap.To) + dayWidth;
+            DrawNotCleanedHatching(gapStart, gapEnd);
+        }
         DrawSegments(firstDay, lastDay, XOf, dayWidth);
         DrawTodayLine(firstDay, lastDay, XOf, dayWidth);
     }
@@ -88,7 +111,7 @@ public sealed class CoverageStrip : UserControl
         }
     }
 
-    private void DrawNotCleanedHatching(double pastWidth)
+    private void DrawPastBackground(double pastWidth)
     {
         if (pastWidth <= 0)
             return;
@@ -100,13 +123,17 @@ public sealed class CoverageStrip : UserControl
             RadiusY = 4,
             Fill = XamlFunctions.ThemeBrush("SubtleFillColorSecondaryBrush"),
         });
+    }
 
+    private void DrawNotCleanedHatching(double start, double end)
+    {
         var hatchBrush = XamlFunctions.ThemeBrush("NotCleanedHatchBrush");
         var hatching = new Canvas
         {
-            Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, pastWidth, TrackHeight) },
+            Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(start, 0, Math.Max(0, end - start), TrackHeight) },
         };
-        for (double x = -TrackHeight; x < pastWidth; x += HatchSpacing)
+        // Lines start one track-height early so the diagonal reaches the left edge.
+        for (double x = start - TrackHeight; x < end; x += HatchSpacing)
             hatching.Children.Add(new Line { X1 = x, Y1 = TrackHeight, X2 = x + TrackHeight, Y2 = 0, Stroke = hatchBrush, StrokeThickness = 1 });
         _track.Children.Add(hatching);
     }
@@ -125,6 +152,7 @@ public sealed class CoverageStrip : UserControl
                 Fill = XamlFunctions.ThemeBrush(StateBrushKey(segment.Status)),
             };
             ToolTipService.SetToolTip(bar, segment.Tooltip);
+            AutomationProperties.SetAccessibilityView(bar, AccessibilityView.Raw);
             bar.PointerEntered += (_, _) => bar.Opacity = 0.75;
             bar.PointerExited += (_, _) => bar.Opacity = 1;
             bar.Tapped += (_, _) => SegmentClicked?.Invoke(this, segment);

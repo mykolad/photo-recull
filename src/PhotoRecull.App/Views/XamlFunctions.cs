@@ -15,8 +15,10 @@ public static class XamlFunctions
 
     public static string ConnectionLabel(bool isConnected) => isConnected ? "Connected" : "Not connected";
 
-    public static Brush SuccessOrCriticalBrush(bool isSuccess) =>
-        ThemeBrush(isSuccess ? "SystemFillColorSuccessBrush" : "SystemFillColorCriticalBrush");
+    public static Brush ValidationResultBrush(bool isValid, bool isChecking) =>
+        ThemeBrush(isChecking ? "TextFillColorSecondaryBrush"
+            : isValid ? "SystemFillColorSuccessBrush"
+            : "SystemFillColorCriticalBrush");
 
     public static Brush ThemeBrush(string key) => (Brush)Application.Current.Resources[key];
 
