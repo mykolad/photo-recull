@@ -64,9 +64,14 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 
 | Folder | Contents |
 |---|---|
-| `src/PhotoRecull.Core` | Scanning, matching, the Google Photos Picker client, stage/delete. Shared by every front end. |
+| `src/PhotoRecull.Core` | Scanning, matching, the Google Photos Picker client, stage/delete, the cleanup library. Shared by every front end. |
 | `src/PhotoRecull.Cli` | The command-line app, including the HTML review report |
+| `src/PhotoRecull.App` | The Windows app (WinUI 3), in progress: setup and the Library so far |
 | `tests/PhotoRecull.Tests` | xUnit tests |
+
+To run the Windows app: `dotnet run --project src/PhotoRecull.App`. It keeps its data in
+`%LOCALAPPDATA%\PhotoRecull`. See [docs/SETUP.md](docs/SETUP.md#windows-app-built-in-google-client)
+for giving it a built-in Google client.
 
 ## Tests
 

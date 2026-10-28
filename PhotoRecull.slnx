@@ -1,7 +1,10 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/PhotoRecull.Core/PhotoRecull.Core.csproj" />
+    <Project Path="src/PhotoRecull.App/PhotoRecull.App.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="src/PhotoRecull.Cli/PhotoRecull.Cli.csproj" />
+    <Project Path="src/PhotoRecull.Core/PhotoRecull.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PhotoRecull.Tests/PhotoRecull.Tests.csproj" />

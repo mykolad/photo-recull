@@ -6,6 +6,7 @@ TestResults/
 
 ## Google OAuth tokens and secrets — never commit these
 credentials.json
+*.local.props
 token_store/
 token_store_picker/
 
