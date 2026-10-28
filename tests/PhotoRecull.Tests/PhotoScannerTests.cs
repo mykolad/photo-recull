@@ -124,13 +124,16 @@ public class PhotoScannerTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void ScanFolder_ReportsEveryPhotoFileBeingRead()
+    public void ScanFolder_ReportsEveryPhotoFileBeingReadWithProgressThroughTheFolder()
     {
-        var filesRead = new List<string>();
+        var reports = new List<ScanProgress>();
 
-        PhotoScanner.ScanFolder(TestDataDir, new SynchronousProgress<string>(filesRead.Add));
+        PhotoScanner.ScanFolder(TestDataDir, new SynchronousProgress<ScanProgress>(reports.Add));
 
-        Assert.Equal([IosCameraFile, GooglePhotosFile], filesRead.Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal([IosCameraFile, GooglePhotosFile],
+            reports.Select(r => r.CurrentFile).Order(StringComparer.OrdinalIgnoreCase));
+        Assert.All(reports, r => Assert.Equal(2, r.FilesTotal));
+        Assert.Equal([1, 2], reports.Select(r => r.FilesChecked));
     }
 
     [Fact]

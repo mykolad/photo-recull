@@ -13,6 +13,7 @@
         IsBackButtonVisible="Collapsed"
         IsSettingsVisible="True"
         SelectionChanged="OnNavigationSelectionChanged"
+        ItemInvoked="OnNavigationItemInvoked"
         PaneOpening="OnPaneOpening"
         PaneClosing="OnPaneClosing">
 

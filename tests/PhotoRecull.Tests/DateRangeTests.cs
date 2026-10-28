@@ -82,6 +82,23 @@ public class DateRangeTests
         Assert.Single(filtered);
     }
 
+    [Fact]
+    public void DateFilter_WithTimeZone_UsesLocalCalendarDays()
+    {
+        // 2026-07-31 22:30 UTC is already 1 Aug in UTC+3.
+        var lateNight = new PhotoFile(@"C:\fake\IMG_1.HEIC", "IMG_1.HEIC",
+            new DateTimeOffset(2026, 7, 31, 22, 30, 0, TimeSpan.Zero), IsIphone: true, TimestampSource: "exif");
+        var utcPlus3 = TimeZoneInfo.CreateCustomTimeZone("UTC+3", TimeSpan.FromHours(3), "UTC+3", "UTC+3");
+
+        var inAugustLocally = DateRangeFilter.KeepPhotosCapturedInRange(
+            [lateNight], new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31), utcPlus3);
+        var inAugustUtc = DateRangeFilter.KeepPhotosCapturedInRange(
+            [lateNight], new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31));
+
+        Assert.Single(inAugustLocally);
+        Assert.Empty(inAugustUtc);
+    }
+
     // -----------------------------------------------------------------------
     // HTML report generator
     // -----------------------------------------------------------------------
