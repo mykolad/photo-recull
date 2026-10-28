@@ -18,11 +18,17 @@ public static partial class Program
     {
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
-        var mainInstance = AppInstance.FindOrRegisterForKey(SingleInstanceKey());
+        var instanceKey = SingleInstanceKey();
+        var mainInstance = AppInstance.FindOrRegisterForKey(instanceKey);
         if (!mainInstance.IsCurrent)
         {
-            HandOverToRunningInstance(mainInstance);
-            return 0;
+            if (TryHandOverToRunningInstance(mainInstance))
+                return 0;
+            // The running instance closed during the hand-over, so this launch
+            // takes its place instead of leaving the user with no window.
+            mainInstance = AppInstance.FindOrRegisterForKey(instanceKey);
+            if (!mainInstance.IsCurrent)
+                return 0;
         }
 
         mainInstance.Activated += (_, _) => App.BringMainWindowToFront();
@@ -37,28 +43,53 @@ public static partial class Program
 
     // One instance per data folder: the library and settings must have a single
     // writer, while a throwaway PHOTORECULL_DATA_FOLDER can still run alongside.
-    private static string SingleInstanceKey() =>
-        "PhotoRecull-" + Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(AppDataPaths.Root.ToUpperInvariant())))[..16];
+    // The path is normalized first so that spellings of the same folder (relative,
+    // trailing separator, different case) can't produce two instances.
+    private static string SingleInstanceKey()
+    {
+        var dataFolder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AppDataPaths.Root)).ToUpperInvariant();
+        return "PhotoRecull-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(dataFolder)))[..16];
+    }
 
     // Redirecting is asynchronous, but this STA thread mustn't block in a way that
     // stops COM calls from being pumped, so wait with CoWaitForMultipleObjects.
-    private static void HandOverToRunningInstance(AppInstance mainInstance)
+    private static bool TryHandOverToRunningInstance(AppInstance mainInstance)
     {
         var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
-        using var redirected = new ManualResetEvent(false);
+        using var redirectionFinished = new ManualResetEvent(false);
+        Exception? redirectionFailure = null;
         Task.Run(() =>
         {
-            mainInstance.RedirectActivationToAsync(activation).AsTask().Wait();
-            redirected.Set();
+            try
+            {
+                mainInstance.RedirectActivationToAsync(activation).AsTask().Wait();
+            }
+            catch (Exception ex)
+            {
+                redirectionFailure = ex;
+            }
+            finally
+            {
+                redirectionFinished.Set();
+            }
         });
-        _ = CoWaitForMultipleObjects(0, uint.MaxValue, 1, [redirected.SafeWaitHandle.DangerousGetHandle()], out _);
+        _ = CoWaitForMultipleObjects(0, uint.MaxValue, 1, [redirectionFinished.SafeWaitHandle.DangerousGetHandle()], out _);
+        if (redirectionFailure is not null)
+            return false;
 
         // Only the process the user just started may move another window to the
         // foreground, so the hand-over does it here rather than in the running app.
-        var runningWindow = Process.GetProcessById((int)mainInstance.ProcessId).MainWindowHandle;
-        if (runningWindow != IntPtr.Zero)
-            SetForegroundWindow(runningWindow);
+        try
+        {
+            var runningWindow = Process.GetProcessById((int)mainInstance.ProcessId).MainWindowHandle;
+            if (runningWindow != IntPtr.Zero)
+                SetForegroundWindow(runningWindow);
+        }
+        catch (ArgumentException)
+        {
+            // It handled the activation and then exited; nothing to bring forward.
+        }
+        return true;
     }
 
     [LibraryImport("ole32.dll")]
