@@ -40,8 +40,10 @@ internal static class Thumbnails
             await bitmap.SetSourceAsync(stream);
             return bitmap;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or MagickException)
+        catch (Exception)
         {
+            // A thumbnail is never worth failing over: unreadable files, codecs
+            // Windows lacks for a video, or shell errors just leave the tile blank.
             return null;
         }
     }

@@ -210,8 +210,15 @@ public sealed partial class ReviewViewModel : ObservableObject
         var path = await Pickers.PickSaveFileAsync($"candidates_{_cleanup.From:yyyy-MM-dd}_{_cleanup.To:yyyy-MM-dd}", ".csv", "CSV file");
         if (path is null)
             return;
-        CandidateCsv.WriteNewestFirst(path, CandidatesToActOn.Select(t => t.Photo));
-        ShellPage.Current?.ShowToast($"Exported {CandidatesToActOn.Count:N0} candidates to {Path.GetFileName(path)}.");
+        try
+        {
+            CandidateCsv.WriteNewestFirst(path, CandidatesToActOn.Select(t => t.Photo));
+            ShellPage.Current?.ShowToast($"Exported {CandidatesToActOn.Count:N0} candidates to {Path.GetFileName(path)}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShellPage.Current?.ShowToast($"Couldn't export the list: {ex.Message}", Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error);
+        }
     }
 
     // ---------------------------------------------------------------- preview (lightbox)

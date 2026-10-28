@@ -34,10 +34,11 @@ public sealed partial class ShellPage : Page
 #endif
     }
 
-    public async void ShowToast(string message)
+    public async void ShowToast(string message, InfoBarSeverity severity = InfoBarSeverity.Success)
     {
         _toastTimer?.Cancel();
         var timer = _toastTimer = new CancellationTokenSource();
+        Toast.Severity = severity;
         Toast.Message = message;
         Toast.IsOpen = true;
         try
