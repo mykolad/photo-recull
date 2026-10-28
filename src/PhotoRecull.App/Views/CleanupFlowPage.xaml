@@ -386,8 +386,15 @@
             </Grid>
         </ScrollViewer>
 
-        <!-- Review -->
-        <Grid Grid.Row="1" Visibility="{x:Bind ViewModel.IsReviewStep, Mode=OneWay}">
+        <!-- Review (disabled while the preview is open, so Tab stays in the preview) -->
+        <ContentControl
+            Grid.Row="1"
+            IsTabStop="False"
+            HorizontalContentAlignment="Stretch"
+            VerticalContentAlignment="Stretch"
+            Visibility="{x:Bind ViewModel.IsReviewStep, Mode=OneWay}"
+            IsEnabled="{x:Bind views:XamlFunctions.Not(ViewModel.Review.IsPreviewOpen), Mode=OneWay}">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -606,9 +613,12 @@
                 </Grid>
             </Border>
         </Grid>
+        </ContentControl>
 
         <!-- Large preview -->
         <Grid
+            x:Name="PreviewOverlay"
+            TabFocusNavigation="Cycle"
             Grid.RowSpan="2"
             Background="{ThemeResource SmokeFillColorDefaultBrush}"
             Visibility="{x:Bind ViewModel.Review.IsPreviewOpen, Mode=OneWay}">
@@ -657,6 +667,7 @@
                                     Style="{StaticResource CaptionTextBlockStyle}"
                                     Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
                                 <Button
+                                    x:Name="ClosePreviewButton"
                                     HorizontalAlignment="Right"
                                     Width="28"
                                     Height="28"

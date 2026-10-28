@@ -61,6 +61,8 @@ public static class XamlFunctions
 
     public static bool CanAct(bool hasCandidates, bool isActing) => hasCandidates && !isActing;
 
+    public static bool Not(bool value) => !value;
+
     public static Microsoft.UI.Xaml.Controls.InfoBarSeverity ResultSeverity(bool hasFailures) =>
         hasFailures ? Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success;
 

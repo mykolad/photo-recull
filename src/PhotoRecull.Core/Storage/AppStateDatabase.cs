@@ -188,11 +188,13 @@ public sealed class AppStateDatabase
         return paths;
     }
 
+    // Windows paths are case-insensitive for all letters, not only ASCII as SQLite's
+    // NOCASE is, so photos are keyed by the same upper-casing OrdinalIgnoreCase uses.
     public void SetPhotoKept(Guid cleanupId, string filePath, bool isKept) =>
         Execute(isKept
-                ? "INSERT OR IGNORE INTO kept_photos (cleanup_id, file_path) VALUES ($cleanupId, $path)"
-                : "DELETE FROM kept_photos WHERE cleanup_id = $cleanupId AND file_path = $path",
-            ("$cleanupId", cleanupId.ToString()), ("$path", filePath));
+                ? "INSERT OR IGNORE INTO kept_photos (cleanup_id, path_key, file_path) VALUES ($cleanupId, $key, $path)"
+                : "DELETE FROM kept_photos WHERE cleanup_id = $cleanupId AND path_key = $key",
+            ("$cleanupId", cleanupId.ToString()), ("$key", filePath.ToUpperInvariant()), ("$path", filePath));
 
     // ------------------------------------------------------------------ stage and delete runs
 
@@ -214,7 +216,9 @@ public sealed class AppStateDatabase
         {
             insert.Parameters.Clear();
             insert.Parameters.AddWithValue("$cleanupId", run.CleanupId.ToString());
-            insert.Parameters.AddWithValue("$ranAt", run.RanAt.ToString("O", CultureInfo.InvariantCulture));
+            // Stored in UTC so that sorting the text sorts by time, even across a
+            // daylight-saving change.
+            insert.Parameters.AddWithValue("$ranAt", run.RanAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
             insert.Parameters.AddWithValue("$action", run.Action.ToString());
             insert.Parameters.AddWithValue("$targetKind", run.Target.Kind.ToString());
             insert.Parameters.AddWithValue("$targetFolder", run.Target.FolderPath);
@@ -377,8 +381,9 @@ public sealed class AppStateDatabase
         """
         CREATE TABLE kept_photos (
             cleanup_id TEXT NOT NULL REFERENCES cleanups(id) ON DELETE CASCADE,
-            file_path  TEXT NOT NULL COLLATE NOCASE,
-            PRIMARY KEY (cleanup_id, file_path));
+            path_key   TEXT NOT NULL,
+            file_path  TEXT NOT NULL,
+            PRIMARY KEY (cleanup_id, path_key));
 
         CREATE TABLE runs (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -101,6 +101,29 @@ public class FileActionsTests : IDisposable
     }
 
     [Fact]
+    public void MoveToStageFolder_UnusableFolder_FailsEveryPhotoWithoutThrowing()
+    {
+        var notAFolder = Path.Combine(_targetFolder, "taken-by-a-file");
+        File.WriteAllText(notAFolder, "a file where the stage folder should go");
+        var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
+
+        var result = FileActions.MoveToStageFolder(photos, notAFolder);
+
+        Assert.Equal(0, result.SucceededCount);
+        Assert.Equal(2, result.Failures.Count);
+        Assert.All(result.Failures, f => Assert.StartsWith("Can't use the stage folder", f.Reason));
+        Assert.All(photos, p => Assert.True(File.Exists(p.Path)));
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void HasRecycleBin_LocalDriveYes_NetworkShareNo()
+    {
+        Assert.True(FileActions.HasRecycleBin(Path.Combine(_targetFolder, "a.heic")));
+        Assert.False(FileActions.HasRecycleBin(@"\\server\share\Camera Roll\a.heic"));
+    }
+
+    [Fact]
     public void MoveToStageFolder_ExplainsANameAlreadyInTheStageFolder()
     {
         Directory.CreateDirectory(_stageFolder);

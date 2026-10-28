@@ -101,8 +101,11 @@ public sealed class HoldToConfirmButton : UserControl
         _timer.Start();
     }
 
+    // Also forgets a held key: its KeyUp may go to another control after focus
+    // moves away, and the next press here must not be mistaken for a repeat.
     private void CancelHolding()
     {
+        _isKeyHolding = false;
         _timer.Stop();
         _held.Reset();
         _fill.Width = 0;

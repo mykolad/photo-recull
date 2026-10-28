@@ -210,6 +210,37 @@ public class AppStateDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void KeptPhotos_UndoMatchesPathsDifferingOnlyInNonAsciiCase()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));
+        database.SaveCleanup(cleanup);
+
+        database.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\Été.heic", isKept: true);
+        Assert.Contains(@"C:\Camera Roll\été.heic", database.LoadKeptPhotoPaths(cleanup.Id));
+
+        database.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\été.heic", isKept: false);
+        Assert.Empty(database.LoadKeptPhotoPaths(cleanup.Id));
+    }
+
+    [Fact]
+    public void Runs_AreOrderedByActualTimeAcrossADaylightSavingChange()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var cleanup = CleanupFor(new(2026, 10, 1), new(2026, 10, 31));
+        var target = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        // 02:55 summer time (00:55 UTC) is earlier than 02:05 winter time (01:05 UTC).
+        var beforeChange = new CleanupRun(cleanup.Id, new DateTimeOffset(2026, 10, 25, 2, 55, 0, TimeSpan.FromHours(2)),
+            CleanupAction.Staged, target, @"C:\_staged", 1, 0, 0);
+        var afterChange = beforeChange with { RanAt = new DateTimeOffset(2026, 10, 25, 2, 5, 0, TimeSpan.FromHours(1)) };
+
+        database.RecordRunsWithCleanup(cleanup, [beforeChange]);
+        database.RecordRunsWithCleanup(cleanup, [afterChange]);
+
+        Assert.Equal([afterChange, beforeChange], database.LoadRunsNewestFirst());
+    }
+
+    [Fact]
     public void DatabaseFromTheFirstSchemaVersion_IsUpgradedKeepingItsData()
     {
         var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));

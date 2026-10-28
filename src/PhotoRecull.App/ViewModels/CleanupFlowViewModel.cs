@@ -183,13 +183,15 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             BrowserLauncher.Open(_pickerUri, _settings.SignInBrowser);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanPickAgain))]
     private async Task PickAgainAsync()
     {
         Step = CleanupFlowStep.Pick;
         IsSavedPickVisible = false;
         await PickInBrowserAsync();
     }
+
+    private bool CanPickAgain() => !IsActing;
 
     private async Task PickInBrowserAsync()
     {
@@ -599,7 +601,14 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PickAgainCommand))]
     public partial bool IsActing { get; set; }
+
+    partial void OnIsActingChanged(bool value)
+    {
+        if (Review is not null)
+            Review.IsActionRunning = value;
+    }
 
     public ObservableCollection<ResultTargetRow> ResultTargets { get; } = [];
 

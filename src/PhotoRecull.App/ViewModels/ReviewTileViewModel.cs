@@ -23,11 +23,12 @@ public sealed partial class ReviewTileViewModel : ObservableObject
 
     private readonly Action<ReviewTileViewModel> _toggleKeep;
     private readonly Action<ReviewTileViewModel> _openPreview;
+    private readonly Func<bool> _isActionRunning;
     private bool _thumbnailRequested;
 
     public ReviewTileViewModel(
         PhotoFile photo, TargetSettings target, ReviewTab tab, bool isKept,
-        Action<ReviewTileViewModel> toggleKeep, Action<ReviewTileViewModel> openPreview)
+        Action<ReviewTileViewModel> toggleKeep, Action<ReviewTileViewModel> openPreview, Func<bool> isActionRunning)
     {
         Photo = photo;
         Target = target;
@@ -35,6 +36,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
         IsKept = isKept;
         _toggleKeep = toggleKeep;
         _openPreview = openPreview;
+        _isActionRunning = isActionRunning;
     }
 
     public PhotoFile Photo { get; }
@@ -107,8 +109,12 @@ public sealed partial class ReviewTileViewModel : ObservableObject
         Thumbnail = await Thumbnails.LoadAsync(Photo.Path, TileThumbnailPixels);
     }
 
-    [RelayCommand]
+    // Once a stage or delete has taken its list of photos, Keep can no longer
+    // change what happens to them, so it's unavailable until the run finishes.
+    [RelayCommand(CanExecute = nameof(CanToggleKeep))]
     private void ToggleKeep() => _toggleKeep(this);
+
+    private bool CanToggleKeep() => !_isActionRunning();
 
     [RelayCommand]
     private void OpenPreview() => _openPreview(this);

@@ -30,7 +30,7 @@ public sealed partial class ReviewViewModel : ObservableObject
                 .Zip(targets)
                 .SelectMany(pair => photos(pair.First.Match).Select(photo => new ReviewTileViewModel(
                     photo, pair.Second, tab, tab == ReviewTab.ToRemove && _keptPaths.Contains(photo.Path),
-                    ToggleKeep, OpenPreview)))
+                    ToggleKeep, OpenPreview, () => IsActionRunning)))
                 .ToList();
 
         _toRemove = Tiles(ReviewTab.ToRemove, m => m.Unmatched);
@@ -178,9 +178,19 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     public bool HasCandidatesToActOn => CandidatesToActOn.Count > 0;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ToggleKeepInPreviewCommand))]
+    public partial bool IsActionRunning { get; set; }
+
+    partial void OnIsActionRunningChanged(bool value)
+    {
+        foreach (var tile in _toRemove)
+            tile.ToggleKeepCommand.NotifyCanExecuteChanged();
+    }
+
     private void ToggleKeep(ReviewTileViewModel tile)
     {
-        if (!tile.CanBeKept)
+        if (!tile.CanBeKept || IsActionRunning)
             return;
         tile.IsKept = !tile.IsKept;
         AppServices.Database.SetPhotoKept(_cleanup.Id, tile.FullPath, tile.IsKept);
@@ -232,7 +242,7 @@ public sealed partial class ReviewViewModel : ObservableObject
     [RelayCommand]
     private void ShowPreviousPreview() => MovePreview(-1);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanToggleKeepInPreview))]
     private void ToggleKeepInPreview()
     {
         if (PreviewTile is { CanBeKept: true } tile)
@@ -241,6 +251,8 @@ public sealed partial class ReviewViewModel : ObservableObject
             OnPropertyChanged(nameof(PreviewStatusText));
         }
     }
+
+    private bool CanToggleKeepInPreview() => !IsActionRunning;
 
     [RelayCommand]
     private void OpenOriginalInPreview() => PreviewTile?.OpenOriginalCommand.Execute(null);

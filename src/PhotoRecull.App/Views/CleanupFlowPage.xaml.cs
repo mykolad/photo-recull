@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using FocusManager = Microsoft.UI.Xaml.Input.FocusManager;
 using Microsoft.UI.Xaml.Navigation;
 using PhotoRecull.App.ViewModels;
 using VirtualKey = Windows.System.VirtualKey;
@@ -52,7 +53,32 @@ public sealed partial class CleanupFlowPage : Page
         if (e.PropertyName == nameof(CleanupFlowViewModel.Step))
             Stepper.CurrentStepIndex = (int)ViewModel.Step;
         if (e.PropertyName == nameof(CleanupFlowViewModel.Review))
+        {
             ReviewTabs.SelectedItem = ToRemoveTab;
+            if (ViewModel.Review is { } review)
+                review.PropertyChanged += OnReviewPropertyChanged;
+        }
+    }
+
+    private Control? _focusedBeforePreview;
+
+    // The preview acts as a modal: focus moves into it when it opens and goes back
+    // to where it was (usually the photo that opened it) when it closes.
+    private void OnReviewPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ReviewViewModel.IsPreviewOpen) || sender is not ReviewViewModel review)
+            return;
+        if (review.IsPreviewOpen)
+        {
+            _focusedBeforePreview ??= FocusManager.GetFocusedElement(XamlRoot) as Control;
+            DispatcherQueue.TryEnqueue(() => ClosePreviewButton.Focus(FocusState.Programmatic));
+        }
+        else
+        {
+            var restore = _focusedBeforePreview;
+            _focusedBeforePreview = null;
+            DispatcherQueue.TryEnqueue(() => restore?.Focus(FocusState.Programmatic));
+        }
     }
 
     private void ShowRangeComparison()
