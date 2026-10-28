@@ -13,4 +13,6 @@ internal static class AppDataPaths
     public static string LibraryFile => Path.Combine(Root, "library.json");
 
     public static string GoogleTokenFolder => Path.Combine(Root, "google-token");
+
+    public static string PicksFolder => Path.Combine(Root, "picks");
 }

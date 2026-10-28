@@ -12,11 +12,12 @@ public sealed record CoverageSegment(DateOnly From, DateOnly To, LibraryCardStat
 public sealed partial class LibraryViewModel : ObservableObject
 {
     private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly List<Cleanup> _cleanups;
     private int _earliestCoverageYear;
 
     public LibraryViewModel()
     {
-        var cleanups = AppServices.LibraryStore.LoadOrCreateDefault().Cleanups;
+        var cleanups = _cleanups = AppServices.LibraryStore.LoadOrCreateDefault().Cleanups;
 
         foreach (var entry in LibraryTimeline.CleanupsAndGapsNewestFirst(cleanups, _today))
             Cards.Add(entry switch
@@ -79,18 +80,39 @@ public sealed partial class LibraryViewModel : ObservableObject
     private bool CanShowNextYear() => CoverageYear < _today.Year;
 
     [RelayCommand]
-    private void NewCleanup() => ShowCleanupFlowComingSoon();
+    private Task NewCleanupAsync() => ShellPage.Current?.StartNewCleanupAsync() ?? Task.CompletedTask;
 
     [RelayCommand]
-    private void Continue() => ShowCleanupFlowComingSoon();
+    private void Continue()
+    {
+        if (ContinueCleanup is { } cleanup)
+            Open(cleanup);
+    }
 
-    public void OpenCleanupAt(DateOnly from, DateOnly to) => ShowCleanupFlowComingSoon();
+    public void OpenCleanupAt(DateOnly from, DateOnly to)
+    {
+        if (_cleanups.FirstOrDefault(c => c.From == from && c.To == to) is { } cleanup)
+            Open(cleanup);
+    }
 
-    private void StartCleanupFor(LibraryEntry gap) => ShowCleanupFlowComingSoon();
+    private void StartCleanupFor(LibraryEntry gap) => _ = NewCleanupAsync();
 
-    private void OpenCleanup(LibraryEntry cleanup) => ShowCleanupFlowComingSoon();
+    private void OpenCleanup(LibraryEntry entry)
+    {
+        if (entry is CleanupEntry { Cleanup: var cleanup })
+            Open(cleanup);
+    }
 
-    // The Pick → Range → Scan → Review flow is the next pull request.
-    private static void ShowCleanupFlowComingSoon() =>
-        ShellPage.Current?.ShowToast("Cleanups open here in the next update.");
+    // Reviewing staged files is part of the Review step, the next pull request;
+    // every other state reopens the cleanup at its saved pick.
+    private void Open(Cleanup cleanup)
+    {
+        if (cleanup.State == CleanupState.Staged)
+        {
+            ShellPage.Current?.ShowToast("Reviewing staged photos opens here in the next update.");
+            return;
+        }
+        var targets = AppServices.SettingsStore.LoadOrCreateDefault().Targets;
+        ShellPage.Current?.OpenCleanupFlow(new CleanupFlowRequest(cleanup.Id, targets));
+    }
 }

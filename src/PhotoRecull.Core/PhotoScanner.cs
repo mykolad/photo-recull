@@ -5,6 +5,8 @@ using MetadataExtractor.Formats.Exif;
 
 namespace PhotoRecull.Core;
 
+public record ScanProgress(int FilesChecked, int FilesTotal, string CurrentFile);
+
 public record PhotoFile(
     string Path,
     string FileName,
@@ -29,22 +31,24 @@ public static class PhotoScanner
         [".heic", ".jpg", ".jpeg", ".png", ".mp4", ".mov"];
 
     public static List<PhotoFile> ScanFolder(
-        string folderPath, IProgress<string>? fileBeingRead = null, CancellationToken cancellationToken = default)
+        string folderPath, IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         if (!System.IO.Directory.Exists(folderPath))
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
         var results = new List<PhotoFile>();
+        var files = System.IO.Directory.GetFiles(folderPath, "*", SearchOption.TopDirectoryOnly);
 
-        foreach (var file in System.IO.Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly))
+        for (int i = 0; i < files.Length; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var file = files[i];
 
             var ext = Path.GetExtension(file).ToLowerInvariant();
             if (!SupportedExtensions.Contains(ext))
                 continue;
 
-            fileBeingRead?.Report(file);
+            progress?.Report(new ScanProgress(FilesChecked: i + 1, FilesTotal: files.Length, CurrentFile: file));
             var fileName = Path.GetFileName(file);
             var (isIphone, timestamp, source) = ClassifyFile(file, fileName);
             results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source));

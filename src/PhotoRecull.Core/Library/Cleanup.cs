@@ -17,6 +17,8 @@ public record Cleanup(
     DateTimeOffset PickedAt,
     DateTimeOffset LastActivityAt)
 {
+    public DateOnly? EarliestPickedDay { get; init; }
+    public DateOnly? LatestPickedDay { get; init; }
     public int? ToRemoveCount { get; init; }
     public int KeptByUserCount { get; init; }
     public int StagedCount { get; init; }

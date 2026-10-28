@@ -10,5 +10,5 @@ public interface ISyncTarget
 
     string FolderPath { get; }
 
-    List<PhotoFile> Scan(IProgress<string>? fileBeingRead = null, CancellationToken cancellationToken = default);
+    List<PhotoFile> Scan(IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default);
 }

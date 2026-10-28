@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using PhotoRecull.App.Services;
+using PhotoRecull.App.ViewModels;
 using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.Views;
@@ -26,6 +27,11 @@ public sealed partial class ShellPage : Page
     {
         if (e.Parameter is string toastMessage)
             ShowToast(toastMessage);
+#if DEBUG
+        if (DebugScreenshot.RequestedCleanupStep() is { } debugRequest)
+            OpenCleanupFlow(new CleanupFlowRequest(debugRequest.CleanupId,
+                AppServices.SettingsStore.LoadOrCreateDefault().Targets));
+#endif
     }
 
     public async void ShowToast(string message)
@@ -70,6 +76,36 @@ public sealed partial class ShellPage : Page
         if (ContentFrame.CurrentSourcePageType != page)
             ContentFrame.Navigate(page);
     }
+
+    // Selecting Library while a cleanup is open doesn't change the selection, so
+    // SelectionChanged doesn't fire; handle the click itself.
+    private void OnNavigationItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
+    {
+        if (args.InvokedItemContainer == LibraryItem && ContentFrame.CurrentSourcePageType != typeof(LibraryPage))
+            ShowLibrary();
+    }
+
+    public void ShowLibrary()
+    {
+        Navigation.SelectedItem = LibraryItem;
+        ContentFrame.Navigate(typeof(LibraryPage));
+        Navigation.IsPaneOpen = true;
+    }
+
+    public async Task StartNewCleanupAsync()
+    {
+        var dialog = new NewCleanupDialog { XamlRoot = XamlRoot };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            OpenCleanupFlow(new CleanupFlowRequest(ExistingCleanupId: null, dialog.SelectedTargets));
+    }
+
+    public void OpenCleanupFlow(CleanupFlowRequest request)
+    {
+        Navigation.SelectedItem = LibraryItem;
+        ContentFrame.Navigate(typeof(CleanupFlowPage), request);
+    }
+
+    public void CollapseNavigationPane() => Navigation.IsPaneOpen = false;
 
     private void OnManageTargetsClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) =>
         Navigation.SelectedItem = Navigation.SettingsItem;
