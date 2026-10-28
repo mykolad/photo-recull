@@ -14,7 +14,7 @@ public sealed partial class LibraryPage : Page
             if (e.PropertyName == nameof(LibraryViewModel.CoverageYear))
                 ShowCoverageForSelectedYear();
         };
-        Coverage.SegmentClicked += (_, segment) => ViewModel.OpenCleanupAt(segment.From, segment.To);
+        Coverage.SegmentClicked += (_, segment) => ViewModel.OpenCleanup(segment.CleanupId);
         ActualThemeChanged += (_, _) => RecreateCardsWithNewThemeBrushes();
     }
 

@@ -6,6 +6,6 @@ public sealed class OneDriveTarget(string cameraRollFolderPath) : ISyncTarget
 
     public string FolderPath { get; } = cameraRollFolderPath;
 
-    public List<PhotoFile> Scan(IProgress<string>? fileBeingRead = null, CancellationToken cancellationToken = default) =>
-        PhotoScanner.ScanFolder(FolderPath, fileBeingRead, cancellationToken);
+    public List<PhotoFile> Scan(IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default) =>
+        PhotoScanner.ScanFolder(FolderPath, progress, cancellationToken);
 }

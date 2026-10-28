@@ -54,4 +54,31 @@ public class PickCacheTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Save_FailingMidway_LeavesThePreviousPickIntact()
+    {
+        var folder = Directory.CreateTempSubdirectory("photorecull-pick-").FullName;
+        var path = Path.Combine(folder, "pick.json");
+        try
+        {
+            var previous = new PickCacheData(DateTimeOffset.UtcNow, null, null, [DateTimeOffset.UnixEpoch]);
+            PickCache.Save(path, previous);
+
+            // Locking the saved pick makes replacing it fail, as an interrupted save would.
+            Exception? saveFailure;
+            using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+                saveFailure = Record.Exception(() =>
+                    PickCache.Save(path, new PickCacheData(DateTimeOffset.UtcNow, null, null, [])));
+
+            Assert.True(saveFailure is IOException or UnauthorizedAccessException);
+
+            Assert.Equal(previous.Timestamps, PickCache.Load(path).Timestamps);
+            Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

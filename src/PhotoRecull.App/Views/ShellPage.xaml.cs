@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using PhotoRecull.App.Services;
+using PhotoRecull.App.ViewModels;
 using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.Views;
@@ -26,6 +27,11 @@ public sealed partial class ShellPage : Page
     {
         if (e.Parameter is string toastMessage)
             ShowToast(toastMessage);
+#if DEBUG
+        if (DebugScreenshot.RequestedCleanupStep() is { } debugRequest)
+            OpenCleanupFlow(new CleanupFlowRequest(debugRequest.CleanupId,
+                AppServices.SettingsStore.LoadOrCreateDefault().Targets));
+#endif
     }
 
     public async void ShowToast(string message)
@@ -67,9 +73,58 @@ public sealed partial class ShellPage : Page
                 "History" => typeof(HistoryPage),
                 _ => typeof(LibraryPage),
             };
-        if (ContentFrame.CurrentSourcePageType != page)
+        // An open cleanup belongs under Library, so Library becoming selected
+        // (e.g. when the view first loads) mustn't close it; clicking Library to
+        // leave the cleanup is handled in OnNavigationItemInvoked.
+        bool isCleanupOpenUnderLibrary = page == typeof(LibraryPage)
+            && ContentFrame.CurrentSourcePageType == typeof(CleanupFlowPage);
+        if (ContentFrame.CurrentSourcePageType != page && !isCleanupOpenUnderLibrary)
             ContentFrame.Navigate(page);
     }
+
+    // Selecting Library while a cleanup is open doesn't change the selection, so
+    // SelectionChanged doesn't fire; handle the click itself.
+    private void OnNavigationItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
+    {
+        if (args.InvokedItemContainer == LibraryItem && ContentFrame.CurrentSourcePageType != typeof(LibraryPage))
+            ShowLibrary();
+    }
+
+    public void ShowLibrary()
+    {
+        Navigation.SelectedItem = LibraryItem;
+        ContentFrame.Navigate(typeof(LibraryPage));
+        Navigation.IsPaneOpen = true;
+    }
+
+    // WinUI allows one open ContentDialog; a quick second click on New cleanup
+    // would otherwise try to open another one and throw.
+    private bool _isNewCleanupDialogOpen;
+
+    public async Task StartNewCleanupAsync()
+    {
+        if (_isNewCleanupDialogOpen)
+            return;
+        _isNewCleanupDialogOpen = true;
+        try
+        {
+            var dialog = new NewCleanupDialog { XamlRoot = XamlRoot };
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                OpenCleanupFlow(new CleanupFlowRequest(ExistingCleanupId: null, dialog.SelectedTargets));
+        }
+        finally
+        {
+            _isNewCleanupDialogOpen = false;
+        }
+    }
+
+    public void OpenCleanupFlow(CleanupFlowRequest request)
+    {
+        Navigation.SelectedItem = LibraryItem;
+        ContentFrame.Navigate(typeof(CleanupFlowPage), request);
+    }
+
+    public void CollapseNavigationPane() => Navigation.IsPaneOpen = false;
 
     private void OnManageTargetsClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e) =>
         Navigation.SelectedItem = Navigation.SettingsItem;

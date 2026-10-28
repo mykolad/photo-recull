@@ -38,6 +38,12 @@ public sealed partial class MainWindow : Window
     public void ShowShell(string? toastMessage = null) =>
         RootFrame.Navigate(typeof(ShellPage), toastMessage);
 
+    public void ShowRangeInTitle(string? rangeLabel)
+    {
+        Title = rangeLabel is null ? "PhotoRecull" : $"PhotoRecull — {rangeLabel}";
+        TitleText.Text = Title;
+    }
+
     public void BringToFront()
     {
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter)

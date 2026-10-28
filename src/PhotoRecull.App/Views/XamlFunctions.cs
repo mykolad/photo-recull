@@ -28,4 +28,19 @@ public static class XamlFunctions
     public static Brush PillBackground(LibraryCardStatus status) => ThemeBrush($"Pill{status}Background");
 
     public static Brush PillForeground(LibraryCardStatus status) => ThemeBrush($"Pill{status}Foreground");
+
+    public static Brush ChipBackground(bool isSelected) =>
+        ThemeBrush(isSelected ? "PillPickedBackground" : "CardBackgroundFillColorDefaultBrush");
+
+    public static Brush ChipBorder(bool isSelected) =>
+        ThemeBrush(isSelected ? "AccentFillColorDefaultBrush" : "CardStrokeColorDefaultBrush");
+
+    public static Brush ChipForeground(bool isSelected) =>
+        ThemeBrush(isSelected ? "PillPickedForeground" : "TextFillColorPrimaryBrush");
+
+    public static Brush DoneOrAccentBrush(bool isDone) =>
+        ThemeBrush(isDone ? "SystemFillColorSuccessBrush" : "AccentFillColorDefaultBrush");
+
+    public static Brush DoneOrPrimaryBrush(bool isDone) =>
+        ThemeBrush(isDone ? "SystemFillColorSuccessBrush" : "TextFillColorPrimaryBrush");
 }

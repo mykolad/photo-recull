@@ -29,6 +29,33 @@ internal static class DebugScreenshot
         };
     }
 
+    // PHOTORECULL_DEBUG_OPEN_CLEANUP=<step>:<cleanup id> opens that cleanup's flow
+    // and drives it to the step (waiting | saved | range | scan) using its saved
+    // pick, without signing in to Google, so each step can be captured.
+    public static (string Step, Guid CleanupId)? RequestedCleanupStep()
+    {
+        var request = Environment.GetEnvironmentVariable("PHOTORECULL_DEBUG_OPEN_CLEANUP")?.Split(':');
+        return request is [var step, var id] && Guid.TryParse(id, out var cleanupId) ? (step, cleanupId) : null;
+    }
+
+    public static async Task DriveFlowToStepAsync(ViewModels.CleanupFlowViewModel flow, string step)
+    {
+        switch (step)
+        {
+            case "waiting":
+                flow.IsSavedPickVisible = false;
+                flow.IsPicking = true;
+                break;
+            case "range":
+                await flow.ContinueFromSavedPickCommand.ExecuteAsync(null);
+                break;
+            case "scan":
+                await flow.ContinueFromSavedPickCommand.ExecuteAsync(null);
+                await flow.ScanTargetsCommand.ExecuteAsync(null);
+                break;
+        }
+    }
+
     private static async Task SavePngAsync(UIElement element, string outputPath)
     {
         var bitmap = new RenderTargetBitmap();

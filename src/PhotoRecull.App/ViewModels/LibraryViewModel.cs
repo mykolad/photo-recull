@@ -4,19 +4,21 @@ using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
 using PhotoRecull.Core.Library;
+using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
 
-public sealed record CoverageSegment(DateOnly From, DateOnly To, LibraryCardStatus Status, string Tooltip);
+public sealed record CoverageSegment(Guid CleanupId, DateOnly From, DateOnly To, LibraryCardStatus Status, string Tooltip);
 
 public sealed partial class LibraryViewModel : ObservableObject
 {
     private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private readonly List<Cleanup> _cleanups;
     private int _earliestCoverageYear;
 
     public LibraryViewModel()
     {
-        var cleanups = AppServices.LibraryStore.LoadOrCreateDefault().Cleanups;
+        var cleanups = _cleanups = AppServices.LibraryStore.LoadOrCreateDefault().Cleanups;
 
         foreach (var entry in LibraryTimeline.CleanupsAndGapsNewestFirst(cleanups, _today))
             Cards.Add(entry switch
@@ -27,7 +29,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             });
 
         CoverageSegments = cleanups
-            .Select(c => new CoverageSegment(c.From, c.To, LibraryCardViewModel.StatusOf(c.State),
+            .Select(c => new CoverageSegment(c.Id, c.From, c.To, LibraryCardViewModel.StatusOf(c.State),
                 $"{DateRangeLabel.Format(c.From, c.To)} · {LibraryCardViewModel.StatusLabel(LibraryCardViewModel.StatusOf(c.State))}"))
             .ToList();
 
@@ -79,18 +81,48 @@ public sealed partial class LibraryViewModel : ObservableObject
     private bool CanShowNextYear() => CoverageYear < _today.Year;
 
     [RelayCommand]
-    private void NewCleanup() => ShowCleanupFlowComingSoon();
+    private Task NewCleanupAsync() => ShellPage.Current?.StartNewCleanupAsync() ?? Task.CompletedTask;
 
     [RelayCommand]
-    private void Continue() => ShowCleanupFlowComingSoon();
+    private void Continue()
+    {
+        if (ContinueCleanup is { } cleanup)
+            Open(cleanup);
+    }
 
-    public void OpenCleanupAt(DateOnly from, DateOnly to) => ShowCleanupFlowComingSoon();
+    public void OpenCleanup(Guid cleanupId)
+    {
+        if (_cleanups.FirstOrDefault(c => c.Id == cleanupId) is { } cleanup)
+            Open(cleanup);
+    }
 
-    private void StartCleanupFor(LibraryEntry gap) => ShowCleanupFlowComingSoon();
+    private void StartCleanupFor(LibraryEntry gap) => _ = NewCleanupAsync();
 
-    private void OpenCleanup(LibraryEntry cleanup) => ShowCleanupFlowComingSoon();
+    private void OpenCleanup(LibraryEntry entry)
+    {
+        if (entry is CleanupEntry { Cleanup: var cleanup })
+            Open(cleanup);
+    }
 
-    // The Pick → Range → Scan → Review flow is the next pull request.
-    private static void ShowCleanupFlowComingSoon() =>
-        ShellPage.Current?.ShowToast("Cleanups open here in the next update.");
+    // A cleanup repeats the cull on the targets chosen when it started, as long as
+    // they're still configured; cleanups saved before targets were recorded (or
+    // whose targets have all been removed since) use the current ones.
+    private static List<TargetSettings> TargetsToReopen(Cleanup cleanup)
+    {
+        var configured = AppServices.SettingsStore.LoadOrCreateDefault().Targets;
+        var stillConfigured = cleanup.Targets?.Where(configured.Contains).ToList() ?? [];
+        return stillConfigured.Count > 0 ? stillConfigured : configured;
+    }
+
+    // Reviewing staged files is part of the Review step, the next pull request;
+    // every other state reopens the cleanup at its saved pick.
+    private void Open(Cleanup cleanup)
+    {
+        if (cleanup.State == CleanupState.Staged)
+        {
+            ShellPage.Current?.ShowToast("Reviewing staged photos opens here in the next update.");
+            return;
+        }
+        ShellPage.Current?.OpenCleanupFlow(new CleanupFlowRequest(cleanup.Id, TargetsToReopen(cleanup)));
+    }
 }

@@ -25,4 +25,10 @@ public sealed record SignInBrowserChoice(string Label, string? BrowserLauncherVa
     public string DisplayNameInSentence => BrowserLauncherValue is null && !IsCustomPath
         ? DefaultBrowser.FriendlyNameOrNull() ?? "your browser"
         : IsCustomPath ? "your browser" : Label;
+
+    public static string DisplayNameFor(string? signInBrowser)
+    {
+        var choice = All[IndexFor(signInBrowser)];
+        return choice.IsCustomPath ? Path.GetFileNameWithoutExtension(signInBrowser!) : choice.DisplayNameInSentence;
+    }
 }
