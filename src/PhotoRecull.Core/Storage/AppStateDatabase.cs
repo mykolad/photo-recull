@@ -202,20 +202,40 @@ public sealed class AppStateDatabase
         return connection;
     }
 
-    // A file that isn't a usable database (damaged, or not SQLite at all) is moved
-    // aside and a fresh one created, so the app can still start; the old file is
-    // kept for recovery.
+    // A file that isn't a usable database (not SQLite at all, or a damaged page
+    // that only shows up once a table is read) is moved aside and a fresh one
+    // created, so the app can still start; the old files are kept for recovery.
     private void OpenOrRecreateIfDamaged()
     {
+        bool isUsable;
         try
         {
             CreateOrMigrateSchema();
+            isUsable = ScalarOrNull("PRAGMA quick_check") == "ok";
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode is 11 or 26) // SQLITE_CORRUPT, SQLITE_NOTADB
         {
-            SqliteConnection.ClearAllPools();
-            File.Move(DatabasePath, $"{DatabasePath}.damaged-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
+            isUsable = false;
+        }
+
+        if (!isUsable)
+        {
+            SetDamagedFilesAside();
             CreateOrMigrateSchema();
+        }
+    }
+
+    // The write-ahead log and shared-memory files go too: a log left next to a
+    // fresh database could otherwise be replayed into it.
+    private void SetDamagedFilesAside()
+    {
+        SqliteConnection.ClearAllPools();
+        var suffix = $".damaged-{DateTime.Now:yyyyMMdd-HHmmss}";
+        foreach (var companion in new[] { "", "-wal", "-shm" })
+        {
+            var path = DatabasePath + companion;
+            if (File.Exists(path))
+                File.Move(path, path + suffix, overwrite: true);
         }
     }
 

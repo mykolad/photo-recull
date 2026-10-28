@@ -143,6 +143,30 @@ public class AppStateDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void DatabaseWithADamagedTablePage_IsSetAsideAtStartupInsteadOfFailingLater()
+    {
+        var original = new AppStateDatabase(DatabasePath);
+        for (int i = 0; i < 300; i++)
+            original.SaveCleanup(CleanupFor(new DateOnly(2020, 1, 1).AddDays(i), new DateOnly(2020, 1, 1).AddDays(i)));
+        SqliteConnection.ClearAllPools();
+
+        // Keep the first page (header and schema) intact and scramble the table
+        // pages after it, so the file still opens as a database.
+        var bytes = File.ReadAllBytes(DatabasePath);
+        const int pageSize = 4096;
+        Assert.True(bytes.Length > 4 * pageSize);
+        for (int i = pageSize; i < bytes.Length; i++)
+            bytes[i] = (byte)(i * 31 % 251);
+        File.WriteAllBytes(DatabasePath, bytes);
+
+        var reopened = new AppStateDatabase(DatabasePath);
+
+        Assert.Empty(reopened.LoadCleanups());
+        Assert.Null(reopened.LoadSettings().SetupCompletedAt);
+        Assert.Single(Directory.GetFiles(_folder, "photorecull.db.damaged-*"));
+    }
+
+    [Fact]
     public async Task GoogleTokenStore_StoresReadsDeletesAndClears()
     {
         var database = new AppStateDatabase(DatabasePath);
