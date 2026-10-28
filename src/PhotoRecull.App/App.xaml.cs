@@ -20,6 +20,10 @@ public partial class App : Application
         MainWindow.Activate();
     }
 
+    // Called on a background thread when a second launch hands over to this one.
+    public static void BringMainWindowToFront() =>
+        MainWindow?.DispatcherQueue.TryEnqueue(() => MainWindow.BringToFront());
+
     private static void AppendToCrashLog(Exception exception)
     {
         try
