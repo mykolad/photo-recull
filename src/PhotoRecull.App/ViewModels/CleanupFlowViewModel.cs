@@ -194,6 +194,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                     _pickerUri = opened.PickerUri;
             });
             var timestamps = await picker.PickTimestampsAsync(http, progress, cancellation.Token);
+            // A cancel can land after the picker's last response but before this
+            // continuation runs; it must not still replace the saved pick.
+            if (cancellation.IsCancellationRequested)
+                return;
             if (timestamps.Count == 0)
             {
                 PickError = "No photos were picked. Nothing was saved.";

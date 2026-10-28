@@ -37,10 +37,15 @@ public static class PhotoScanner
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
         var results = new List<PhotoFile>();
-        var photoFiles = System.IO.Directory
-            .EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly)
-            .Where(file => SupportedExtensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
-            .ToList();
+        // Listing a large or network folder can take a while on its own, so a
+        // cancel is honored between entries rather than only once reading starts.
+        var photoFiles = new List<string>();
+        foreach (var file in System.IO.Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (SupportedExtensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
+                photoFiles.Add(file);
+        }
 
         for (int i = 0; i < photoFiles.Count; i++)
         {

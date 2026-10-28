@@ -8,9 +8,6 @@
     xmlns:controls="using:PhotoRecull.App.Controls">
 
     <Page.Resources>
-        <Style x:Key="FieldLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextBlockStyle}">
-            <Setter Property="Margin" Value="0,0,0,4" />
-        </Style>
         <Style x:Key="StatNumberStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="20" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -152,14 +149,8 @@
                             </StackPanel>
                             <controls:RangeComparisonBars x:Name="ComparisonBars" />
                             <StackPanel Orientation="Horizontal" Spacing="16">
-                                <StackPanel>
-                                    <TextBlock Text="From" Style="{StaticResource FieldLabelStyle}" />
-                                    <CalendarDatePicker Width="180" Date="{x:Bind ViewModel.RangeFrom, Mode=TwoWay}" />
-                                </StackPanel>
-                                <StackPanel>
-                                    <TextBlock Text="To" Style="{StaticResource FieldLabelStyle}" />
-                                    <CalendarDatePicker Width="180" Date="{x:Bind ViewModel.RangeTo, Mode=TwoWay}" />
-                                </StackPanel>
+                                <CalendarDatePicker Header="From" Width="180" Date="{x:Bind ViewModel.RangeFrom, Mode=TwoWay}" />
+                                <CalendarDatePicker Header="To" Width="180" Date="{x:Bind ViewModel.RangeTo, Mode=TwoWay}" />
                             </StackPanel>
                             <StackPanel Spacing="6">
                                 <TextBlock Text="Suggestions" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
