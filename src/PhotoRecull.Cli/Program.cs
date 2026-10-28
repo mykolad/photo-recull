@@ -1,5 +1,6 @@
 using System.Globalization;
-using PhotoRecull;
+using PhotoRecull.Cli;
+using PhotoRecull.Core;
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -91,9 +92,10 @@ if (!useCache && !File.Exists(credentialsPath))
 
         To set up:
           1. Go to https://console.cloud.google.com
-          2. Create a project and enable "Google Photos Library API"
+          2. Create a project and enable the "Photos Picker API"
           3. Create OAuth 2.0 credentials (Desktop app) and download as credentials.json
-          4. Place credentials.json in the same folder as this app, or pass --credentials <path>
+          4. Place credentials.json in the folder you run from, or pass --credentials <path>
+        See docs/SETUP.md for details.
         """);
     return 1;
 }
@@ -133,12 +135,15 @@ else
     // Picker uses a different scope than the retired Library API, so it needs its
     // own token store — reusing the old one would load a token without the picker scope.
     var tokenStore = Path.Combine(AppContext.BaseDirectory, "token_store_picker");
-    var pickerClient = new GooglePhotosPickerClient(credentialsPath, tokenStore, browser);
 
     HttpClient http;
+    GooglePhotosPickerClient pickerClient;
     try
     {
-        http = await pickerClient.AuthorizeAsync();
+        var oauthClient = await GooglePhotosPickerClient.LoadOAuthClientFromCredentialsFileAsync(credentialsPath);
+        pickerClient = new GooglePhotosPickerClient(oauthClient, tokenStore, browser);
+        http = await pickerClient.AuthorizeAsync(onReauthenticatingAfterExpiredToken: () =>
+            Console.WriteLine("Cached Google token has expired or was revoked — re-authenticating..."));
     }
     catch (Exception ex)
     {
@@ -149,12 +154,38 @@ else
     try
     {
         int lastReported = 0;
-        var progress = new Progress<int>(count =>
+        bool picked = false;
+        var progress = new ConsoleProgress<PickerProgress>(p =>
         {
-            if (count - lastReported >= 50)
+            switch (p)
             {
-                Console.Write($"\rReading picked photos... {count} items");
-                lastReported = count;
+                case PickerProgress.OpenedInBrowser opened:
+                    Console.WriteLine();
+                    Console.WriteLine("A Google Photos picker is opening in your browser.");
+                    Console.WriteLine("Select ALL photos you STILL have in Google Photos for the range you're");
+                    Console.WriteLine("cleaning up (tip: on photos.google.com you can select a whole day at once),");
+                    Console.WriteLine("then return here — this tool continues automatically once you're done.");
+                    Console.WriteLine();
+                    Console.WriteLine("If the browser didn't open, paste this URL manually:");
+                    Console.WriteLine($"  {opened.PickerUri}");
+                    Console.WriteLine();
+                    Console.Write("Waiting for you to finish selecting photos");
+                    break;
+                case PickerProgress.StillWaitingForDone:
+                    Console.Write(".");
+                    break;
+                case PickerProgress.PickedItemsRead read:
+                    if (!picked)
+                    {
+                        Console.WriteLine(" done.");
+                        picked = true;
+                    }
+                    if (read.CountSoFar - lastReported >= 50)
+                    {
+                        Console.Write($"\rReading picked photos... {read.CountSoFar} items");
+                        lastReported = read.CountSoFar;
+                    }
+                    break;
             }
         });
 
@@ -186,36 +217,27 @@ else
 // Step 2: Scan OneDrive folder, then apply date range filter
 // ---------------------------------------------------------------------------
 
-Console.Write("Scanning OneDrive folder... ");
-List<OneDrivePhoto> oneDrivePhotos;
+ISyncTarget target = new OneDriveTarget(oneDriveFolder);
+
+Console.Write($"Scanning {target.DisplayName} folder... ");
+List<PhotoFile> targetPhotos;
 try
 {
-    var all = OneDriveScanner.ScanFolder(oneDriveFolder);
+    var all = target.Scan();
 
     // Apply date range: iPhone files outside the range are excluded entirely
     // (the user is only interested in that window).
     if (fromDate.HasValue || toDate.HasValue)
     {
-        var fromUtc = fromDate.HasValue
-            ? new DateTimeOffset(fromDate.Value, TimeOnly.MinValue, TimeSpan.Zero)
-            : DateTimeOffset.MinValue;
-        var toUtc = toDate.HasValue
-            ? new DateTimeOffset(toDate.Value, TimeOnly.MaxValue, TimeSpan.Zero)
-            : DateTimeOffset.MaxValue;
+        targetPhotos = DateRangeFilter.KeepPhotosCapturedInRange(all, fromDate, toDate);
 
-        oneDrivePhotos = all
-            .Where(p => !p.IsIphone                                              // non-iPhone always included as skipped
-                     || !p.Timestamp.HasValue                                    // no timestamp → included as skipped
-                     || (p.Timestamp.Value >= fromUtc && p.Timestamp.Value <= toUtc))
-            .ToList();
-
-        var excluded = all.Count - oneDrivePhotos.Count;
+        var excluded = all.Count - targetPhotos.Count;
         Console.WriteLine($"{all.Count} files found, {excluded} outside date range filtered out.");
     }
     else
     {
-        oneDrivePhotos = all;
-        Console.WriteLine($"{oneDrivePhotos.Count} files found.");
+        targetPhotos = all;
+        Console.WriteLine($"{targetPhotos.Count} files found.");
     }
 }
 catch (Exception ex)
@@ -229,7 +251,7 @@ catch (Exception ex)
 // ---------------------------------------------------------------------------
 
 Console.WriteLine("Matching photos...");
-var result = PhotoMatcher.Match(googleTimestamps, oneDrivePhotos);
+var result = PhotoMatcher.Match(googleTimestamps, targetPhotos);
 
 // ---------------------------------------------------------------------------
 // Step 4: Report
@@ -270,7 +292,7 @@ else
 // Optional CSV export
 if (outputCsv is not null)
 {
-    WriteCsv(outputCsv, result.Unmatched);
+    CandidateCsv.WriteNewestFirst(outputCsv, result.Unmatched);
     Console.WriteLine($"\nCSV report saved to: {outputCsv}");
 }
 
@@ -312,23 +334,11 @@ if (wantStage)
         if (!ConfirmYes()) { Console.WriteLine("Aborted."); return 0; }
     }
 
-    System.IO.Directory.CreateDirectory(stageDir);
-    int moved = 0, failed = 0;
-    foreach (var photo in result.Unmatched)
-    {
-        var dest = System.IO.Path.Combine(stageDir, photo.FileName);
-        try
-        {
-            File.Move(photo.Path, dest, overwrite: false);
-            moved++;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"  FAILED to move {photo.FileName}: {ex.Message}");
-            failed++;
-        }
-    }
-    Console.WriteLine($"Moved {moved} file(s) to: {stageDir} {(failed > 0 ? $"({failed} failed)" : "")}");
+    var staged = FileActions.MoveToStageFolder(result.Unmatched, stageDir);
+    foreach (var failure in staged.Failures)
+        Console.Error.WriteLine($"  FAILED to move {failure.Photo.FileName}: {failure.Reason}");
+    var failed = staged.Failures.Count;
+    Console.WriteLine($"Moved {staged.SucceededCount} file(s) to: {stageDir} {(failed > 0 ? $"({failed} failed)" : "")}");
     Console.WriteLine("Review that folder, then delete it manually when satisfied.");
     return 0;
 }
@@ -348,21 +358,11 @@ if (deleteMode)
         if (input != "DELETE") { Console.WriteLine("Aborted."); return 0; }
     }
 
-    int deleted = 0, failed = 0;
-    foreach (var photo in result.Unmatched)
-    {
-        try
-        {
-            File.Delete(photo.Path);
-            deleted++;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"  FAILED to delete {photo.FileName}: {ex.Message}");
-            failed++;
-        }
-    }
-    Console.WriteLine($"Deleted {deleted} file(s). {(failed > 0 ? $"{failed} failed." : "")}");
+    var deleted = FileActions.DeletePermanently(result.Unmatched);
+    foreach (var failure in deleted.Failures)
+        Console.Error.WriteLine($"  FAILED to delete {failure.Photo.FileName}: {failure.Reason}");
+    var failed = deleted.Failures.Count;
+    Console.WriteLine($"Deleted {deleted.SucceededCount} file(s). {(failed > 0 ? $"{failed} failed." : "")}");
     return 0;
 }
 
@@ -407,7 +407,7 @@ static void PrintHelp()
         PhotoRecull — Remove OneDrive photos already deleted from Google Photos
 
         USAGE:
-          dotnet run -- --onedrive <folder> [options] <mode>
+          dotnet run --project src/PhotoRecull.Cli -- --onedrive <folder> [options] <mode>
 
         REQUIRED:
           --onedrive <folder>     Path to your local OneDrive Camera Roll folder
@@ -467,24 +467,6 @@ static void PrintHelp()
         """);
 }
 
-static void WriteCsv(string path, List<OneDrivePhoto> photos)
-{
-    using var sw = new StreamWriter(path);
-    sw.WriteLine("TimestampUTC,TimestampSource,FileName,FullPath");
-    foreach (var p in photos.OrderByDescending(x => x.Timestamp))
-    {
-        var ts = p.Timestamp.HasValue
-            ? p.Timestamp.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
-            : "";
-        sw.WriteLine($"{ts},{p.TimestampSource ?? ""},{EscapeCsv(p.FileName)},{EscapeCsv(p.Path)}");
-    }
-}
-
-static string EscapeCsv(string s) =>
-    s.Contains(',') || s.Contains('"') || s.Contains('\n')
-        ? $"\"{s.Replace("\"", "\"\"")}\""
-        : s;
-
 static bool ConfirmYes()
 {
     var input = Console.ReadLine()?.Trim().ToLowerInvariant();
@@ -514,7 +496,7 @@ static void PrintNextSteps(string oneDriveFolder, DateOnly? from, DateOnly? to,
 
     string BaseCmd()
     {
-        var c = $"dotnet run -- --onedrive \"{oneDriveFolder}\"";
+        var c = $"dotnet run --project src/PhotoRecull.Cli -- --onedrive \"{oneDriveFolder}\"";
         if (from.HasValue) c += $" --from {from:yyyy-MM-dd}";
         if (to.HasValue)   c += $" --to {to:yyyy-MM-dd}";
         if (effectiveCache is not null) c += $" --cache \"{effectiveCache}\"";

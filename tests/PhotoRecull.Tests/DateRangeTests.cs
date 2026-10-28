@@ -1,9 +1,10 @@
-using PhotoRecull;
+using PhotoRecull.Cli;
+using PhotoRecull.Core;
 
 namespace PhotoRecull.Tests;
 
 /// <summary>
-/// Tests that the date range filter correctly includes/excludes OneDrive photos
+/// Tests that the date range filter correctly includes/excludes target photos
 /// and that the HTML report generator produces valid output.
 /// </summary>
 public class DateRangeTests
@@ -15,14 +16,13 @@ public class DateRangeTests
     private static readonly DateOnly PhotoDate = new(2026, 4, 11);
 
     // -----------------------------------------------------------------------
-    // Date range filtering (applied in Program.cs after ScanFolder)
-    // We test the filtering logic directly here using real scan results.
+    // Date range filtering, using real scan results
     // -----------------------------------------------------------------------
 
     [Fact]
     public void DateFilter_RangeCoversPhotoDate_BothFilesIncluded()
     {
-        var all = OneDriveScanner.ScanFolder(TestDataDir);
+        var all = PhotoScanner.ScanFolder(TestDataDir);
         var filtered = ApplyDateFilter(all, new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30));
 
         // Both sample files have iPhone=true and fall within April 2026
@@ -32,7 +32,7 @@ public class DateRangeTests
     [Fact]
     public void DateFilter_RangeBeforePhotoDate_IphoneFilesExcluded()
     {
-        var all = OneDriveScanner.ScanFolder(TestDataDir);
+        var all = PhotoScanner.ScanFolder(TestDataDir);
         var filtered = ApplyDateFilter(all, new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31));
 
         // No iPhone files should survive (photo is April, not March)
@@ -42,7 +42,7 @@ public class DateRangeTests
     [Fact]
     public void DateFilter_RangeAfterPhotoDate_IphoneFilesExcluded()
     {
-        var all = OneDriveScanner.ScanFolder(TestDataDir);
+        var all = PhotoScanner.ScanFolder(TestDataDir);
         var filtered = ApplyDateFilter(all, new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31));
 
         Assert.DoesNotContain(filtered, p => p.IsIphone);
@@ -51,7 +51,7 @@ public class DateRangeTests
     [Fact]
     public void DateFilter_ExactDayMatch_BothFilesIncluded()
     {
-        var all = OneDriveScanner.ScanFolder(TestDataDir);
+        var all = PhotoScanner.ScanFolder(TestDataDir);
         var filtered = ApplyDateFilter(all, PhotoDate, PhotoDate);
 
         Assert.Equal(2, filtered.Count(p => p.IsIphone));
@@ -60,7 +60,7 @@ public class DateRangeTests
     [Fact]
     public void DateFilter_DayBeforePhoto_IphoneFilesExcluded()
     {
-        var all = OneDriveScanner.ScanFolder(TestDataDir);
+        var all = PhotoScanner.ScanFolder(TestDataDir);
         var filtered = ApplyDateFilter(all, new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 10));
 
         Assert.DoesNotContain(filtered, p => p.IsIphone);
@@ -70,12 +70,12 @@ public class DateRangeTests
     public void DateFilter_NonIphoneFiles_AlwaysIncluded()
     {
         // Simulate a scan result that contains a non-iPhone file
-        var nonIphone = new OneDrivePhoto(
+        var nonIphone = new PhotoFile(
             Path: @"C:\fake\DSC001.jpg", FileName: "DSC001.jpg",
             Timestamp: new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
             IsIphone: false, TimestampSource: null);
 
-        var photos = new List<OneDrivePhoto> { nonIphone };
+        var photos = new List<PhotoFile> { nonIphone };
         // Range doesn't include the timestamp, but non-iPhone should still appear
         var filtered = ApplyDateFilter(photos, new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30));
 
@@ -92,7 +92,7 @@ public class DateRangeTests
         var tmpPath = Path.GetTempFileName() + ".html";
         try
         {
-            var photos = OneDriveScanner.ScanFolder(TestDataDir);
+            var photos = PhotoScanner.ScanFolder(TestDataDir);
             // Simulate: one photo matched (keep), one unmatched (remove)
             var ios = photos.First(p => p.FileName.EndsWith("_iOS.heic", StringComparison.OrdinalIgnoreCase));
             var img = photos.First(p => p.FileName.Equals("IMG_5587.HEIC", StringComparison.OrdinalIgnoreCase));
@@ -143,20 +143,6 @@ public class DateRangeTests
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Helper — mirrors the date-range filter logic from Program.cs
-    // -----------------------------------------------------------------------
-
-    private static List<OneDrivePhoto> ApplyDateFilter(
-        List<OneDrivePhoto> photos, DateOnly from, DateOnly to)
-    {
-        var fromUtc = new DateTimeOffset(from, TimeOnly.MinValue, TimeSpan.Zero);
-        var toUtc   = new DateTimeOffset(to,   TimeOnly.MaxValue, TimeSpan.Zero);
-
-        return photos
-            .Where(p => !p.IsIphone
-                     || !p.Timestamp.HasValue
-                     || (p.Timestamp.Value >= fromUtc && p.Timestamp.Value <= toUtc))
-            .ToList();
-    }
+    private static List<PhotoFile> ApplyDateFilter(List<PhotoFile> photos, DateOnly from, DateOnly to) =>
+        DateRangeFilter.KeepPhotosCapturedInRange(photos, from, to);
 }

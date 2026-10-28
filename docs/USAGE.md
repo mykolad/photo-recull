@@ -1,7 +1,7 @@
 # Usage
 
 ```bash
-dotnet run -- --onedrive <folder> [options] <mode>
+dotnet run --project src/PhotoRecull.Cli -- --onedrive <folder> [options] <mode>
 ```
 
 You must supply `--onedrive`. The **mode** defaults to a dry run; pass `--stage` or
@@ -88,15 +88,15 @@ Caching and the review report are on by default, so a normal flow needs no extra
 
 ```bash
 # 1. Pick once. Auto-saves the pick to 2026-08.json and opens 2026-08.html to review.
-dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 \
+dotnet run --project src/PhotoRecull.Cli -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 \
   --dry-run --browser chrome
 
 # 2. Stage candidates. Reuses 2026-08.json automatically — no re-picking.
-dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 --stage
+dotnet run --project src/PhotoRecull.Cli -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 --stage
 
 # 3. Inspect _staged_2026-08, drag anything wrong back into Camera Roll,
 #    then delete the staged folder yourself — or, if fully confident:
-dotnet run -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 --delete --yes
+dotnet run --project src/PhotoRecull.Cli -- --onedrive "C:\...\Camera Roll" --from 2026-08 --to 2026-08 --delete --yes
 ```
 
 After a dry run with candidates, the tool prints the exact stage command, pre-filled with

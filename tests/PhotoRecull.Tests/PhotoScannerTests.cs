@@ -1,15 +1,15 @@
-using PhotoRecull;
+using PhotoRecull.Core;
 
 namespace PhotoRecull.Tests;
 
 /// <summary>
-/// Tests for OneDriveScanner using the two real sample HEIC files in TestData/.
+/// Tests for PhotoScanner using the two real sample HEIC files in TestData/.
 ///
 /// Both files are the same photo — one named in OneDrive iOS format
 /// (timestamp-based, UTC), the other in the original iPhone format (IMG_xxxx).
 /// Both should resolve to the same UTC capture time.
 /// </summary>
-public class OneDriveScannerTests
+public class PhotoScannerTests
 {
     // TestData folder is copied next to the test DLL by the .csproj ItemGroup.
     private static readonly string TestDataDir =
@@ -33,7 +33,7 @@ public class OneDriveScannerTests
     [Fact]
     public void ScanFolder_IosCameraFile_IsDetectedAsIphone()
     {
-        var photos = OneDriveScanner.ScanFolder(TestDataDir);
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
         var photo = photos.Single(p => p.FileName.EndsWith("_iOS.heic", StringComparison.OrdinalIgnoreCase));
 
         Assert.True(photo.IsIphone);
@@ -42,7 +42,7 @@ public class OneDriveScannerTests
     [Fact]
     public void ScanFolder_IosCameraFile_TimestampParsedFromFilename()
     {
-        var photos = OneDriveScanner.ScanFolder(TestDataDir);
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
         var photo = photos.Single(p => p.FileName.EndsWith("_iOS.heic", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal("filename", photo.TimestampSource);
@@ -52,7 +52,7 @@ public class OneDriveScannerTests
     [Fact]
     public void ScanFolder_IosCameraFile_TimestampIsCorrectUtc()
     {
-        var photos = OneDriveScanner.ScanFolder(TestDataDir);
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
         var photo = photos.Single(p => p.FileName.EndsWith("_iOS.heic", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal(ExpectedUtc, photo.Timestamp!.Value);
@@ -65,7 +65,7 @@ public class OneDriveScannerTests
     [Fact]
     public void ScanFolder_ImgFile_IsDetectedAsIphoneViaExif()
     {
-        var photos = OneDriveScanner.ScanFolder(TestDataDir);
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
         var photo = photos.Single(p => p.FileName.Equals("IMG_5587.HEIC", StringComparison.OrdinalIgnoreCase));
 
         Assert.True(photo.IsIphone);
@@ -74,7 +74,7 @@ public class OneDriveScannerTests
     [Fact]
     public void ScanFolder_ImgFile_TimestampParsedFromExif()
     {
-        var photos = OneDriveScanner.ScanFolder(TestDataDir);
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
         var photo = photos.Single(p => p.FileName.Equals("IMG_5587.HEIC", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal("exif", photo.TimestampSource);
@@ -84,7 +84,7 @@ public class OneDriveScannerTests
     [Fact]
     public void ScanFolder_ImgFile_TimestampIsCorrectUtc()
     {
-        var photos = OneDriveScanner.ScanFolder(TestDataDir);
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
         var photo = photos.Single(p => p.FileName.Equals("IMG_5587.HEIC", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal(ExpectedUtc, photo.Timestamp!.Value);
@@ -98,7 +98,7 @@ public class OneDriveScannerTests
     [Fact]
     public void ScanFolder_BothSampleFiles_ProduceSameUtcTimestamp()
     {
-        var photos = OneDriveScanner.ScanFolder(TestDataDir);
+        var photos = PhotoScanner.ScanFolder(TestDataDir);
 
         var ios = photos.Single(p => p.FileName.EndsWith("_iOS.heic", StringComparison.OrdinalIgnoreCase));
         var img = photos.Single(p => p.FileName.Equals("IMG_5587.HEIC", StringComparison.OrdinalIgnoreCase));
@@ -116,6 +116,41 @@ public class OneDriveScannerTests
     public void ScanFolder_NonExistentFolder_ThrowsDirectoryNotFoundException()
     {
         Assert.Throws<DirectoryNotFoundException>(
-            () => OneDriveScanner.ScanFolder(@"C:\does\not\exist"));
+            () => PhotoScanner.ScanFolder(@"C:\does\not\exist"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Progress and cancellation (used by the app's Scan screen)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void ScanFolder_ReportsEveryPhotoFileBeingRead()
+    {
+        var filesRead = new List<string>();
+
+        PhotoScanner.ScanFolder(TestDataDir, new SynchronousProgress<string>(filesRead.Add));
+
+        Assert.Equal([IosCameraFile, GooglePhotosFile], filesRead.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ScanFolder_AlreadyCancelled_Throws()
+    {
+        Assert.Throws<OperationCanceledException>(
+            () => PhotoScanner.ScanFolder(TestDataDir, cancellationToken: new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    public void OneDriveTarget_ScansItsCameraRollFolder()
+    {
+        var target = new OneDriveTarget(TestDataDir);
+
+        Assert.Equal("OneDrive", target.DisplayName);
+        Assert.Equal(2, target.Scan().Count);
+    }
+
+    private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 }

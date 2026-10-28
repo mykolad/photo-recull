@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace PhotoRecull;
+namespace PhotoRecull.Core;
 
 /// <summary>
 /// Opens a URL or local file in a chosen browser, falling back to the system

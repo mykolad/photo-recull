@@ -1,10 +1,10 @@
-using PhotoRecull;
+using PhotoRecull.Core;
 
 namespace PhotoRecull.Tests;
 
 /// <summary>
 /// Unit tests for PhotoMatcher.Match.
-/// These tests use synthetic OneDrivePhoto records — no real files needed.
+/// These tests use synthetic PhotoFile records — no real files needed.
 /// </summary>
 public class PhotoMatcherTests
 {
@@ -13,11 +13,11 @@ public class PhotoMatcherTests
         new(2026, 4, 11, 7, 33, 33, 0, TimeSpan.Zero);
 
     // Factory helpers
-    private static OneDrivePhoto IphonePhoto(DateTimeOffset? ts, string name = "test_iOS.heic") =>
+    private static PhotoFile IphonePhoto(DateTimeOffset? ts, string name = "test_iOS.heic") =>
         new(Path: $@"C:\fake\{name}", FileName: name, Timestamp: ts,
             IsIphone: true, TimestampSource: ts.HasValue ? "filename" : null);
 
-    private static OneDrivePhoto NonIphonePhoto(DateTimeOffset? ts = null, string name = "DSC001.jpg") =>
+    private static PhotoFile NonIphonePhoto(DateTimeOffset? ts = null, string name = "DSC001.jpg") =>
         new(Path: $@"C:\fake\{name}", FileName: name, Timestamp: ts,
             IsIphone: false, TimestampSource: null);
 
@@ -109,7 +109,7 @@ public class PhotoMatcherTests
     [Fact]
     public void Match_EmptyGoogleSet_AllIphoneFilesAreUnmatched()
     {
-        var photos = new List<OneDrivePhoto>
+        var photos = new List<PhotoFile>
         {
             IphonePhoto(Base, "a_iOS.heic"),
             IphonePhoto(Base.AddSeconds(30), "b_iOS.heic"),
@@ -163,7 +163,7 @@ public class PhotoMatcherTests
         var nonIphonePhoto  = NonIphonePhoto(Base, "camera.jpg");
         var noTimestampPhoto = IphonePhoto(null, "notime_iOS.heic");
 
-        var photos = new List<OneDrivePhoto>
+        var photos = new List<PhotoFile>
             { matchedPhoto, unmatchedPhoto, nonIphonePhoto, noTimestampPhoto };
 
         var result = PhotoMatcher.Match(GoogleSet(Base), photos);
@@ -182,7 +182,7 @@ public class PhotoMatcherTests
     public void Match_RealScan_OneGoogleTimestamp_KeepsExactlyOneFile()
     {
         var testDataDir = Path.Combine(AppContext.BaseDirectory, "TestData");
-        var photos = OneDriveScanner.ScanFolder(testDataDir);
+        var photos = PhotoScanner.ScanFolder(testDataDir);
 
         // Both test files share the same capture time. Google Photos has a
         // single photo at that time, so matching is one-to-one: exactly one
@@ -247,7 +247,7 @@ public class PhotoMatcherTests
     public void Match_RealScanWithEmptyGoogleSet_BothFilesUnmatched()
     {
         var testDataDir = Path.Combine(AppContext.BaseDirectory, "TestData");
-        var photos = OneDriveScanner.ScanFolder(testDataDir);
+        var photos = PhotoScanner.ScanFolder(testDataDir);
 
         var result = PhotoMatcher.Match(GoogleSet(), photos);
 

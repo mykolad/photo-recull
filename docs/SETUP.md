@@ -24,8 +24,9 @@ setup.
 
 ## 2. Add credentials to the project
 
-Rename the downloaded file to **`credentials.json`** and place it in the project folder
-(next to `PhotoRecull.csproj`), or pass its path with `--credentials <file>`.
+Rename the downloaded file to **`credentials.json`** and place it in the repository root
+(where you run `dotnet run --project src/PhotoRecull.Cli` from), or
+pass its path with `--credentials <file>`.
 
 `credentials.json` and the cached OAuth token are **git-ignored** — never commit them.
 
@@ -34,7 +35,7 @@ Rename the downloaded file to **`credentials.json`** and place it in the project
 On the first run a browser window opens asking you to sign in and approve access. You'll
 see an "unverified app" warning (expected for a personal test app) — choose
 **Advanced → Go to … (unsafe)** to continue. The token is then cached under
-`bin/.../token_store_picker/`, so later runs don't prompt again.
+`src/PhotoRecull.Cli/bin/.../token_store_picker/`, so later runs don't prompt again.
 
 To sign in with a browser other than your default (e.g. keep the default signed out of
 Google), use `--browser chrome`. See [USAGE.md](USAGE.md).
