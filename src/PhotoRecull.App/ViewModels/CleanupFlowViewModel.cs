@@ -51,12 +51,14 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public string SignInBrowserName { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPickStep), nameof(IsRangeStep), nameof(IsScanStep))]
+    [NotifyPropertyChangedFor(nameof(IsPickStep), nameof(IsRangeStep), nameof(IsScanStep), nameof(IsReviewStep), nameof(IsResultStep))]
     public partial CleanupFlowStep Step { get; set; }
 
     public bool IsPickStep => Step == CleanupFlowStep.Pick;
     public bool IsRangeStep => Step == CleanupFlowStep.Range;
     public bool IsScanStep => Step == CleanupFlowStep.Scan;
+    public bool IsReviewStep => Step is CleanupFlowStep.Review or CleanupFlowStep.Confirm;
+    public bool IsResultStep => Step == CleanupFlowStep.Result;
 
     public string Title => _cleanup is null ? "New cleanup" : DateRangeLabel.Format(_cleanup.From, _cleanup.To);
 
@@ -117,10 +119,26 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     [ObservableProperty]
     public partial string? ReauthenticatingMessage { get; set; }
 
+    // A cleanup that was scanned before ("Continue review") is scanned again with
+    // its saved pick, since files may have changed, and opens straight in Review.
     public void Start()
     {
+        if (_cleanup is { State: CleanupState.ReadyToAct } cleanup && AppServices.Database.LoadPick(cleanup.Id) is { } savedPick)
+        {
+            _pickedTimestamps = savedPick.Timestamps;
+            SetDraftRange(cleanup.From, cleanup.To);
+            _ = ScanThenReviewAsync();
+            return;
+        }
         if (!IsSavedPickVisible)
             _ = PickInBrowserAsync();
+    }
+
+    private async Task ScanThenReviewAsync()
+    {
+        await ScanTargetsAsync();
+        if (IsScanComplete)
+            ShowReview();
     }
 
     [RelayCommand]
@@ -482,10 +500,159 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         Step = CleanupFlowStep.Range;
     }
 
-    // The Review step is the next pull request.
     [RelayCommand]
-    private void ReviewResults() =>
-        ShellPage.Current?.ShowToast($"{PhotoCount(_cleanup?.ToRemoveCount ?? 0)} to review. Review opens here in the next update.");
+    private void ReviewResults() => ShowReview();
+
+    // ---------------------------------------------------------------- Review, Confirm, Result
+
+    [ObservableProperty]
+    public partial ReviewViewModel? Review { get; set; }
+
+    private void ShowReview()
+    {
+        if (_cleanup is null)
+            return;
+        Review = new ReviewViewModel(_cleanup, ScanResults, Targets);
+        Step = CleanupFlowStep.Review;
+    }
+
+    public void BeginConfirm() => Step = CleanupFlowStep.Confirm;
+
+    public void CancelConfirm() => Step = CleanupFlowStep.Review;
+
+    public string DefaultStageFolderFor(TargetSettings target) =>
+        Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(target.FolderPath)) ?? target.FolderPath,
+            $"_staged_{_cleanup!.From:yyyy-MM-dd}_{_cleanup.To:yyyy-MM-dd}");
+
+    public IReadOnlyList<(TargetSettings Target, int Count, long Bytes)> CandidatesPerTarget() =>
+        Review?.CandidatesToActOn
+            .GroupBy(t => t.Target)
+            .Select(g => (g.Key, g.Count(), g.Sum(t => t.SizeBytes)))
+            .ToList() ?? [];
+
+    private CleanupAction _lastAction;
+    private Dictionary<TargetSettings, string> _lastStageFolders = [];
+    private List<(TargetSettings Target, FileFailure Failure)> _lastFailures = [];
+
+    public Task StageAsync(IReadOnlyDictionary<TargetSettings, string> stageFolders) =>
+        ActOnAsync(CleanupAction.Staged, stageFolders,
+            Review!.CandidatesToActOn.Select(t => (t.Target, t.Photo)).ToList());
+
+    public Task DeleteAsync() =>
+        ActOnAsync(CleanupAction.Deleted, new Dictionary<TargetSettings, string>(),
+            Review!.CandidatesToActOn.Select(t => (t.Target, t.Photo)).ToList());
+
+    [RelayCommand]
+    private Task RetryFailedAsync() =>
+        ActOnAsync(_lastAction, _lastStageFolders, _lastFailures.Select(f => (f.Target, f.Failure.Photo)).ToList());
+
+    private async Task ActOnAsync(
+        CleanupAction action, IReadOnlyDictionary<TargetSettings, string> stageFolders,
+        List<(TargetSettings Target, PhotoFile Photo)> photos)
+    {
+        IsActing = true;
+        var ranAt = DateTimeOffset.Now;
+        var perTarget = await Task.Run(() => photos
+            .GroupBy(p => p.Target)
+            .Select(g =>
+            {
+                var targetPhotos = g.Select(p => p.Photo).ToList();
+                var result = action == CleanupAction.Staged
+                    ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key])
+                    : DeleteFrom(g.Key, targetPhotos);
+                return (Target: g.Key, Result: result);
+            })
+            .ToList());
+        IsActing = false;
+
+        var runs = perTarget.Select(r => new CleanupRun(_cleanup!.Id, ranAt, action, r.Target,
+            action == CleanupAction.Staged ? stageFolders[r.Target] : null,
+            r.Result.SucceededCount, r.Result.Failures.Count,
+            action == CleanupAction.Deleted ? r.Result.SucceededBytes : 0)).ToList();
+        int succeeded = runs.Sum(r => r.SucceededCount);
+
+        if (succeeded > 0)
+        {
+            _cleanup = _cleanup! with
+            {
+                State = action == CleanupAction.Staged ? CleanupState.Staged : CleanupState.Done,
+                StagedCount = action == CleanupAction.Staged ? _cleanup.StagedCount + succeeded : _cleanup.StagedCount,
+                RemovedCount = action == CleanupAction.Deleted ? _cleanup.RemovedCount + succeeded : _cleanup.RemovedCount,
+                FreedBytes = _cleanup.FreedBytes + runs.Sum(r => r.FreedBytes),
+                KeptByUserCount = Review?.KeptByUserCount ?? _cleanup.KeptByUserCount,
+                LastActivityAt = ranAt,
+            };
+        }
+        AppServices.Database.RecordRunsWithCleanup(_cleanup!, runs);
+
+        _lastAction = action;
+        _lastStageFolders = stageFolders.ToDictionary();
+        _lastFailures = perTarget.SelectMany(r => r.Result.Failures.Select(f => (r.Target, f))).ToList();
+        ShowResult(action, perTarget, stageFolders);
+    }
+
+    private static FileActionResult DeleteFrom(TargetSettings target, List<PhotoFile> photos) =>
+        DeletesGoToRecycleBin(target)
+            ? FileActions.MoveToRecycleBin(photos)
+            : FileActions.DeletePermanently(photos);
+
+    public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;
+
+    [ObservableProperty]
+    public partial bool IsActing { get; set; }
+
+    public ObservableCollection<ResultTargetRow> ResultTargets { get; } = [];
+
+    public ObservableCollection<ResultFailureRow> ResultFailures { get; } = [];
+
+    [ObservableProperty]
+    public partial string ResultTitle { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string ResultMessage { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool ResultHasFailures { get; set; }
+
+    private void ShowResult(
+        CleanupAction action,
+        List<(TargetSettings Target, FileActionResult Result)> perTarget,
+        IReadOnlyDictionary<TargetSettings, string> stageFolders)
+    {
+        int succeeded = perTarget.Sum(r => r.Result.SucceededCount);
+        int failed = perTarget.Sum(r => r.Result.Failures.Count);
+        var verb = action == CleanupAction.Staged ? "Staged" : "Deleted";
+        ResultTitle = $"{verb} {FileCount(succeeded)}.";
+        ResultMessage = (succeeded > 0
+                ? $"{Title} is now marked {(action == CleanupAction.Staged ? "Staged" : "Done")} in Library."
+                : "Nothing changed in Library.")
+            + (failed > 0 ? $" {FileCount(failed)} failed." : "");
+        ResultHasFailures = failed > 0;
+
+        ResultTargets.Clear();
+        foreach (var (target, result) in perTarget)
+        {
+            var location = action == CleanupAction.Staged
+                ? stageFolders[target]
+                : DeletesGoToRecycleBin(target) ? "Moved to the Recycle Bin" : "Deleted permanently";
+            ResultTargets.Add(new ResultTargetRow(
+                ShellPage.TargetGlyph(target.Kind), SyncTargets.DisplayName(target.Kind), location,
+                action == CleanupAction.Staged ? "Moved" : "Deleted", result.SucceededCount, result.Failures.Count,
+                action == CleanupAction.Staged ? stageFolders[target] : null,
+                action == CleanupAction.Staged ? "Open folder" : DeletesGoToRecycleBin(target) ? "Recycle Bin" : null));
+        }
+        ResultFailures.Clear();
+        foreach (var (target, failure) in _lastFailures)
+            ResultFailures.Add(new ResultFailureRow(failure.Photo.FileName, SyncTargets.DisplayName(target.Kind), failure.Reason));
+
+        NotifyTitleChanged();
+        Step = CleanupFlowStep.Result;
+    }
+
+    private static string FileCount(int count) => count == 1 ? "1 file" : $"{count:N0} files";
+
+    [RelayCommand]
+    private void ViewHistory() => ShellPage.Current?.ShowHistory();
 
     [RelayCommand]
     private void BackToLibrary()

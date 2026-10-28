@@ -23,7 +23,7 @@
                     <FontIcon Glyph="&#xE787;" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="History" Tag="History">
+            <NavigationViewItem x:Name="HistoryItem" Content="History" Tag="History">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE81C;" />
                 </NavigationViewItem.Icon>

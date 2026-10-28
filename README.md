@@ -68,7 +68,7 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 |---|---|
 | `src/PhotoRecull.Core` | Scanning, matching, the Google Photos Picker client, stage/delete, the cleanup library. Shared by every front end. |
 | `src/PhotoRecull.Cli` | The command-line app, including the HTML review report |
-| `src/PhotoRecull.App` | The Windows app (WinUI 3), in progress: setup, the Library, and a cleanup up to scanning (pick, date range, scan) |
+| `src/PhotoRecull.App` | The Windows app (WinUI 3): setup, the Library, and a full cleanup for OneDrive (pick, date range, scan, review, stage or delete to the Recycle Bin) |
 | `tests/PhotoRecull.Tests` | xUnit tests |
 
 To run the Windows app: `dotnet run --project src/PhotoRecull.App`. It keeps its settings,

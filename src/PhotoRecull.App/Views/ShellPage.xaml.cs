@@ -97,6 +97,12 @@ public sealed partial class ShellPage : Page
         Navigation.IsPaneOpen = true;
     }
 
+    public void ShowHistory()
+    {
+        Navigation.IsPaneOpen = true;
+        Navigation.SelectedItem = HistoryItem;
+    }
+
     // WinUI allows one open ContentDialog; a quick second click on New cleanup
     // would otherwise try to open another one and throw.
     private bool _isNewCleanupDialogOpen;

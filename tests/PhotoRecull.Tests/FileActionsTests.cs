@@ -70,7 +70,44 @@ public class FileActionsTests : IDisposable
             result = FileActions.DeletePermanently([locked, unlocked]);
 
         Assert.Equal(1, result.SucceededCount);
-        Assert.Equal(locked, Assert.Single(result.Failures).Photo);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(locked, failure.Photo);
+        Assert.Equal("Locked: another app or OneDrive sync is using it", failure.Reason);
         Assert.False(File.Exists(unlocked.Path));
+    }
+
+    [Fact]
+    public void Results_CountTheBytesOfFilesThatSucceeded()
+    {
+        var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("bb.heic") };
+
+        var result = FileActions.DeletePermanently(photos);
+
+        Assert.Equal("a.heic".Length + "bb.heic".Length, result.SucceededBytes);
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void MissingFile_IsReportedAsMissing()
+    {
+        var missing = new PhotoFile(Path.Combine(_targetFolder, "gone.heic"), "gone.heic",
+            DateTimeOffset.UtcNow, IsIphone: true, TimestampSource: "filename");
+
+        var stageResult = FileActions.MoveToStageFolder([missing], _stageFolder);
+        var recycleResult = FileActions.MoveToRecycleBin([missing]);
+
+        Assert.Equal("Missing: moved or deleted since the scan", Assert.Single(stageResult.Failures).Reason);
+        Assert.Equal("Missing: moved or deleted since the scan", Assert.Single(recycleResult.Failures).Reason);
+    }
+
+    [Fact]
+    public void MoveToStageFolder_ExplainsANameAlreadyInTheStageFolder()
+    {
+        Directory.CreateDirectory(_stageFolder);
+        File.WriteAllText(Path.Combine(_stageFolder, "a.heic"), "already staged");
+
+        var result = FileActions.MoveToStageFolder([CreatePhoto("a.heic")], _stageFolder);
+
+        Assert.Equal("A file with this name is already in the stage folder", Assert.Single(result.Failures).Reason);
     }
 }

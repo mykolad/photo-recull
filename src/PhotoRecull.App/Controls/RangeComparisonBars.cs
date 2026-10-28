@@ -53,6 +53,9 @@ public sealed class RangeComparisonBars : UserControl
 
     private void Redraw()
     {
+        // Set on every redraw (including theme changes) rather than once, so the
+        // labels stay readable after switching between light and dark.
+        _pickLabel.Foreground = _rangeLabel.Foreground = XamlFunctions.ThemeBrush("TextFillColorSecondaryBrush");
         double width = _pickTrack.ActualWidth;
         if (width <= 0 || _pick is not { } pick)
             return;
@@ -118,7 +121,6 @@ public sealed class RangeComparisonBars : UserControl
         FontSize = 12,
         LineHeight = 16,
         TextWrapping = TextWrapping.Wrap,
-        Foreground = XamlFunctions.ThemeBrush("TextFillColorSecondaryBrush"),
     };
 
     private static void Place(Grid grid, FrameworkElement element, int row, int column)

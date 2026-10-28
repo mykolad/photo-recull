@@ -167,6 +167,86 @@ public class AppStateDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void KeptPhotos_AreRememberedPerCleanupIgnoringPathCase()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));
+        var other = CleanupFor(new(2026, 9, 1), new(2026, 9, 30));
+        database.SaveCleanup(cleanup);
+        database.SaveCleanup(other);
+
+        database.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\IMG_1.HEIC", isKept: true);
+        database.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\IMG_2.HEIC", isKept: true);
+        database.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\IMG_2.HEIC", isKept: true);
+        database.SetPhotoKept(cleanup.Id, @"c:\camera roll\img_1.heic", isKept: false);
+
+        Assert.Equal([@"C:\Camera Roll\IMG_2.HEIC"], new AppStateDatabase(DatabasePath).LoadKeptPhotoPaths(cleanup.Id));
+        Assert.Contains(@"c:\camera roll\IMG_2.heic", database.LoadKeptPhotoPaths(cleanup.Id));
+        Assert.Empty(database.LoadKeptPhotoPaths(other.Id));
+    }
+
+    [Fact]
+    public void Runs_AreRecordedWithTheCleanupsNewStateAndListedNewestFirst()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.ReadyToAct);
+        var staged = new CleanupRun(cleanup.Id, new DateTimeOffset(2026, 9, 1, 10, 0, 0, TimeSpan.Zero),
+            CleanupAction.Staged, oneDrive, @"C:\_staged_2026-08-01_2026-08-31", 40, 1, 0);
+        var deleted = staged with
+        {
+            RanAt = staged.RanAt.AddDays(2),
+            Action = CleanupAction.Deleted,
+            Destination = null,
+            FreedBytes = 123_456_789,
+        };
+
+        database.RecordRunsWithCleanup(cleanup with { State = CleanupState.Staged, StagedCount = 40 }, [staged]);
+        database.RecordRunsWithCleanup(cleanup with { State = CleanupState.Done, RemovedCount = 40 }, [deleted]);
+
+        var reopened = new AppStateDatabase(DatabasePath);
+        Assert.Equal([deleted, staged], reopened.LoadRunsNewestFirst());
+        Assert.Equal(CleanupState.Done, Assert.Single(reopened.LoadCleanups()).State);
+    }
+
+    [Fact]
+    public void DatabaseFromTheFirstSchemaVersion_IsUpgradedKeepingItsData()
+    {
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));
+        using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE cleanups (id TEXT PRIMARY KEY, from_day TEXT NOT NULL, to_day TEXT NOT NULL,
+                    state TEXT NOT NULL, picked_count INTEGER NOT NULL, picked_at TEXT NOT NULL,
+                    last_activity_at TEXT NOT NULL, targets TEXT, earliest_picked_day TEXT, latest_picked_day TEXT,
+                    to_remove_count INTEGER, kept_by_user_count INTEGER NOT NULL DEFAULT 0,
+                    staged_count INTEGER NOT NULL DEFAULT 0, removed_count INTEGER NOT NULL DEFAULT 0,
+                    freed_bytes INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE picked_photos (cleanup_id TEXT NOT NULL REFERENCES cleanups(id) ON DELETE CASCADE,
+                    captured_at_utc_ticks INTEGER NOT NULL);
+                CREATE TABLE google_token (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO settings VALUES ('SignInBrowser', 'firefox');
+                INSERT INTO cleanups (id, from_day, to_day, state, picked_count, picked_at, last_activity_at)
+                    VALUES ('{cleanup.Id}', '2026-08-01', '2026-08-31', 'Picked', 3,
+                            '{cleanup.PickedAt:O}', '{cleanup.LastActivityAt:O}');
+                PRAGMA user_version = 1;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var upgraded = new AppStateDatabase(DatabasePath);
+        upgraded.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\IMG_1.HEIC", isKept: true);
+
+        Assert.Equal("firefox", upgraded.LoadSettings().SignInBrowser);
+        Assert.Equal(cleanup, Assert.Single(upgraded.LoadCleanups()));
+        Assert.Single(upgraded.LoadKeptPhotoPaths(cleanup.Id));
+        Assert.Empty(upgraded.LoadRunsNewestFirst());
+    }
+
+    [Fact]
     public async Task GoogleTokenStore_StoresReadsDeletesAndClears()
     {
         var database = new AppStateDatabase(DatabasePath);

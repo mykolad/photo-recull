@@ -17,6 +17,10 @@
                     <SolidColorBrush x:Key="CleanupPickedBrush" Color="#6EA6DC" />
                     <SolidColorBrush x:Key="NotCleanedHatchBrush" Color="#1F000000" />
                     <SolidColorBrush x:Key="TodayLineBrush" Color="#1B1B1B" />
+                    <SolidColorBrush x:Key="HoldToConfirmBackgroundBrush" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="HoldToConfirmBorderBrush" Color="#A52A1B" />
+                    <SolidColorBrush x:Key="HoldToConfirmFillBrush" Color="#8F1D12" />
+                    <SolidColorBrush x:Key="HoldToConfirmTextBrush" Color="#FFFFFF" />
 
                     <SolidColorBrush x:Key="PillNotCleanedForeground" Color="#5D5D5D" />
                     <SolidColorBrush x:Key="PillNotCleanedBackground" Color="#0E000000" />
@@ -36,6 +40,10 @@
                     <SolidColorBrush x:Key="CleanupPickedBrush" Color="#4A7BAF" />
                     <SolidColorBrush x:Key="NotCleanedHatchBrush" Color="#2EFFFFFF" />
                     <SolidColorBrush x:Key="TodayLineBrush" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="HoldToConfirmBackgroundBrush" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="HoldToConfirmBorderBrush" Color="#E0503F" />
+                    <SolidColorBrush x:Key="HoldToConfirmFillBrush" Color="#7A160D" />
+                    <SolidColorBrush x:Key="HoldToConfirmTextBrush" Color="#FFFFFF" />
 
                     <SolidColorBrush x:Key="PillNotCleanedForeground" Color="#C5C5C5" />
                     <SolidColorBrush x:Key="PillNotCleanedBackground" Color="#14FFFFFF" />
@@ -56,6 +64,10 @@
                     <SolidColorBrush x:Key="CleanupPickedBrush" Color="{ThemeResource SystemColorHotlightColor}" />
                     <SolidColorBrush x:Key="NotCleanedHatchBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
                     <SolidColorBrush x:Key="TodayLineBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="HoldToConfirmBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="HoldToConfirmBorderBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                    <SolidColorBrush x:Key="HoldToConfirmFillBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="HoldToConfirmTextBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
 
                     <SolidColorBrush x:Key="PillNotCleanedForeground" Color="{ThemeResource SystemColorWindowTextColor}" />
                     <SolidColorBrush x:Key="PillNotCleanedBackground" Color="{ThemeResource SystemColorWindowColor}" />

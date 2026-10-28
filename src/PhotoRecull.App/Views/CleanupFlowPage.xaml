@@ -52,7 +52,7 @@
             <controls:FlowStepper x:Name="Stepper" Grid.Column="1" VerticalAlignment="Center" />
         </Grid>
 
-        <ScrollViewer Grid.Row="1">
+        <ScrollViewer Grid.Row="1" Visibility="{x:Bind views:XamlFunctions.CollapsedWhenTrue(ViewModel.IsReviewStep), Mode=OneWay}">
             <Grid Padding="40,0,40,32">
                 <!-- Pick -->
                 <StackPanel MaxWidth="780" HorizontalAlignment="Left" Spacing="12" Visibility="{x:Bind ViewModel.IsPickStep, Mode=OneWay}">
@@ -297,7 +297,424 @@
                             Visibility="{x:Bind views:XamlFunctions.CollapsedWhenTrue(ViewModel.IsScanComplete), Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
+                <!-- Result -->
+                <StackPanel MaxWidth="780" HorizontalAlignment="Left" Spacing="12" Visibility="{x:Bind ViewModel.IsResultStep, Mode=OneWay}">
+                    <InfoBar
+                        IsOpen="True"
+                        IsClosable="False"
+                        Severity="{x:Bind views:XamlFunctions.ResultSeverity(ViewModel.ResultHasFailures), Mode=OneWay}"
+                        Title="{x:Bind ViewModel.ResultTitle, Mode=OneWay}"
+                        Message="{x:Bind ViewModel.ResultMessage, Mode=OneWay}" />
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.ResultTargets}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="8" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ResultTargetRow">
+                                <Border Style="{StaticResource CardBorderStyle}" Padding="16,14">
+                                    <Grid ColumnSpacing="16" RowSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="20" />
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{x:Bind Name}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock
+                                                Text="{x:Bind Location}"
+                                                Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                                                TextWrapping="NoWrap"
+                                                TextTrimming="CharacterEllipsis"
+                                                ToolTipService.ToolTip="{x:Bind Location}" />
+                                        </StackPanel>
+                                        <Button
+                                            Grid.Column="2"
+                                            Content="{x:Bind OpenButtonText}"
+                                            Command="{x:Bind OpenCommand}"
+                                            Visibility="{x:Bind HasOpenButton}" />
+                                        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="32" Margin="36,0,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="{x:Bind SucceededCount}" FontSize="20" FontWeight="SemiBold" />
+                                                <TextBlock Text="{x:Bind SucceededLabel}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                            </StackPanel>
+                                            <StackPanel>
+                                                <TextBlock
+                                                    Text="{x:Bind FailedCount}"
+                                                    FontSize="20"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{x:Bind views:XamlFunctions.FailureCountBrush(FailedCount)}" />
+                                                <TextBlock Text="Failed" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                    <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.ResultHasFailures, Mode=OneWay}">
+                        <TextBlock Text="Failures" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <Border Style="{StaticResource CardBorderStyle}" Padding="16,8">
+                            <ItemsRepeater ItemsSource="{x:Bind ViewModel.ResultFailures}">
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ResultFailureRow">
+                                        <Grid ColumnSpacing="12" Padding="0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="3*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{x:Bind FileName}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind TargetName}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{x:Bind Reason}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </Border>
+                        <Button Content="Retry failed" Command="{x:Bind ViewModel.RetryFailedCommand}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Style="{StaticResource AccentButtonStyle}" Content="Back to Library" Command="{x:Bind ViewModel.BackToLibraryCommand}" />
+                        <Button Content="View history" Command="{x:Bind ViewModel.ViewHistoryCommand}" />
+                    </StackPanel>
+                </StackPanel>
             </Grid>
         </ScrollViewer>
+
+        <!-- Review -->
+        <Grid Grid.Row="1" Visibility="{x:Bind ViewModel.IsReviewStep, Mode=OneWay}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel Padding="40,0,40,8" Spacing="4">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <SelectorBar x:Name="ReviewTabs" SelectionChanged="OnReviewTabChanged">
+                        <SelectorBarItem
+                            x:Name="ToRemoveTab"
+                            IsSelected="True"
+                            Text="{x:Bind views:XamlFunctions.TabText('To remove', ViewModel.Review.ToRemoveCount), Mode=OneWay}" />
+                        <SelectorBarItem Text="{x:Bind views:XamlFunctions.TabText('To keep', ViewModel.Review.ToKeepCount), Mode=OneWay}" />
+                        <SelectorBarItem Text="{x:Bind views:XamlFunctions.TabText('Skipped', ViewModel.Review.SkippedCount), Mode=OneWay}" />
+                    </SelectorBar>
+                    <ComboBox
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        SelectedIndex="{x:Bind ViewModel.Review.TimeModeIndex, Mode=TwoWay}">
+                        <ComboBoxItem Content="{x:Bind ViewModel.Review.LocalTimeLabel, Mode=OneWay}" />
+                        <ComboBoxItem Content="UTC" />
+                    </ComboBox>
+                    <Button Grid.Column="2" VerticalAlignment="Center" Command="{x:Bind ViewModel.Review.ExportCandidatesCommand, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE896;" FontSize="14" />
+                            <TextBlock Text="Export list (CSV)" />
+                        </StackPanel>
+                    </Button>
+                    <HyperlinkButton Grid.Column="3" VerticalAlignment="Center" Command="{x:Bind ViewModel.PickAgainCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                            <TextBlock Text="Pick again" />
+                        </StackPanel>
+                    </HyperlinkButton>
+                </Grid>
+                <TextBlock Text="{x:Bind ViewModel.Review.TabExplanation, Mode=OneWay}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1">
+                <ItemsRepeater Margin="40,0,40,24" ItemsSource="{x:Bind ViewModel.Review.Days, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="20" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ReviewDayViewModel">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{x:Bind Header}" Style="{StaticResource BodyStrongTextBlockStyle}" FontSize="13" />
+                                <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                <ItemsRepeater ItemsSource="{x:Bind Segments}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Spacing="8" />
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ReviewSegmentViewModel">
+                                            <Border
+                                                CornerRadius="8"
+                                                Padding="{x:Bind views:XamlFunctions.BurstPadding(IsBurst)}"
+                                                Background="{x:Bind views:XamlFunctions.BurstBackground(IsBurst)}">
+                                                <StackPanel Spacing="6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Visibility="{x:Bind IsBurst}">
+                                                        <FontIcon Glyph="&#xE8C8;" FontSize="13" />
+                                                        <TextBlock Text="{x:Bind BurstLabel}" FontSize="12" />
+                                                    </StackPanel>
+                                                    <ItemsRepeater ItemsSource="{x:Bind Tiles}">
+                                                        <ItemsRepeater.Layout>
+                                                            <UniformGridLayout
+                                                                MinItemWidth="150"
+                                                                MinColumnSpacing="8"
+                                                                MinRowSpacing="12"
+                                                                MaximumRowsOrColumns="6"
+                                                                ItemsStretch="Fill" />
+                                                        </ItemsRepeater.Layout>
+                                                        <ItemsRepeater.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:ReviewTileViewModel">
+                                                                <StackPanel Spacing="4">
+                                                                    <Button
+                                                                        Padding="0"
+                                                                        BorderThickness="0"
+                                                                        CornerRadius="4"
+                                                                        Background="Transparent"
+                                                                        HorizontalAlignment="Stretch"
+                                                                        HorizontalContentAlignment="Stretch"
+                                                                        Command="{x:Bind OpenPreviewCommand}"
+                                                                        AutomationProperties.Name="{x:Bind FileName}">
+                                                                        <Grid Height="112" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                                                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="UniformToFill" />
+                                                                            <Rectangle Fill="White" Opacity="{x:Bind KeptVeilOpacity, Mode=OneWay}" />
+                                                                            <Border
+                                                                                Margin="6"
+                                                                                Padding="8,1"
+                                                                                CornerRadius="9"
+                                                                                HorizontalAlignment="Left"
+                                                                                VerticalAlignment="Top"
+                                                                                Background="{ThemeResource PillDoneBackground}"
+                                                                                Visibility="{x:Bind IsKept, Mode=OneWay}">
+                                                                                <TextBlock Text="Kept" FontSize="11" Foreground="{ThemeResource PillDoneForeground}" />
+                                                                            </Border>
+                                                                            <Border
+                                                                                Margin="6"
+                                                                                Width="22"
+                                                                                Height="22"
+                                                                                CornerRadius="4"
+                                                                                HorizontalAlignment="Left"
+                                                                                VerticalAlignment="Bottom"
+                                                                                Background="White"
+                                                                                ToolTipService.ToolTip="{x:Bind TargetName}">
+                                                                                <FontIcon Glyph="{x:Bind TargetGlyph}" FontSize="13" Foreground="Black" />
+                                                                            </Border>
+                                                                            <Border
+                                                                                Margin="6"
+                                                                                Padding="6,1"
+                                                                                CornerRadius="4"
+                                                                                HorizontalAlignment="Right"
+                                                                                VerticalAlignment="Bottom"
+                                                                                Background="#99000000"
+                                                                                Visibility="{x:Bind IsVideo}">
+                                                                                <TextBlock Text="Video" FontSize="11" Foreground="White" />
+                                                                            </Border>
+                                                                        </Grid>
+                                                                    </Button>
+                                                                    <TextBlock
+                                                                        Text="{x:Bind FileName}"
+                                                                        FontSize="12"
+                                                                        TextTrimming="CharacterEllipsis"
+                                                                        ToolTipService.ToolTip="{x:Bind FullPath}" />
+                                                                    <Grid ColumnSpacing="4">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock
+                                                                            Text="{x:Bind TimeLine, Mode=OneWay}"
+                                                                            Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                                                                            TextWrapping="NoWrap"
+                                                                            TextTrimming="CharacterEllipsis"
+                                                                            VerticalAlignment="Center" />
+                                                                        <Button
+                                                                            Grid.Column="1"
+                                                                            Width="26"
+                                                                            Height="26"
+                                                                            Padding="0"
+                                                                            Command="{x:Bind OpenOriginalCommand}"
+                                                                            ToolTipService.ToolTip="Open original"
+                                                                            AutomationProperties.Name="Open original">
+                                                                            <FontIcon Glyph="&#xE8A7;" FontSize="12" />
+                                                                        </Button>
+                                                                        <Button
+                                                                            Grid.Column="2"
+                                                                            Height="26"
+                                                                            Padding="8,0"
+                                                                            FontSize="12"
+                                                                            Content="{x:Bind KeepButtonText, Mode=OneWay}"
+                                                                            Command="{x:Bind ToggleKeepCommand}"
+                                                                            Visibility="{x:Bind CanBeKept}"
+                                                                            Background="{x:Bind views:XamlFunctions.KeepButtonBackground(IsKept), Mode=OneWay}"
+                                                                            Foreground="{x:Bind views:XamlFunctions.KeepButtonForeground(IsKept), Mode=OneWay}" />
+                                                                    </Grid>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </ItemsRepeater.ItemTemplate>
+                                                    </ItemsRepeater>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+
+            <Border
+                Grid.Row="2"
+                Padding="40,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                Background="{ThemeResource LayerFillColorDefaultBrush}">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind ViewModel.Review.ActionSummaryTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind ViewModel.Review.ActionSummaryDetail, Mode=OneWay}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                        <ProgressBar IsIndeterminate="True" Margin="0,6,0,0" Visibility="{x:Bind ViewModel.IsActing, Mode=OneWay}" />
+                    </StackPanel>
+                    <Button
+                        Grid.Column="1"
+                        Click="OnDeleteClick"
+                        IsEnabled="{x:Bind views:XamlFunctions.CanAct(ViewModel.Review.HasCandidatesToActOn, ViewModel.IsActing), Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            <TextBlock Text="Delete…" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        Grid.Column="2"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Click="OnStageClick"
+                        IsEnabled="{x:Bind views:XamlFunctions.CanAct(ViewModel.Review.HasCandidatesToActOn, ViewModel.IsActing), Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8B7;" FontSize="14" />
+                            <TextBlock Text="Stage candidates…" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Large preview -->
+        <Grid
+            Grid.RowSpan="2"
+            Background="{ThemeResource SmokeFillColorDefaultBrush}"
+            Visibility="{x:Bind ViewModel.Review.IsPreviewOpen, Mode=OneWay}">
+            <Border
+                Margin="40,24"
+                CornerRadius="8"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="320" />
+                    </Grid.ColumnDefinitions>
+                    <Grid Background="Black" CornerRadius="8,0,0,8">
+                        <Image Source="{x:Bind ViewModel.Review.PreviewImage, Mode=OneWay}" Stretch="Uniform" />
+                        <Button
+                            Margin="12"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Command="{x:Bind ViewModel.Review.ShowPreviousPreviewCommand, Mode=OneWay}"
+                            ToolTipService.ToolTip="Previous (←)"
+                            AutomationProperties.Name="Previous photo">
+                            <FontIcon Glyph="&#xE76B;" FontSize="14" />
+                        </Button>
+                        <Button
+                            Margin="12"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Command="{x:Bind ViewModel.Review.ShowNextPreviewCommand, Mode=OneWay}"
+                            ToolTipService.ToolTip="Next (→)"
+                            AutomationProperties.Name="Next photo">
+                            <FontIcon Glyph="&#xE76C;" FontSize="14" />
+                        </Button>
+                    </Grid>
+                    <Grid Grid.Column="1" Padding="20" RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Spacing="4">
+                            <Grid>
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.Review.PreviewStatusText, Mode=OneWay}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                                <Button
+                                    HorizontalAlignment="Right"
+                                    Width="28"
+                                    Height="28"
+                                    Padding="0"
+                                    Command="{x:Bind ViewModel.Review.ClosePreviewCommand, Mode=OneWay}"
+                                    ToolTipService.ToolTip="Close (Esc)"
+                                    AutomationProperties.Name="Close preview">
+                                    <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                </Button>
+                            </Grid>
+                            <TextBlock
+                                Text="{x:Bind ViewModel.Review.PreviewTile.FileName, Mode=OneWay}"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                TextWrapping="Wrap" />
+                            <TextBlock Text="{x:Bind ViewModel.Review.PreviewPositionText, Mode=OneWay}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="Local" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.LocalTimeText, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="UTC" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.UtcTimeText, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Time from" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.TimeSourceLabel, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Type · size" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.TypeAndSizeText, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Burst" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.BurstPositionText, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.TargetName, Mode=OneWay}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.FullPath, Mode=OneWay}" TextWrapping="Wrap" FontSize="12" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Spacing="8">
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.Review.ToggleKeepInPreviewCommand, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.Review.PreviewTile.CanBeKept, Mode=OneWay}"
+                                Content="{x:Bind views:XamlFunctions.PreviewKeepText(ViewModel.Review.PreviewTile.IsKept), Mode=OneWay}" />
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Content="Open original (O)"
+                                Command="{x:Bind ViewModel.Review.OpenOriginalInPreviewCommand, Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </Page>
+

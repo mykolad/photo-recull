@@ -53,6 +53,15 @@ internal static class DebugScreenshot
                 await flow.ContinueFromSavedPickCommand.ExecuteAsync(null);
                 await flow.ScanTargetsCommand.ExecuteAsync(null);
                 break;
+            case "review" or "preview" or "stage":
+                await flow.ContinueFromSavedPickCommand.ExecuteAsync(null);
+                await flow.ScanTargetsCommand.ExecuteAsync(null);
+                flow.ReviewResultsCommand.Execute(null);
+                if (step == "preview" && flow.Review?.Days.FirstOrDefault()?.Segments.FirstOrDefault()?.Tiles.FirstOrDefault() is { } tile)
+                    tile.OpenPreviewCommand.Execute(null);
+                if (step == "stage")
+                    await flow.StageAsync(flow.CandidatesPerTarget().ToDictionary(t => t.Target, t => flow.DefaultStageFolderFor(t.Target)));
+                break;
         }
     }
 

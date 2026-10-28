@@ -43,4 +43,27 @@ public static class XamlFunctions
 
     public static Brush DoneOrPrimaryBrush(bool isDone) =>
         ThemeBrush(isDone ? "SystemFillColorSuccessBrush" : "TextFillColorPrimaryBrush");
+
+    public static string TabText(string label, int count) => $"{label} · {count:N0}";
+
+    public static Thickness BurstPadding(bool isBurst) => isBurst ? new Thickness(10, 8, 10, 10) : new Thickness(0);
+
+    public static Brush BurstBackground(bool isBurst) =>
+        isBurst ? ThemeBrush("SubtleFillColorSecondaryBrush") : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+    public static Brush KeepButtonBackground(bool isKept) =>
+        ThemeBrush(isKept ? "PillDoneBackground" : "ControlFillColorDefaultBrush");
+
+    public static Brush KeepButtonForeground(bool isKept) =>
+        ThemeBrush(isKept ? "PillDoneForeground" : "TextFillColorPrimaryBrush");
+
+    public static string PreviewKeepText(bool isKept) => isKept ? "Kept · Undo (K)" : "Keep this photo (K)";
+
+    public static bool CanAct(bool hasCandidates, bool isActing) => hasCandidates && !isActing;
+
+    public static Microsoft.UI.Xaml.Controls.InfoBarSeverity ResultSeverity(bool hasFailures) =>
+        hasFailures ? Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success;
+
+    public static Brush FailureCountBrush(int failedCount) =>
+        ThemeBrush(failedCount > 0 ? "SystemFillColorCriticalBrush" : "TextFillColorPrimaryBrush");
 }
