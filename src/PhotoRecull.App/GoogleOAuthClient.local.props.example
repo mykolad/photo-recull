@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    Copy to GoogleOAuthClient.local.props (git-ignored) and fill in a Desktop OAuth
+    client from Google Cloud Console to build the app with a built-in Google client.
+  -->
+  <PropertyGroup>
+    <PhotoRecullGoogleClientId>000000000000-xxxxxxxxxxxxxxxx.apps.googleusercontent.com</PhotoRecullGoogleClientId>
+    <PhotoRecullGoogleClientSecret>your-client-secret</PhotoRecullGoogleClientSecret>
+  </PropertyGroup>
+</Project>

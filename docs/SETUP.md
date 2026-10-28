@@ -40,6 +40,20 @@ see an "unverified app" warning (expected for a personal test app) — choose
 To sign in with a browser other than your default (e.g. keep the default signed out of
 Google), use `--browser chrome`. See [USAGE.md](USAGE.md).
 
+## Windows app: built-in Google client
+
+Store builds of the Windows app have a Google OAuth client built in, so users only click
+**Sign in with Google**. The client isn't in the repository. A build picks it up from:
+
+- **Locally:** copy `src/PhotoRecull.App/GoogleOAuthClient.local.props.example` to
+  `GoogleOAuthClient.local.props` (git-ignored) and fill in a Desktop OAuth client's ID and
+  secret.
+- **CI:** the `PhotoRecullGoogleClientId` and `PhotoRecullGoogleClientSecret` environment
+  variables.
+
+A build without them (a fork, for example) asks for a `credentials.json` during Setup
+instead, as the command-line app does.
+
 ## Notes on the Google API change
 
 Before 2025-03-31 an app could read a user's entire library via the Library API. Google
