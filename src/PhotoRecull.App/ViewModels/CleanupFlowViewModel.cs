@@ -24,7 +24,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 {
     private readonly DispatcherQueue _uiThread = DispatcherQueue.GetForCurrentThread();
     private readonly AppSettings _settings = AppServices.SettingsStore.LoadOrCreateDefault();
-    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    // Read each time: the app can stay open past midnight.
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
     private Cleanup? _cleanup;
     private List<DateTimeOffset> _pickedTimestamps = [];
     private CancellationTokenSource? _pickCancellation;
@@ -236,7 +237,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         if (pickedCleanup is null)
         {
             var neighbors = CleanupNeighbors.For(AllCleanups(), null);
-            var suggested = RangeSuggestions.For(earliest, latest, neighbors, _today).FirstOrDefault()
+            var suggested = RangeSuggestions.For(earliest, latest, neighbors, Today).FirstOrDefault()
                 ?? new RangeSuggestion("", earliest, latest);
             pickedCleanup = new Cleanup(Guid.NewGuid(), suggested.From, suggested.To, CleanupState.Picked,
                 timestamps.Count, now, now) { Targets = Targets.ToList() };
@@ -315,7 +316,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         if (_cleanup is { EarliestPickedDay: { } earliest, LatestPickedDay: { } latest })
         {
             var neighbors = CleanupNeighbors.For(AllCleanups(), _cleanup);
-            foreach (var suggestion in RangeSuggestions.For(earliest, latest, neighbors, _today))
+            foreach (var suggestion in RangeSuggestions.For(earliest, latest, neighbors, Today))
                 Suggestions.Add(new RangeSuggestionChipViewModel(suggestion, s => SetDraftRange(s.From, s.To)));
         }
         OnPropertyChanged(nameof(PickedSummaryTitle));

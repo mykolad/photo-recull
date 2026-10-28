@@ -97,11 +97,25 @@ public sealed partial class ShellPage : Page
         Navigation.IsPaneOpen = true;
     }
 
+    // WinUI allows one open ContentDialog; a quick second click on New cleanup
+    // would otherwise try to open another one and throw.
+    private bool _isNewCleanupDialogOpen;
+
     public async Task StartNewCleanupAsync()
     {
-        var dialog = new NewCleanupDialog { XamlRoot = XamlRoot };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            OpenCleanupFlow(new CleanupFlowRequest(ExistingCleanupId: null, dialog.SelectedTargets));
+        if (_isNewCleanupDialogOpen)
+            return;
+        _isNewCleanupDialogOpen = true;
+        try
+        {
+            var dialog = new NewCleanupDialog { XamlRoot = XamlRoot };
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                OpenCleanupFlow(new CleanupFlowRequest(ExistingCleanupId: null, dialog.SelectedTargets));
+        }
+        finally
+        {
+            _isNewCleanupDialogOpen = false;
+        }
     }
 
     public void OpenCleanupFlow(CleanupFlowRequest request)
