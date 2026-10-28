@@ -37,18 +37,17 @@ public static class PhotoScanner
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
         var results = new List<PhotoFile>();
-        var files = System.IO.Directory.GetFiles(folderPath, "*", SearchOption.TopDirectoryOnly);
+        var photoFiles = System.IO.Directory
+            .EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly)
+            .Where(file => SupportedExtensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
+            .ToList();
 
-        for (int i = 0; i < files.Length; i++)
+        for (int i = 0; i < photoFiles.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var file = files[i];
+            var file = photoFiles[i];
 
-            var ext = Path.GetExtension(file).ToLowerInvariant();
-            if (!SupportedExtensions.Contains(ext))
-                continue;
-
-            progress?.Report(new ScanProgress(FilesChecked: i + 1, FilesTotal: files.Length, CurrentFile: file));
+            progress?.Report(new ScanProgress(FilesChecked: i + 1, FilesTotal: photoFiles.Count, CurrentFile: file));
             var fileName = Path.GetFileName(file);
             var (isIphone, timestamp, source) = ClassifyFile(file, fileName);
             results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source));

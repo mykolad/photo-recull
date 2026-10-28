@@ -1,6 +1,7 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -20,8 +21,11 @@ public sealed class FlowStepper : UserControl
     {
         Content = _steps;
         ActualThemeChanged += (_, _) => Redraw();
-        Redraw();
+        CurrentStepIndex = 0;
     }
+
+    protected override AutomationPeer OnCreateAutomationPeer() =>
+        new SummaryAutomationPeer(this, AutomationControlType.Group, nameof(FlowStepper));
 
     public int CurrentStepIndex
     {

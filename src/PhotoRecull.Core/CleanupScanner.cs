@@ -7,8 +7,10 @@ public sealed record TargetScanResult(ISyncTarget Target, int PhotoFilesFound, M
 
 public static class CleanupScanner
 {
-    // Each target is matched against the whole pick independently: a photo kept
-    // in Google Photos keeps one copy on every target.
+    // Each target is matched against the pick independently: a photo kept in
+    // Google Photos keeps one copy on every target. Picked photos outside the
+    // range are left out, as the Range screen promises; otherwise a pick from
+    // just before midnight could keep a target photo from just after it.
     public static TargetScanResult ScanAndMatch(
         ISyncTarget target,
         IReadOnlyCollection<DateTimeOffset> pickedTimestamps,
@@ -20,6 +22,11 @@ public static class CleanupScanner
     {
         var allPhotos = target.Scan(progress, cancellationToken);
         var photosInRange = DateRangeFilter.KeepPhotosCapturedInRange(allPhotos, firstDay, lastDay, captureDayTimeZone);
-        return new TargetScanResult(target, allPhotos.Count, PhotoMatcher.Match(pickedTimestamps, photosInRange));
+        var pickedInRange = pickedTimestamps.Where(t =>
+        {
+            var day = DateRangeFilter.CaptureDay(t, captureDayTimeZone);
+            return day >= firstDay && day <= lastDay;
+        });
+        return new TargetScanResult(target, allPhotos.Count, PhotoMatcher.Match(pickedInRange, photosInRange));
     }
 }

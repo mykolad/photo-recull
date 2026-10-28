@@ -73,7 +73,12 @@ public sealed partial class ShellPage : Page
                 "History" => typeof(HistoryPage),
                 _ => typeof(LibraryPage),
             };
-        if (ContentFrame.CurrentSourcePageType != page)
+        // An open cleanup belongs under Library, so Library becoming selected
+        // (e.g. when the view first loads) mustn't close it; clicking Library to
+        // leave the cleanup is handled in OnNavigationItemInvoked.
+        bool isCleanupOpenUnderLibrary = page == typeof(LibraryPage)
+            && ContentFrame.CurrentSourcePageType == typeof(CleanupFlowPage);
+        if (ContentFrame.CurrentSourcePageType != page && !isCleanupOpenUnderLibrary)
             ContentFrame.Navigate(page);
     }
 

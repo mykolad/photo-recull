@@ -36,20 +36,8 @@ public sealed class CoverageStrip : UserControl
 
     public event EventHandler<CoverageSegment>? SegmentClicked;
 
-    // A UserControl has no automation peer of its own, so without this Narrator
-    // never sees the strip or the spoken summary set in Show().
-    protected override AutomationPeer OnCreateAutomationPeer() => new CoverageStripAutomationPeer(this);
-
-    private sealed class CoverageStripAutomationPeer(CoverageStrip owner) : FrameworkElementAutomationPeer(owner)
-    {
-        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Image;
-
-        protected override string GetClassNameCore() => nameof(CoverageStrip);
-
-        protected override bool IsControlElementCore() => true;
-
-        protected override bool IsContentElementCore() => true;
-    }
+    protected override AutomationPeer OnCreateAutomationPeer() =>
+        new SummaryAutomationPeer(this, AutomationControlType.Image, nameof(CoverageStrip));
 
     public void Show(int year, IReadOnlyList<CoverageSegment> segments, IReadOnlyList<NotCleanedGap> notCleanedGaps, DateOnly today)
     {

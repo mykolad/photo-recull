@@ -248,6 +248,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         };
         PickStore.Save(_cleanup.Id, new PickCacheData(DateTimeOffset.UtcNow, earliest, latest, timestamps));
         SaveCleanup();
+        OnPropertyChanged(nameof(SavedPickTitle));
+        OnPropertyChanged(nameof(SavedPickDetail));
+        OnPropertyChanged(nameof(WaitingHeadline));
+        OnPropertyChanged(nameof(WaitingHelp));
         ShowRange(_cleanup.From, _cleanup.To);
     }
 
@@ -391,7 +395,16 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         if (_cleanup is null || DraftRange() is not { } range)
             return;
 
-        _cleanup = _cleanup with { From = range.From, To = range.To, LastActivityAt = DateTimeOffset.Now };
+        // Until this scan succeeds, results from an earlier scan (maybe of other
+        // dates) no longer describe the cleanup.
+        _cleanup = _cleanup with
+        {
+            From = range.From,
+            To = range.To,
+            State = CleanupState.Picked,
+            ToRemoveCount = null,
+            LastActivityAt = DateTimeOffset.Now,
+        };
         SaveCleanup();
         NotifyTitleChanged();
 
@@ -429,6 +442,11 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             ScanError = $"Couldn't scan: {ex.Message}";
             return;
         }
+
+        // Cancellation is only checked while files are read, so a cancel after the
+        // last file can still let the scans finish; don't record that as done.
+        if (cancellation.IsCancellationRequested)
+            return;
 
         _cleanup = _cleanup with
         {

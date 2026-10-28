@@ -62,8 +62,8 @@
                     <Border Style="{StaticResource CardBorderStyle}" Padding="20" Visibility="{x:Bind ViewModel.IsSavedPickVisible, Mode=OneWay}">
                         <StackPanel Spacing="16">
                             <StackPanel>
-                                <TextBlock Text="{x:Bind ViewModel.SavedPickTitle}" FontSize="16" FontWeight="SemiBold" />
-                                <TextBlock Text="{x:Bind ViewModel.SavedPickDetail}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.SavedPickTitle, Mode=OneWay}" FontSize="16" FontWeight="SemiBold" />
+                                <TextBlock Text="{x:Bind ViewModel.SavedPickDetail, Mode=OneWay}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
                             </StackPanel>
                             <RadioButtons SelectedIndex="{x:Bind ViewModel.SavedPickChoiceIndex, Mode=TwoWay}">
                                 <RadioButton>
@@ -118,9 +118,9 @@
                                 <ProgressRing Width="48" Height="48" VerticalAlignment="Top" IsActive="{x:Bind ViewModel.IsPicking, Mode=OneWay}" />
                                 <StackPanel Grid.Column="1" Spacing="8">
                                     <TextBlock Text="{x:Bind ViewModel.WaitingCaption}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
-                                    <TextBlock Text="{x:Bind ViewModel.WaitingHeadline}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{x:Bind ViewModel.WaitingHeadline, Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
                                     <TextBlock
-                                        Text="{x:Bind ViewModel.WaitingHelp}"
+                                        Text="{x:Bind ViewModel.WaitingHelp, Mode=OneWay}"
                                         TextWrapping="Wrap"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
