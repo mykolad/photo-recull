@@ -51,7 +51,7 @@ public class JsonFileStoreTests : IDisposable
         Assert.Equal(saved.Targets, loaded.Targets);
         Assert.Equal(saved.SetupCompletedAt, loaded.SetupCompletedAt);
         Assert.Contains("\"OneDrive\"", File.ReadAllText(store.FilePath));
-        Assert.False(File.Exists(store.FilePath + ".tmp"));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(store.FilePath)!, "*.tmp"));
     }
 
     [Fact]
@@ -70,5 +70,16 @@ public class JsonFileStoreTests : IDisposable
         store.Save(new LibraryData { Cleanups = [cleanup] });
 
         Assert.Equal(cleanup, Assert.Single(store.LoadOrCreateDefault().Cleanups));
+    }
+
+    [Fact]
+    public void Save_ConcurrentSavesToTheSameFile_AllSucceedAndLeaveNoTemporaryFiles()
+    {
+        var store = new JsonFileStore<AppSettings>(Path.Combine(_folder, "settings.json"));
+
+        Parallel.For(0, 20, i => store.Save(new AppSettings { SignInBrowser = $"browser-{i}" }));
+
+        Assert.StartsWith("browser-", store.LoadOrCreateDefault().SignInBrowser);
+        Assert.Empty(Directory.GetFiles(_folder, "*.tmp"));
     }
 }

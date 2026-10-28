@@ -31,12 +31,39 @@ public sealed class JsonFileStore<T>(string filePath) where T : new()
     }
 
     // Written to a temporary file first and then swapped in, so a crash or power
-    // loss mid-write can't leave the user's library or settings half-written.
+    // loss mid-write can't leave the user's library or settings half-written. Each
+    // save gets its own temporary file because two app windows may save at once.
     public void Save(T value)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(FilePath))!);
-        var temporaryPath = FilePath + ".tmp";
-        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(value, Options));
-        File.Move(temporaryPath, FilePath, overwrite: true);
+        var temporaryPath = $"{FilePath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(value, Options));
+            MoveOverDestinationRetryingWhileBusy(temporaryPath);
+        }
+        finally
+        {
+            File.Delete(temporaryPath);
+        }
+    }
+
+    // Windows denies replacing a file while another save is replacing it; that
+    // only lasts milliseconds, so retry briefly before giving up.
+    private void MoveOverDestinationRetryingWhileBusy(string temporaryPath)
+    {
+        const int maxAttempts = 20;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temporaryPath, FilePath, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < maxAttempts)
+            {
+                Thread.Sleep(Random.Shared.Next(5, 25));
+            }
+        }
     }
 }

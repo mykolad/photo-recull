@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.App.Services;
+using PhotoRecull.Core;
 using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
@@ -25,12 +26,15 @@ public sealed partial class SetupViewModel : ObservableObject
     public bool NeedsDeveloperCredentialsFile { get; } = !AppServices.Google.HasBuiltInOAuthClient;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanFinishSetup))]
     public partial string DeveloperCredentialsPath { get; set; } = "";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFinishSetup))]
+    public partial bool IsDeveloperCredentialsFileValid { get; set; }
+
     // In a developer build the cached Google token can survive a restart while the
-    // chosen credentials file doesn't, so connected alone isn't enough to finish.
-    private bool HasUsableOAuthClient => !NeedsDeveloperCredentialsFile || File.Exists(DeveloperCredentialsPath);
+    // credentials choice doesn't, so being connected alone isn't enough to finish.
+    private bool HasUsableOAuthClient => !NeedsDeveloperCredentialsFile || IsDeveloperCredentialsFileValid;
 
     [ObservableProperty]
     public partial string? DeveloperCredentialsError { get; set; }
@@ -91,20 +95,34 @@ public sealed partial class SetupViewModel : ObservableObject
     [RelayCommand]
     private async Task BrowseDeveloperCredentialsAsync()
     {
-        if (await Pickers.PickFileAsync(".json") is { } path)
+        if (await Pickers.PickFileAsync(".json") is not { } path)
+            return;
+
+        DeveloperCredentialsPath = path;
+        try
         {
-            DeveloperCredentialsPath = path;
-            DeveloperCredentialsError = null;
+            var oauthClient = await GooglePhotosPickerClient.LoadOAuthClientFromCredentialsFileAsync(path);
+            IsDeveloperCredentialsFileValid =
+                !string.IsNullOrEmpty(oauthClient?.ClientId) && !string.IsNullOrEmpty(oauthClient.ClientSecret);
         }
+        catch (Exception)
+        {
+            // Any failure to read it as Google client secrets (unreadable file,
+            // malformed JSON, not a Desktop/Web client) means it can't be used.
+            IsDeveloperCredentialsFileValid = false;
+        }
+        DeveloperCredentialsError = IsDeveloperCredentialsFileValid
+            ? null
+            : "This isn't an OAuth client file. Download the Desktop app client's JSON from Google Cloud Console.";
     }
 
     [RelayCommand(IncludeCancelCommand = true)]
     private async Task SignInAsync(CancellationToken cancellationToken)
     {
         SignInError = null;
-        if (NeedsDeveloperCredentialsFile && !File.Exists(DeveloperCredentialsPath))
+        if (NeedsDeveloperCredentialsFile && !IsDeveloperCredentialsFileValid)
         {
-            DeveloperCredentialsError = "File not found. Choose the credentials.json you downloaded.";
+            DeveloperCredentialsError ??= "Choose the credentials.json you downloaded.";
             return;
         }
 
