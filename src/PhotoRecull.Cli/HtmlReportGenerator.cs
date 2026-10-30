@@ -144,7 +144,7 @@ public static class HtmlReportGenerator
                 .cover.remove { outline: 2px solid #c0392b; outline-offset: -2px; }
                 .stack:not([open]) { box-shadow: 5px -5px 0 -1px #fff, 5px -5px 0 0 #bbb, 0 1px 4px #0001; margin: 5px 5px 0 0; }
                 .stack.has-stay .cover.remove { display: none; }
-                #show-only-remove:checked ~ .timeline .stack.has-stay .cover.remove { display: block; }
+                #show-only-remove:checked ~ .timeline .stack.has-stay:not([open]) .cover.remove { display: block; }
                 .cover .count {
                   position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px;
                   background: #0009; color: #fff; font-size: 0.75rem;

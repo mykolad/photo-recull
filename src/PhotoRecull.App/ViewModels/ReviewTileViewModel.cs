@@ -68,7 +68,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     public long SizeBytes => Photo.SizeBytes;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(KeepButtonText), nameof(Mark), nameof(IsMarkedToRemove), nameof(ThumbnailOpacity))]
+    [NotifyPropertyChangedFor(nameof(KeepButtonText), nameof(Mark), nameof(IsMarkedToRemove), nameof(MarkText), nameof(ThumbnailOpacity))]
     public partial bool IsKept { get; set; }
 
     // Read by the tile's Image binding when the tile is first laid out, which is
@@ -96,6 +96,13 @@ public sealed partial class ReviewTileViewModel : ObservableObject
         : ReviewMark.ToRemove;
 
     public bool IsMarkedToRemove => Mark == ReviewMark.ToRemove;
+
+    public string MarkText => Kind == ReviewTileKind.Skipped ? "Skipped" : Mark switch
+    {
+        ReviewMark.ToRemove => "To remove",
+        ReviewMark.KeptByYou => "Kept by you",
+        _ => "Stays",
+    };
 
     // Dimmed rather than hidden, so a photo to remove is still seen next to the
     // ones around it that stay.

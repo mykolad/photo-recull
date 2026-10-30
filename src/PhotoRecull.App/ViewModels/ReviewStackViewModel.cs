@@ -26,7 +26,7 @@ public sealed partial class ReviewStackViewModel(
     public ReviewTileViewModel Cover => ReviewTimeline.Cover(Shown, frame => frame.Mark);
 
     // Peeks out from behind the cover, so a burst reads as a stack.
-    public ReviewTileViewModel FrameBehindCover => Frames.FirstOrDefault(f => f != Cover) ?? Cover;
+    public ReviewTileViewModel FrameBehindCover => Shown.FirstOrDefault(f => f != Cover) ?? Cover;
 
     public bool ShowsVideoBadge => !IsBurst && Cover.IsVideo;
 
@@ -41,7 +41,7 @@ public sealed partial class ReviewStackViewModel(
 
     public string Header => $"{Title} · {Caption}";
 
-    public string AutomationName => IsBurst ? $"{Title}, {Caption}. Show frames" : Cover.FileName;
+    public string AutomationName => IsBurst ? $"{Title}, {Caption}. Show frames" : $"{Cover.FileName}, {Cover.MarkText}";
 
     [ObservableProperty]
     public partial bool IsExpanded { get; set; }
@@ -60,6 +60,8 @@ public sealed partial class ReviewStackViewModel(
         OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(Header));
         OnPropertyChanged(nameof(AutomationName));
+        foreach (var cell in _frameCells ?? [])
+            cell.Refresh();
     }
 
     [RelayCommand]
