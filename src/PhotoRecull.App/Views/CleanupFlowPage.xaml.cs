@@ -54,7 +54,7 @@ public sealed partial class CleanupFlowPage : Page
             Stepper.CurrentStepIndex = (int)ViewModel.Step;
         if (e.PropertyName == nameof(CleanupFlowViewModel.Review))
         {
-            ReviewTabs.SelectedItem = ToRemoveTab;
+            ReviewTabs.SelectedItem = TimelineTab;
             if (ViewModel.Review is { } review)
                 review.PropertyChanged += OnReviewPropertyChanged;
         }
@@ -96,9 +96,8 @@ public sealed partial class CleanupFlowPage : Page
             return;
         switch (sender.Items.IndexOf(sender.SelectedItem))
         {
-            case 0: review.ShowToRemoveCommand.Execute(null); break;
-            case 1: review.ShowToKeepCommand.Execute(null); break;
-            case 2: review.ShowSkippedCommand.Execute(null); break;
+            case 0: review.ShowTimelineCommand.Execute(null); break;
+            case 1: review.ShowSkippedCommand.Execute(null); break;
         }
     }
 

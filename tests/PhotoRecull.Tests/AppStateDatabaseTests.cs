@@ -43,6 +43,7 @@ public class AppStateDatabaseTests : IDisposable
             SignInBrowser = "chrome",
             Targets = [new TargetSettings(TargetKind.OneDrive, @"C:\Users\me\OneDrive\Pictures\Camera Roll")],
             ShowCaptureTimesInUtc = true,
+            ReviewFilter = ReviewFilter.OnlyToRemove,
             SetupCompletedAt = new DateTimeOffset(2026, 10, 28, 9, 0, 0, TimeSpan.FromHours(2)),
         };
 
@@ -52,6 +53,7 @@ public class AppStateDatabaseTests : IDisposable
         Assert.Equal(saved.SignInBrowser, loaded.SignInBrowser);
         Assert.Equal(saved.Targets, loaded.Targets);
         Assert.True(loaded.ShowCaptureTimesInUtc);
+        Assert.Equal(ReviewFilter.OnlyToRemove, loaded.ReviewFilter);
         Assert.Null(loaded.DeveloperCredentialsPath);
         Assert.Equal(saved.SetupCompletedAt, loaded.SetupCompletedAt);
     }

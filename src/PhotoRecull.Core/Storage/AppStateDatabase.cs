@@ -49,6 +49,9 @@ public sealed class AppStateDatabase
                 ? JsonSerializer.Deserialize<List<TargetSettings>>(targets, JsonOptions) ?? []
                 : [],
             ShowCaptureTimesInUtc = values.GetValueOrDefault(nameof(AppSettings.ShowCaptureTimesInUtc)) == "true",
+            ReviewFilter = Enum.TryParse<ReviewFilter>(values.GetValueOrDefault(nameof(AppSettings.ReviewFilter)), out var filter)
+                ? filter
+                : ReviewFilter.All,
             DeveloperCredentialsPath = values.GetValueOrDefault(nameof(AppSettings.DeveloperCredentialsPath)),
             SetupCompletedAt = values.TryGetValue(nameof(AppSettings.SetupCompletedAt), out var completed)
                 ? DateTimeOffset.Parse(completed, CultureInfo.InvariantCulture)
@@ -63,6 +66,7 @@ public sealed class AppStateDatabase
         SetOrRemoveSetting(transaction, nameof(AppSettings.SignInBrowser), settings.SignInBrowser);
         SetOrRemoveSetting(transaction, nameof(AppSettings.Targets), JsonSerializer.Serialize(settings.Targets, JsonOptions));
         SetOrRemoveSetting(transaction, nameof(AppSettings.ShowCaptureTimesInUtc), settings.ShowCaptureTimesInUtc ? "true" : "false");
+        SetOrRemoveSetting(transaction, nameof(AppSettings.ReviewFilter), settings.ReviewFilter.ToString());
         SetOrRemoveSetting(transaction, nameof(AppSettings.DeveloperCredentialsPath), settings.DeveloperCredentialsPath);
         SetOrRemoveSetting(transaction, nameof(AppSettings.SetupCompletedAt),
             settings.SetupCompletedAt?.ToString("O", CultureInfo.InvariantCulture));

@@ -407,29 +407,40 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <SelectorBar x:Name="ReviewTabs" SelectionChanged="OnReviewTabChanged">
                         <SelectorBarItem
-                            x:Name="ToRemoveTab"
+                            x:Name="TimelineTab"
                             IsSelected="True"
-                            Text="{x:Bind views:XamlFunctions.TabText('To remove', ViewModel.Review.ToRemoveCount), Mode=OneWay}" />
-                        <SelectorBarItem Text="{x:Bind views:XamlFunctions.TabText('To keep', ViewModel.Review.ToKeepCount), Mode=OneWay}" />
+                            Text="{x:Bind views:XamlFunctions.TabText('Timeline', ViewModel.Review.TimelineCount), Mode=OneWay}" />
                         <SelectorBarItem Text="{x:Bind views:XamlFunctions.TabText('Skipped', ViewModel.Review.SkippedCount), Mode=OneWay}" />
                     </SelectorBar>
                     <ComboBox
                         Grid.Column="1"
                         VerticalAlignment="Center"
+                        AutomationProperties.Name="Show"
+                        Visibility="{x:Bind ViewModel.Review.IsTimelineTab, Mode=OneWay}"
+                        SelectedIndex="{x:Bind ViewModel.Review.FilterIndex, Mode=TwoWay}">
+                        <ComboBoxItem Content="All photos" />
+                        <ComboBoxItem Content="Hide photos to remove" />
+                        <ComboBoxItem Content="Only photos to remove" />
+                    </ComboBox>
+                    <ComboBox
+                        Grid.Column="2"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Time zone"
                         SelectedIndex="{x:Bind ViewModel.Review.TimeModeIndex, Mode=TwoWay}">
                         <ComboBoxItem Content="{x:Bind ViewModel.Review.LocalTimeLabel, Mode=OneWay}" />
                         <ComboBoxItem Content="UTC" />
                     </ComboBox>
-                    <Button Grid.Column="2" VerticalAlignment="Center" Command="{x:Bind ViewModel.Review.ExportCandidatesCommand, Mode=OneWay}">
+                    <Button Grid.Column="3" VerticalAlignment="Center" Command="{x:Bind ViewModel.Review.ExportCandidatesCommand, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE896;" FontSize="14" />
                             <TextBlock Text="Export list (CSV)" />
                         </StackPanel>
                     </Button>
-                    <HyperlinkButton Grid.Column="3" VerticalAlignment="Center" Command="{x:Bind ViewModel.PickAgainCommand}">
+                    <HyperlinkButton Grid.Column="4" VerticalAlignment="Center" Command="{x:Bind ViewModel.PickAgainCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE72C;" FontSize="14" />
                             <TextBlock Text="Pick again" />
@@ -439,6 +450,12 @@
                 <TextBlock Text="{x:Bind ViewModel.Review.TabExplanation, Mode=OneWay}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
             </StackPanel>
 
+            <TextBlock
+                Grid.Row="1"
+                Margin="40,24"
+                Text="{x:Bind ViewModel.Review.NothingShownText, Mode=OneWay}"
+                Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                Visibility="{x:Bind ViewModel.Review.HasNothingShown, Mode=OneWay}" />
             <ScrollViewer Grid.Row="1">
                 <ItemsRepeater Margin="40,0,40,24" ItemsSource="{x:Bind ViewModel.Review.Days, Mode=OneWay}">
                     <ItemsRepeater.Layout>
@@ -447,7 +464,7 @@
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="vm:ReviewDayViewModel">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="{x:Bind Header}" Style="{StaticResource BodyStrongTextBlockStyle}" FontSize="13" />
+                                <TextBlock Text="{x:Bind Header, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" FontSize="13" />
                                 <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
                                 <ItemsRepeater ItemsSource="{x:Bind Segments}">
                                     <ItemsRepeater.Layout>
@@ -457,14 +474,36 @@
                                         <DataTemplate x:DataType="vm:ReviewSegmentViewModel">
                                             <Border
                                                 CornerRadius="8"
-                                                Padding="{x:Bind views:XamlFunctions.BurstPadding(IsBurst)}"
-                                                Background="{x:Bind views:XamlFunctions.BurstBackground(IsBurst)}">
+                                                Padding="{x:Bind views:XamlFunctions.BurstPadding(IsExpandedBurst)}"
+                                                Background="{x:Bind views:XamlFunctions.BurstBackground(IsExpandedBurst)}">
                                                 <StackPanel Spacing="6">
-                                                    <StackPanel Orientation="Horizontal" Spacing="6" Visibility="{x:Bind IsBurst}">
-                                                        <FontIcon Glyph="&#xE8C8;" FontSize="13" />
-                                                        <TextBlock Text="{x:Bind BurstLabel}" FontSize="12" />
-                                                    </StackPanel>
-                                                    <ItemsRepeater ItemsSource="{x:Bind Tiles}">
+                                                    <Grid ColumnSpacing="6" Visibility="{x:Bind IsExpandedBurst}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Glyph="&#xE8C8;" FontSize="13" VerticalAlignment="Center" />
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            FontSize="12"
+                                                            VerticalAlignment="Center"
+                                                            TextTrimming="CharacterEllipsis"
+                                                            Text="{x:Bind ExpandedBurst.Header, Mode=OneWay}" />
+                                                        <Button
+                                                            Grid.Column="2"
+                                                            Height="26"
+                                                            Padding="8,0"
+                                                            FontSize="12"
+                                                            Command="{x:Bind ExpandedBurst.ToggleExpandedCommand}"
+                                                            AutomationProperties.Name="Stack the burst again">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <FontIcon Glyph="&#xE70E;" FontSize="10" />
+                                                                <TextBlock Text="Stack" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </Grid>
+                                                    <ItemsRepeater ItemsSource="{x:Bind Cells}">
                                                         <ItemsRepeater.Layout>
                                                             <UniformGridLayout
                                                                 MinItemWidth="150"
@@ -474,7 +513,7 @@
                                                                 ItemsStretch="Fill" />
                                                         </ItemsRepeater.Layout>
                                                         <ItemsRepeater.ItemTemplate>
-                                                            <DataTemplate x:DataType="vm:ReviewTileViewModel">
+                                                            <DataTemplate x:DataType="vm:ReviewStackViewModel">
                                                                 <StackPanel Spacing="4">
                                                                     <Button
                                                                         Padding="0"
@@ -483,49 +522,89 @@
                                                                         Background="Transparent"
                                                                         HorizontalAlignment="Stretch"
                                                                         HorizontalContentAlignment="Stretch"
-                                                                        Command="{x:Bind OpenPreviewCommand}"
-                                                                        AutomationProperties.Name="{x:Bind FileName}">
-                                                                        <Grid Height="112" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                                                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="UniformToFill" />
-                                                                            <Rectangle Fill="White" Opacity="{x:Bind KeptVeilOpacity, Mode=OneWay}" />
-                                                                            <Border
-                                                                                Margin="6"
-                                                                                Padding="8,1"
-                                                                                CornerRadius="9"
-                                                                                HorizontalAlignment="Left"
-                                                                                VerticalAlignment="Top"
-                                                                                Background="{ThemeResource PillDoneBackground}"
-                                                                                Visibility="{x:Bind IsKept, Mode=OneWay}">
-                                                                                <TextBlock Text="Kept" FontSize="11" Foreground="{ThemeResource PillDoneForeground}" />
-                                                                            </Border>
-                                                                            <Border
-                                                                                Margin="6"
-                                                                                Width="22"
-                                                                                Height="22"
+                                                                        Command="{x:Bind ActivateCommand}"
+                                                                        AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}">
+                                                                        <Grid Height="112">
+                                                                            <Grid
+                                                                                Margin="8,0,0,8"
                                                                                 CornerRadius="4"
-                                                                                HorizontalAlignment="Left"
-                                                                                VerticalAlignment="Bottom"
-                                                                                Background="White"
-                                                                                ToolTipService.ToolTip="{x:Bind TargetName}">
-                                                                                <FontIcon Glyph="{x:Bind TargetGlyph}" FontSize="13" Foreground="Black" />
-                                                                            </Border>
-                                                                            <Border
-                                                                                Margin="6"
-                                                                                Padding="6,1"
+                                                                                Background="Black"
+                                                                                BorderBrush="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                                                BorderThickness="1"
+                                                                                Visibility="{x:Bind IsBurst}">
+                                                                                <Image Source="{x:Bind FrameBehindCover.Thumbnail, Mode=OneWay}" Stretch="UniformToFill" Opacity="0.55" />
+                                                                            </Grid>
+                                                                            <Grid
+                                                                                Margin="{x:Bind views:XamlFunctions.StackCoverMargin(IsBurst)}"
                                                                                 CornerRadius="4"
-                                                                                HorizontalAlignment="Right"
-                                                                                VerticalAlignment="Bottom"
-                                                                                Background="#99000000"
-                                                                                Visibility="{x:Bind IsVideo}">
-                                                                                <TextBlock Text="Video" FontSize="11" Foreground="White" />
-                                                                            </Border>
+                                                                                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                                                                BorderBrush="{ThemeResource SystemFillColorCriticalBrush}"
+                                                                                BorderThickness="{x:Bind views:XamlFunctions.ToRemoveOutline(Cover.IsMarkedToRemove), Mode=OneWay}">
+                                                                                <Image Source="{x:Bind Cover.Thumbnail, Mode=OneWay}" Stretch="UniformToFill" Opacity="{x:Bind Cover.ThumbnailOpacity, Mode=OneWay}" />
+                                                                                <Border
+                                                                                    Margin="6"
+                                                                                    Padding="8,1"
+                                                                                    CornerRadius="9"
+                                                                                    HorizontalAlignment="Left"
+                                                                                    VerticalAlignment="Top"
+                                                                                    Background="{ThemeResource PillDoneBackground}"
+                                                                                    Visibility="{x:Bind Cover.IsKept, Mode=OneWay}">
+                                                                                    <TextBlock Text="Kept" FontSize="11" Foreground="{ThemeResource PillDoneForeground}" />
+                                                                                </Border>
+                                                                                <Border
+                                                                                    Margin="6"
+                                                                                    Width="22"
+                                                                                    Height="22"
+                                                                                    CornerRadius="11"
+                                                                                    HorizontalAlignment="Right"
+                                                                                    VerticalAlignment="Top"
+                                                                                    Background="{ThemeResource SystemFillColorCriticalBrush}"
+                                                                                    ToolTipService.ToolTip="To remove"
+                                                                                    Visibility="{x:Bind Cover.IsMarkedToRemove, Mode=OneWay}">
+                                                                                    <FontIcon Glyph="&#xE74D;" FontSize="11" Foreground="White" />
+                                                                                </Border>
+                                                                                <Border
+                                                                                    Margin="6"
+                                                                                    Width="22"
+                                                                                    Height="22"
+                                                                                    CornerRadius="4"
+                                                                                    HorizontalAlignment="Left"
+                                                                                    VerticalAlignment="Bottom"
+                                                                                    Background="White"
+                                                                                    ToolTipService.ToolTip="{x:Bind Cover.TargetName, Mode=OneWay}">
+                                                                                    <FontIcon Glyph="{x:Bind Cover.TargetGlyph, Mode=OneWay}" FontSize="13" Foreground="Black" />
+                                                                                </Border>
+                                                                                <Border
+                                                                                    Margin="6"
+                                                                                    Padding="6,1"
+                                                                                    CornerRadius="4"
+                                                                                    HorizontalAlignment="Right"
+                                                                                    VerticalAlignment="Bottom"
+                                                                                    Background="#99000000"
+                                                                                    Visibility="{x:Bind ShowsVideoBadge, Mode=OneWay}">
+                                                                                    <TextBlock Text="Video" FontSize="11" Foreground="White" />
+                                                                                </Border>
+                                                                                <Border
+                                                                                    Margin="6"
+                                                                                    Padding="6,2"
+                                                                                    CornerRadius="4"
+                                                                                    HorizontalAlignment="Right"
+                                                                                    VerticalAlignment="Bottom"
+                                                                                    Background="#99000000"
+                                                                                    Visibility="{x:Bind IsBurst}">
+                                                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                                        <FontIcon Glyph="&#xE8C8;" FontSize="11" Foreground="White" />
+                                                                                        <TextBlock Text="{x:Bind FrameCountText}" FontSize="11" Foreground="White" />
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                            </Grid>
                                                                         </Grid>
                                                                     </Button>
                                                                     <TextBlock
-                                                                        Text="{x:Bind FileName}"
+                                                                        Text="{x:Bind Title}"
                                                                         FontSize="12"
                                                                         TextTrimming="CharacterEllipsis"
-                                                                        ToolTipService.ToolTip="{x:Bind FullPath}" />
+                                                                        ToolTipService.ToolTip="{x:Bind Cover.FullPath, Mode=OneWay}" />
                                                                     <Grid ColumnSpacing="4">
                                                                         <Grid.ColumnDefinitions>
                                                                             <ColumnDefinition Width="*" />
@@ -533,7 +612,7 @@
                                                                             <ColumnDefinition Width="Auto" />
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock
-                                                                            Text="{x:Bind TimeLine, Mode=OneWay}"
+                                                                            Text="{x:Bind Subtitle, Mode=OneWay}"
                                                                             Style="{StaticResource SecondaryCaptionTextBlockStyle}"
                                                                             TextWrapping="NoWrap"
                                                                             TextTrimming="CharacterEllipsis"
@@ -543,7 +622,8 @@
                                                                             Width="26"
                                                                             Height="26"
                                                                             Padding="0"
-                                                                            Command="{x:Bind OpenOriginalCommand}"
+                                                                            Command="{x:Bind Cover.OpenOriginalCommand, Mode=OneWay}"
+                                                                            Visibility="{x:Bind views:XamlFunctions.CollapsedWhenTrue(IsBurst)}"
                                                                             ToolTipService.ToolTip="Open original"
                                                                             AutomationProperties.Name="Open original">
                                                                             <FontIcon Glyph="&#xE8A7;" FontSize="12" />
@@ -553,11 +633,22 @@
                                                                             Height="26"
                                                                             Padding="8,0"
                                                                             FontSize="12"
-                                                                            Content="{x:Bind KeepButtonText, Mode=OneWay}"
-                                                                            Command="{x:Bind ToggleKeepCommand}"
-                                                                            Visibility="{x:Bind CanBeKept}"
-                                                                            Background="{x:Bind views:XamlFunctions.KeepButtonBackground(IsKept), Mode=OneWay}"
-                                                                            Foreground="{x:Bind views:XamlFunctions.KeepButtonForeground(IsKept), Mode=OneWay}" />
+                                                                            Content="{x:Bind Cover.KeepButtonText, Mode=OneWay}"
+                                                                            Command="{x:Bind Cover.ToggleKeepCommand, Mode=OneWay}"
+                                                                            Visibility="{x:Bind views:XamlFunctions.ShowsKeepButton(IsBurst, Cover.CanBeKept), Mode=OneWay}"
+                                                                            Background="{x:Bind views:XamlFunctions.KeepButtonBackground(Cover.IsKept), Mode=OneWay}"
+                                                                            Foreground="{x:Bind views:XamlFunctions.KeepButtonForeground(Cover.IsKept), Mode=OneWay}" />
+                                                                        <Button
+                                                                            Grid.Column="2"
+                                                                            Width="26"
+                                                                            Height="26"
+                                                                            Padding="0"
+                                                                            Command="{x:Bind ToggleExpandedCommand}"
+                                                                            Visibility="{x:Bind IsBurst}"
+                                                                            ToolTipService.ToolTip="Show frames"
+                                                                            AutomationProperties.Name="Show frames">
+                                                                            <FontIcon Glyph="&#xE70D;" FontSize="10" />
+                                                                        </Button>
                                                                     </Grid>
                                                                 </StackPanel>
                                                             </DataTemplate>
@@ -673,7 +764,7 @@
                                 <TextBlock
                                     Text="{x:Bind ViewModel.Review.PreviewStatusText, Mode=OneWay}"
                                     Style="{StaticResource CaptionTextBlockStyle}"
-                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                                    Foreground="{x:Bind views:XamlFunctions.PreviewStatusBrush(ViewModel.Review.IsPreviewMarkedToRemove), Mode=OneWay}" />
                                 <Button
                                     x:Name="ClosePreviewButton"
                                     HorizontalAlignment="Right"

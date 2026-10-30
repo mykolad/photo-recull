@@ -14,10 +14,13 @@ public sealed partial class ReviewViewModel : ObservableObject
 {
     private readonly Cleanup _cleanup;
     private readonly HashSet<string> _keptPaths;
-    private readonly List<ReviewTileViewModel> _toRemove;
-    private readonly List<ReviewTileViewModel> _toKeep;
+    private readonly List<ReviewTileViewModel> _candidates;
+    private readonly List<ReviewTileViewModel> _timeline;
     private readonly List<ReviewTileViewModel> _skipped;
-    private List<ReviewTileViewModel> _currentTabTiles = [];
+    // Bursts by their newest frame, so they stay open when the filter or time zone changes.
+    private readonly HashSet<string> _expandedBursts = [];
+    private readonly Dictionary<ReviewTileViewModel, ReviewStackViewModel> _stackOfTile = [];
+    private List<ReviewTileViewModel> _shownInOrder = [];
 
     public ReviewViewModel(Cleanup cleanup, IReadOnlyList<TargetScanResult> scanResults, IReadOnlyList<TargetSettings> targets)
     {
@@ -25,40 +28,50 @@ public sealed partial class ReviewViewModel : ObservableObject
         _keptPaths = AppServices.Database.LoadKeptPhotoPaths(cleanup.Id);
         Targets = targets;
 
-        List<ReviewTileViewModel> Tiles(ReviewTab tab, Func<MatchResult, List<PhotoFile>> photos) =>
+        List<ReviewTileViewModel> Tiles(ReviewTileKind kind, Func<MatchResult, List<PhotoFile>> photos) =>
             scanResults
                 .Zip(targets)
                 .SelectMany(pair => photos(pair.First.Match).Select(photo => new ReviewTileViewModel(
-                    photo, pair.Second, tab, tab == ReviewTab.ToRemove && _keptPaths.Contains(photo.Path),
+                    photo, pair.Second, kind, kind == ReviewTileKind.Candidate && _keptPaths.Contains(photo.Path),
                     ToggleKeep, OpenPreview, () => IsActionRunning)))
                 .ToList();
 
-        _toRemove = Tiles(ReviewTab.ToRemove, m => m.Unmatched);
-        _toKeep = Tiles(ReviewTab.ToKeep, m => m.Matched);
-        _skipped = Tiles(ReviewTab.Skipped, m => m.Skipped);
-        ShowTimesInUtc = AppServices.Database.LoadSettings().ShowCaptureTimesInUtc;
-        ShowTab(ReviewTab.ToRemove);
+        _candidates = Tiles(ReviewTileKind.Candidate, m => m.Unmatched);
+        _timeline = [.. _candidates, .. Tiles(ReviewTileKind.Match, m => m.Matched)];
+        _skipped = Tiles(ReviewTileKind.Skipped, m => m.Skipped);
+        var settings = AppServices.Database.LoadSettings();
+        ShowTimesInUtc = settings.ShowCaptureTimesInUtc;
+        Filter = settings.ReviewFilter;
+        ShowTab(ReviewTab.Timeline);
     }
 
     public IReadOnlyList<TargetSettings> Targets { get; }
 
     public ObservableCollection<ReviewDayViewModel> Days { get; } = [];
 
-    public int ToRemoveCount => _toRemove.Count;
-    public int ToKeepCount => _toKeep.Count;
+    public int TimelineCount => _timeline.Count;
     public int SkippedCount => _skipped.Count;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TabExplanation), nameof(IsToRemoveTab))]
+    [NotifyPropertyChangedFor(nameof(TabExplanation), nameof(IsTimelineTab))]
     public partial ReviewTab SelectedTab { get; set; }
 
-    public bool IsToRemoveTab => SelectedTab == ReviewTab.ToRemove;
+    public bool IsTimelineTab => SelectedTab == ReviewTab.Timeline;
 
     public string TabExplanation => SelectedTab switch
     {
-        ReviewTab.ToRemove => "No match in Google Photos. Newest first, grouped by day, bursts together. Click a photo for a large preview.",
-        ReviewTab.ToKeep => "Matched one-to-one within ±2 s of a picked photo. Spot-check these are photos you kept.",
+        ReviewTab.Timeline => "Newest first. Photos with no match in Google Photos are dimmed and marked to remove. Bursts are stacked: click one to see its frames.",
         _ => "Not from an iPhone or without a capture time. PhotoRecull never moves or deletes these.",
+    };
+
+    public bool HasNothingShown => Days.Count == 0;
+
+    public string NothingShownText => (SelectedTab, Filter) switch
+    {
+        (ReviewTab.Skipped, _) => "Nothing was skipped.",
+        (_, ReviewFilter.OnlyToRemove) => "Nothing to remove: every photo matched one in Google Photos.",
+        (_, ReviewFilter.HideToRemove) => "Every photo in this range is marked to remove. Show all photos to review them.",
+        _ => "No photos in this range.",
     };
 
     [ObservableProperty]
@@ -86,13 +99,26 @@ public sealed partial class ReviewViewModel : ObservableObject
         }
     }
 
+    [ObservableProperty]
+    public partial ReviewFilter Filter { get; set; }
+
+    public int FilterIndex
+    {
+        get => (int)Filter;
+        set
+        {
+            if (value < 0 || value == (int)Filter)
+                return;
+            Filter = (ReviewFilter)value;
+            AppServices.Database.SaveSettings(AppServices.Database.LoadSettings() with { ReviewFilter = Filter });
+            ShowTab(SelectedTab);
+        }
+    }
+
     // ---------------------------------------------------------------- tabs and grouping
 
     [RelayCommand]
-    private void ShowToRemove() => ShowTab(ReviewTab.ToRemove);
-
-    [RelayCommand]
-    private void ShowToKeep() => ShowTab(ReviewTab.ToKeep);
+    private void ShowTimeline() => ShowTab(ReviewTab.Timeline);
 
     [RelayCommand]
     private void ShowSkipped() => ShowTab(ReviewTab.Skipped);
@@ -100,58 +126,62 @@ public sealed partial class ReviewViewModel : ObservableObject
     private void ShowTab(ReviewTab tab)
     {
         SelectedTab = tab;
-        var tiles = tab switch
-        {
-            ReviewTab.ToRemove => _toRemove,
-            ReviewTab.ToKeep => _toKeep,
-            _ => _skipped,
-        };
+        var tiles = tab == ReviewTab.Timeline ? _timeline : _skipped;
+        var filter = tab == ReviewTab.Timeline ? Filter : ReviewFilter.All;
         foreach (var tile in tiles)
             tile.ShowTimesInUtc = ShowTimesInUtc;
 
         var tileByPhoto = tiles.ToDictionary(t => t.Photo);
         var zone = ShowTimesInUtc ? TimeZoneInfo.Utc : TimeZoneInfo.Local;
-        var noun = tab == ReviewTab.ToRemove ? "candidate" : "photo";
 
         Days.Clear();
-        var ordered = new List<ReviewTileViewModel>();
-        foreach (var day in ReviewGrouping.NewestFirstByDayWithBursts(tiles.Select(t => t.Photo), zone))
+        _stackOfTile.Clear();
+        var shownInOrder = new List<ReviewTileViewModel>();
+        foreach (var day in ReviewTimeline.NewestFirst(tiles.Select(t => t.Photo), p => tileByPhoto[p].Mark, filter, zone))
         {
-            var segments = new List<ReviewSegmentViewModel>();
-            var singles = new List<ReviewTileViewModel>();
-            foreach (var group in day.Groups)
+            var stacks = new List<ReviewStackViewModel>();
+            foreach (var group in day.Stacks)
             {
-                var groupTiles = group.Photos.Select(p => tileByPhoto[p]).ToList();
-                ordered.AddRange(groupTiles);
-                if (!group.IsBurst)
+                var frames = group.Frames.Select(p => tileByPhoto[p]).ToList();
+                var shown = group.Shown.Select(p => tileByPhoto[p]).ToList();
+                for (int i = 0; i < frames.Count; i++)
+                    frames[i].BurstPositionText = group.IsBurst ? $"Frame {frames.Count - i} of {frames.Count}, within {group.SpanSeconds} s" : "No";
+                var stack = new ReviewStackViewModel(frames, shown, group.SpanSeconds, ToggleExpanded, OpenPreview)
                 {
-                    singles.AddRange(groupTiles);
-                    continue;
-                }
-                if (singles.Count > 0)
-                    segments.Add(new ReviewSegmentViewModel(false, "", singles));
-                singles = [];
-                for (int i = 0; i < groupTiles.Count; i++)
-                    groupTiles[i].BurstPositionText = $"Frame {groupTiles.Count - i} of {groupTiles.Count}, within {group.SpanSeconds} s";
-                segments.Add(new ReviewSegmentViewModel(true,
-                    $"Burst · {groupTiles.Count} frames within {group.SpanSeconds} s", groupTiles));
+                    IsExpanded = group.IsBurst && _expandedBursts.Contains(frames[0].FullPath),
+                };
+                foreach (var frame in frames)
+                    _stackOfTile[frame] = stack;
+                shownInOrder.AddRange(shown);
+                stacks.Add(stack);
             }
-            if (singles.Count > 0)
-                segments.Add(new ReviewSegmentViewModel(false, "", singles));
 
             var dayLabel = day.Day is { } d
                 ? d.ToDateTime(TimeOnly.MinValue).ToString("ddd d MMM", CultureInfo.CurrentCulture)
                 : "No capture time";
-            Days.Add(new ReviewDayViewModel($"{dayLabel} · {day.PhotoCount} {noun}{(day.PhotoCount == 1 ? "" : "s")}", segments));
+            Days.Add(new ReviewDayViewModel(dayLabel, day.Photos.Select(p => tileByPhoto[p]).ToList(), stacks,
+                countsWhatStays: tab == ReviewTab.Timeline));
         }
-        _currentTabTiles = ordered;
+        _shownInOrder = shownInOrder;
+        OnPropertyChanged(nameof(HasNothingShown));
+        OnPropertyChanged(nameof(NothingShownText));
+    }
+
+    private void ToggleExpanded(ReviewStackViewModel stack)
+    {
+        stack.IsExpanded = !stack.IsExpanded;
+        if (stack.IsExpanded)
+            _expandedBursts.Add(stack.Frames[0].FullPath);
+        else
+            _expandedBursts.Remove(stack.Frames[0].FullPath);
+        stack.Day.RebuildSegments();
     }
 
     // ---------------------------------------------------------------- keep overrides
 
-    public IReadOnlyList<ReviewTileViewModel> CandidatesToActOn => _toRemove.Where(t => !t.IsKept).ToList();
+    public IReadOnlyList<ReviewTileViewModel> CandidatesToActOn => _candidates.Where(t => !t.IsKept).ToList();
 
-    public int KeptByUserCount => _toRemove.Count(t => t.IsKept);
+    public int KeptByUserCount => _candidates.Count(t => t.IsKept);
 
     public string ActionSummaryTitle
     {
@@ -186,16 +216,23 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     partial void OnIsActionRunningChanged(bool value)
     {
-        foreach (var tile in _toRemove)
+        foreach (var tile in _candidates)
             tile.ToggleKeepCommand.NotifyCanExecuteChanged();
     }
 
+    // Keeping a photo doesn't re-apply the filter, so it stays where it is
+    // (and can be undone) until the filter changes.
     private void ToggleKeep(ReviewTileViewModel tile)
     {
         if (!tile.CanBeKept || IsActionRunning)
             return;
         tile.IsKept = !tile.IsKept;
         AppServices.Database.SetPhotoKept(_cleanup.Id, tile.FullPath, tile.IsKept);
+        if (_stackOfTile.TryGetValue(tile, out var stack))
+        {
+            stack.Refresh();
+            stack.Day.Refresh();
+        }
         OnPropertyChanged(nameof(ActionSummaryTitle));
         OnPropertyChanged(nameof(ActionSummaryDetail));
         OnPropertyChanged(nameof(HasCandidatesToActOn));
@@ -232,14 +269,19 @@ public sealed partial class ReviewViewModel : ObservableObject
     [ObservableProperty]
     public partial Microsoft.UI.Xaml.Media.ImageSource? PreviewImage { get; set; }
 
-    public string PreviewStatusText => PreviewTile?.Tab switch
+    public string PreviewStatusText => PreviewTile?.Mark switch
     {
-        ReviewTab.ToRemove => PreviewTile.IsKept ? "Kept by you · not staged or deleted" : "To remove · no match in Google Photos",
-        ReviewTab.ToKeep => "To keep · matched a picked photo",
-        _ => "Skipped · never moved or deleted",
+        ReviewMark.ToRemove => "To remove · no match in Google Photos",
+        ReviewMark.KeptByYou => "Kept by you · not staged or deleted",
+        _ when PreviewTile?.Kind == ReviewTileKind.Skipped => "Skipped · never moved or deleted",
+        _ => "Stays · matched a picked photo",
     };
 
-    public string PreviewPositionText => PreviewTile is null ? "" : $"{_currentTabTiles.IndexOf(PreviewTile) + 1} of {_currentTabTiles.Count}";
+    public bool IsPreviewMarkedToRemove => PreviewTile?.IsMarkedToRemove == true;
+
+    // The arrows walk through what the timeline shows, frames of collapsed
+    // bursts included, in timeline order.
+    public string PreviewPositionText => PreviewTile is null ? "" : $"{_shownInOrder.IndexOf(PreviewTile) + 1} of {_shownInOrder.Count}";
 
     private void OpenPreview(ReviewTileViewModel tile) => ShowPreview(tile);
 
@@ -259,6 +301,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         {
             ToggleKeep(tile);
             OnPropertyChanged(nameof(PreviewStatusText));
+            OnPropertyChanged(nameof(IsPreviewMarkedToRemove));
         }
     }
 
@@ -269,10 +312,10 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     private void MovePreview(int step)
     {
-        if (PreviewTile is null || _currentTabTiles.Count == 0)
+        if (PreviewTile is null || _shownInOrder.Count == 0)
             return;
-        int index = Math.Clamp(_currentTabTiles.IndexOf(PreviewTile) + step, 0, _currentTabTiles.Count - 1);
-        ShowPreview(_currentTabTiles[index]);
+        int index = Math.Clamp(_shownInOrder.IndexOf(PreviewTile) + step, 0, _shownInOrder.Count - 1);
+        ShowPreview(_shownInOrder[index]);
     }
 
     private async void ShowPreview(ReviewTileViewModel tile)
@@ -280,6 +323,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         PreviewTile = tile;
         PreviewImage = tile.Thumbnail;
         OnPropertyChanged(nameof(PreviewStatusText));
+        OnPropertyChanged(nameof(IsPreviewMarkedToRemove));
         OnPropertyChanged(nameof(PreviewPositionText));
         var fullSize = await Thumbnails.LoadAsync(tile.FullPath, ReviewTileViewModel.PreviewPixels);
         if (PreviewTile == tile && fullSize is not null)
