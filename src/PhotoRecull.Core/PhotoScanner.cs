@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
+using MetadataExtractor.Formats.QuickTime;
 
 namespace PhotoRecull.Core;
 
@@ -12,10 +13,15 @@ public record PhotoFile(
     string FileName,
     DateTimeOffset? Timestamp,
     bool IsIphone,
-    string? TimestampSource   // "filename", "exif", or null if unknown
+    string? TimestampSource   // "filename", "exif", "video", or null if unknown
 )
 {
+    // Includes the Live Photo video, when there is one.
     public long SizeBytes { get; init; }
+
+    // A Live Photo's motion part (IMG_1234.MOV next to IMG_1234.HEIC). Google
+    // Photos shows the pair as one item, so it's kept or removed with its photo.
+    public string? LivePhotoVideoPath { get; init; }
 }
 
 /// <summary>
@@ -30,8 +36,15 @@ public static class PhotoScanner
         @"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})(\d{3})_iOS\.(\w+)$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly HashSet<string> SupportedExtensions =
-        [".heic", ".jpg", ".jpeg", ".png", ".mp4", ".mov"];
+    private static readonly HashSet<string> StillExtensions = [".heic", ".jpg", ".jpeg", ".png"];
+
+    private static readonly HashSet<string> VideoExtensions = [".mp4", ".mov"];
+
+    public static bool IsPhotoOrVideo(string path)
+    {
+        var extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
+        return StillExtensions.Contains(extension) || VideoExtensions.Contains(extension);
+    }
 
     public static List<PhotoFile> ScanFolder(
         string folderPath, IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -39,23 +52,32 @@ public static class PhotoScanner
         if (!System.IO.Directory.Exists(folderPath))
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
-        var results = new List<PhotoFile>();
         // Listing a large or network folder can take a while on its own, so a
         // cancel is honored between entries rather than only once reading starts.
         var photoFiles = new List<string>();
         foreach (var file in System.IO.Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (SupportedExtensions.Contains(Path.GetExtension(file).ToLowerInvariant()))
+            if (IsPhotoOrVideo(file))
                 photoFiles.Add(file);
         }
+        return ReadPhotos(photoFiles, progress, cancellationToken);
+    }
 
-        for (int i = 0; i < photoFiles.Count; i++)
+    public static List<PhotoFile> ReadPhotos(
+        IReadOnlyList<string> photoFiles, IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        var liveVideoByStill = LivePhotoVideoByStill(photoFiles);
+        var liveVideos = liveVideoByStill.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var filesToRead = photoFiles.Where(f => !liveVideos.Contains(f)).ToList();
+
+        var results = new List<PhotoFile>();
+        for (int i = 0; i < filesToRead.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var file = photoFiles[i];
+            var file = filesToRead[i];
 
-            progress?.Report(new ScanProgress(FilesChecked: i + 1, FilesTotal: photoFiles.Count, CurrentFile: file));
+            progress?.Report(new ScanProgress(FilesChecked: i + 1, FilesTotal: filesToRead.Count, CurrentFile: file));
             long sizeBytes;
             try
             {
@@ -67,12 +89,42 @@ public static class PhotoScanner
                 // listed; it's no longer there to keep or remove, so skip it.
                 continue;
             }
-            var fileName = Path.GetFileName(file);
+            var liveVideo = liveVideoByStill.GetValueOrDefault(file);
+            if (liveVideo is not null)
+                sizeBytes += SizeOrZeroIfGone(liveVideo);
+            var fileName = System.IO.Path.GetFileName(file);
             var (isIphone, timestamp, source) = ClassifyFile(file, fileName);
-            results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source) { SizeBytes = sizeBytes });
+            results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source)
+            {
+                SizeBytes = sizeBytes,
+                LivePhotoVideoPath = liveVideo,
+            });
         }
 
         return results;
+    }
+
+    // iPhone gives a Live Photo's still and video the same name; any other
+    // same-named pair (two stills, or several videos) is left as separate files.
+    private static Dictionary<string, string> LivePhotoVideoByStill(IReadOnlyList<string> photoFiles) =>
+        photoFiles
+            .GroupBy(f => System.IO.Path.ChangeExtension(f, null), StringComparer.OrdinalIgnoreCase)
+            .Select(g => (
+                Stills: g.Where(f => StillExtensions.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant())).ToList(),
+                Videos: g.Where(f => VideoExtensions.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant())).ToList()))
+            .Where(pair => pair.Stills.Count == 1 && pair.Videos.Count == 1)
+            .ToDictionary(pair => pair.Stills[0], pair => pair.Videos[0], StringComparer.OrdinalIgnoreCase);
+
+    private static long SizeOrZeroIfGone(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return 0;
+        }
     }
 
     private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source) ClassifyFile(
@@ -86,15 +138,23 @@ public static class PhotoScanner
             return (true, ts, "filename");
         }
 
-        // Fallback: read EXIF to check Make/Model and get timestamp
+        // Fallback: read EXIF (or a video's QuickTime metadata) to check Make/Model and get timestamp
         try
         {
             var dirs = ImageMetadataReader.ReadMetadata(path);
+            if (dirs.OfType<QuickTimeMetadataHeaderDirectory>().FirstOrDefault() is { } quickTime)
+                return ClassifyVideo(quickTime, dirs.OfType<QuickTimeMovieHeaderDirectory>().FirstOrDefault());
+
             var ifd0 = dirs.OfType<ExifIfd0Directory>().FirstOrDefault();
             var subIfd = dirs.OfType<ExifSubIfdDirectory>().FirstOrDefault();
 
-            bool isIphone = IsIphoneExif(ifd0);
-            DateTimeOffset? timestamp = isIphone ? ReadExifTimestamp(subIfd) : null;
+            bool isIphone = IsIphone(ifd0?.GetString(ExifDirectoryBase.TagMake), ifd0?.GetString(ExifDirectoryBase.TagModel));
+            DateTimeOffset? timestamp = isIphone && subIfd is not null
+                ? ExifCaptureTime(
+                    subIfd.GetString(ExifDirectoryBase.TagDateTimeOriginal),
+                    subIfd.GetString(ExifDirectoryBase.TagSubsecondTimeOriginal),
+                    subIfd.GetString(ExifDirectoryBase.TagTimeZoneOriginal))
+                : null;
             string? source = timestamp.HasValue ? "exif" : null;
 
             return (isIphone, timestamp, source);
@@ -104,6 +164,29 @@ public static class PhotoScanner
             return (false, null, null);
         }
     }
+
+    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source) ClassifyVideo(
+        QuickTimeMetadataHeaderDirectory quickTime, QuickTimeMovieHeaderDirectory? movieHeader)
+    {
+        bool isIphone = IsIphone(
+            quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagMake),
+            quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagModel));
+        DateTime? appleCreationDate = quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var created)
+            ? created : null;
+        DateTime? movieCreated = movieHeader?.TryGetDateTime(QuickTimeMovieHeaderDirectory.TagCreated, out var written) == true
+            ? written : null;
+        var timestamp = isIphone ? VideoCaptureTime(appleCreationDate, movieCreated) : null;
+        return (isIphone, timestamp, timestamp.HasValue ? "video" : null);
+    }
+
+    // The Apple creation date is when recording started, which is what Google
+    // Photos shows; the movie header's is when the file was written, i.e. when a
+    // long video ended. The metadata reader returns the first in local time and
+    // the second as UTC with an unspecified kind.
+    public static DateTimeOffset? VideoCaptureTime(DateTime? appleCreationDate, DateTime? movieHeaderCreated) =>
+        appleCreationDate is { } started ? new DateTimeOffset(started).ToUniversalTime()
+        : movieHeaderCreated is { } written ? new DateTimeOffset(DateTime.SpecifyKind(written, DateTimeKind.Utc))
+        : null;
 
     /// <summary>
     /// The OneDrive filename encodes UTC time: 20260411_073333208_iOS.heic
@@ -122,48 +205,31 @@ public static class PhotoScanner
         return new DateTimeOffset(year, month, day, hour, min, sec, ms, TimeSpan.Zero);
     }
 
-    private static bool IsIphoneExif(ExifIfd0Directory? ifd0)
-    {
-        if (ifd0 is null) return false;
-        var make  = ifd0.GetString(ExifDirectoryBase.TagMake)  ?? "";
-        var model = ifd0.GetString(ExifDirectoryBase.TagModel) ?? "";
-        return make.Equals("Apple", StringComparison.OrdinalIgnoreCase)
-            && model.Contains("iPhone", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsIphone(string? make, string? model) =>
+        string.Equals(make, "Apple", StringComparison.OrdinalIgnoreCase)
+        && (model ?? "").Contains("iPhone", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Reads DateTimeOriginal + SubSecTimeOriginal + TimeZoneOriginal from EXIF
-    /// and returns a UTC DateTimeOffset.
+    /// Combines DateTimeOriginal ("2026:04:11 10:33:33"), SubSecTimeOriginal
+    /// ("208") and OffsetTimeOriginal ("+03:00" or "-04:00") into a UTC time.
     /// </summary>
-    private static DateTimeOffset? ReadExifTimestamp(ExifSubIfdDirectory? sub)
+    public static DateTimeOffset? ExifCaptureTime(string? dateTimeOriginal, string? subSecond, string? offset)
     {
-        if (sub is null) return null;
-
-        // DateTimeOriginal: "2026:04:11 10:33:33"
-        var raw = sub.GetString(ExifDirectoryBase.TagDateTimeOriginal);
-        if (raw is null) return null;
-
-        if (!DateTime.TryParseExact(raw, "yyyy:MM:dd HH:mm:ss",
+        if (!DateTime.TryParseExact(dateTimeOriginal, "yyyy:MM:dd HH:mm:ss",
             CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
             return null;
 
-        // Sub-second: "208" → 208 ms
-        int ms = 0;
-        var subSec = sub.GetString(ExifDirectoryBase.TagSubsecondTimeOriginal);
-        if (subSec is not null && int.TryParse(subSec, out int parsed))
-            ms = parsed;
+        // Digits of a second's fraction: "2" is 200 ms, "208" is 208 ms.
+        if (subSecond is { Length: > 0 } && subSecond.All(char.IsAsciiDigit))
+            dt = dt.AddMilliseconds(int.Parse(subSecond.PadRight(3, '0')[..3], CultureInfo.InvariantCulture));
 
-        dt = dt.AddMilliseconds(ms);
-
-        // Timezone offset: "+03:00"
-        TimeSpan offset = TimeSpan.Zero;
-        var tzRaw = sub.GetString(ExifDirectoryBase.TagTimeZoneOriginal);
-        if (tzRaw is not null && TimeSpan.TryParseExact(
-            tzRaw.TrimStart('+'), @"hh\:mm", CultureInfo.InvariantCulture, out var tz))
+        TimeSpan utcOffset = TimeSpan.Zero;
+        if (offset is not null && TimeSpan.TryParseExact(
+            offset.TrimStart('+', '-'), @"hh\:mm", CultureInfo.InvariantCulture, out var magnitude))
         {
-            offset = tzRaw.StartsWith('-') ? -tz : tz;
+            utcOffset = offset.StartsWith('-') ? -magnitude : magnitude;
         }
 
-        return new DateTimeOffset(dt, offset).ToUniversalTime();
+        return new DateTimeOffset(dt, utcOffset).ToUniversalTime();
     }
 }

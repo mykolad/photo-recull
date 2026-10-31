@@ -15,7 +15,7 @@ public class HtmlReportGeneratorTests : IDisposable
 
     private string Render(MatchResult result)
     {
-        HtmlReportGenerator.Write(_reportPath, result, @"C:\fake", new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
+        HtmlReportGenerator.Write(_reportPath, result, "OneDrive", @"C:\fake", new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
         return File.ReadAllText(_reportPath);
     }
 

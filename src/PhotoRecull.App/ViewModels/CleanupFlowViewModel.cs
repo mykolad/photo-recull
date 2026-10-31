@@ -525,8 +525,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public void CancelConfirm() => Step = CleanupFlowStep.Review;
 
     public string DefaultStageFolderFor(TargetSettings target) =>
-        Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(target.FolderPath)) ?? target.FolderPath,
-            $"_staged_{_cleanup!.From:yyyy-MM-dd}_{_cleanup.To:yyyy-MM-dd}");
+        SyncTargets.Create(target).DefaultStageFolder(_cleanup!.From, _cleanup.To);
 
     public IReadOnlyList<(TargetSettings Target, int Count, long Bytes)> CandidatesPerTarget() =>
         Review?.CandidatesToActOn
@@ -607,6 +606,11 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;
 
+    // Synology photos are deleted over the network, past the Windows Recycle
+    // Bin; they can only be restored if DSM's Recycle Bin is on for the share.
+    public static string? DsmRecycleBinFolder(TargetSettings target) =>
+        SyncTargets.Create(target) is SynologyPhotosTarget { HasRecycleBin: true } synology ? synology.RecycleBinFolder : null;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PickAgainCommand), nameof(BackToLibraryCommand), nameof(ViewHistoryCommand))]
     public partial bool IsActing { get; set; }
@@ -650,14 +654,16 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         ResultTargets.Clear();
         foreach (var (target, result) in perTarget)
         {
-            var location = action == CleanupAction.Staged
-                ? stageFolders[target]
-                : DeletesGoToRecycleBin(target) ? "Moved to the Recycle Bin" : "Deleted permanently";
+            var dsmRecycleBin = action == CleanupAction.Deleted ? DsmRecycleBinFolder(target) : null;
+            var (location, folderToOpen, openButtonText) = action == CleanupAction.Staged
+                ? (stageFolders[target], stageFolders[target], "Open folder")
+                : DeletesGoToRecycleBin(target) ? ("Moved to the Recycle Bin", null, "Recycle Bin")
+                : dsmRecycleBin is not null ? ("Moved to #recycle on the NAS, if DSM's Recycle Bin is on", dsmRecycleBin, "Open #recycle")
+                : ("Deleted permanently", (string?)null, (string?)null);
             ResultTargets.Add(new ResultTargetRow(
                 ShellPage.TargetGlyph(target.Kind), SyncTargets.DisplayName(target.Kind), location,
                 action == CleanupAction.Staged ? "Moved" : "Deleted", result.SucceededCount, result.Failures.Count,
-                action == CleanupAction.Staged ? stageFolders[target] : null,
-                action == CleanupAction.Staged ? "Open folder" : DeletesGoToRecycleBin(target) ? "Recycle Bin" : null));
+                folderToOpen, openButtonText));
         }
         ResultFailures.Clear();
         foreach (var (target, failure) in _lastFailures)

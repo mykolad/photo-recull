@@ -15,12 +15,28 @@ public enum GoogleConnection
 
 public sealed partial class SetupViewModel : ObservableObject
 {
-    private CancellationTokenSource? _folderValidation;
-
     public SetupViewModel()
     {
         GoogleConnection = AppServices.Google.IsSignedIn ? GoogleConnection.Connected : GoogleConnection.NotConnected;
-        FolderPath = SuggestedOneDriveCameraRollOrEmpty();
+        OneDriveFolder.PropertyChanged += OnTargetFolderChanged;
+        SynologyFolder.PropertyChanged += OnTargetFolderChanged;
+    }
+
+    public TargetFolderViewModel OneDriveFolder { get; } = new(TargetKind.OneDrive, SuggestedOneDriveCameraRollOrEmpty());
+
+    public TargetFolderViewModel SynologyFolder { get; } = new(TargetKind.SynologyPhotos, "");
+
+    // 0 is OneDrive, 1 Synology Photos, in the order of the radio buttons.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedFolder), nameof(CanFinishSetup))]
+    public partial int SelectedTargetIndex { get; set; }
+
+    public TargetFolderViewModel SelectedFolder => SelectedTargetIndex == 1 ? SynologyFolder : OneDriveFolder;
+
+    private void OnTargetFolderChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TargetFolderViewModel.IsFolderValid))
+            OnPropertyChanged(nameof(CanFinishSetup));
     }
 
     public bool NeedsDeveloperCredentialsFile { get; } = !AppServices.Google.HasBuiltInOAuthClient;
@@ -77,20 +93,7 @@ public sealed partial class SetupViewModel : ObservableObject
 
     public string SignInButtonText => IsWaitingForBrowser ? "Waiting for Google…" : "Sign in with Google";
 
-    [ObservableProperty]
-    public partial string FolderPath { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string? FolderValidationText { get; set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanFinishSetup))]
-    public partial bool IsFolderValid { get; set; }
-
-    [ObservableProperty]
-    public partial bool IsCheckingFolder { get; set; }
-
-    public bool CanFinishSetup => IsConnected && IsFolderValid && HasUsableOAuthClient;
+    public bool CanFinishSetup => IsConnected && SelectedFolder.IsFolderValid && HasUsableOAuthClient;
 
     [RelayCommand]
     private async Task BrowseDeveloperCredentialsAsync()
@@ -145,83 +148,17 @@ public sealed partial class SetupViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task BrowseFolderAsync()
-    {
-        if (await Pickers.PickFolderAsync() is { } path)
-            FolderPath = path;
-    }
-
-    [RelayCommand]
     private void FinishSetup()
     {
         var settings = AppServices.Database.LoadSettings() with
         {
             SignInBrowser = SignInBrowser,
-            Targets = [new TargetSettings(TargetKind.OneDrive, FolderPath.Trim())],
+            Targets = [SelectedFolder.Settings],
             DeveloperCredentialsPath = NullIfEmpty(DeveloperCredentialsPath),
             SetupCompletedAt = DateTimeOffset.Now,
         };
         AppServices.Database.SaveSettings(settings);
         App.MainWindow.ShowShell("Setup complete. Start your first cleanup.");
-    }
-
-    partial void OnFolderPathChanged(string value) => _ = ValidateFolderAsync(value);
-
-    private async Task ValidateFolderAsync(string folderPath)
-    {
-        _folderValidation?.Cancel();
-        var validation = _folderValidation = new CancellationTokenSource();
-
-        IsFolderValid = false;
-        if (string.IsNullOrWhiteSpace(folderPath))
-        {
-            FolderValidationText = null;
-            return;
-        }
-        FolderValidationText = "Checking folder…";
-        IsCheckingFolder = true;
-
-        string resultText;
-        bool isValid;
-        try
-        {
-            // Wait for typing to pause, then stop counting as soon as a newer path
-            // supersedes this one, so a slow mapped drive isn't listed once per keystroke.
-            await Task.Delay(TimeSpan.FromMilliseconds(300), validation.Token);
-            int? fileCount = await Task.Run(() => CountFilesOrNullIfMissing(folderPath, validation.Token), validation.Token);
-            isValid = fileCount is not null;
-            resultText = fileCount is { } count
-                ? $"Folder found · {count:N0} files"
-                : "Folder not found. Check the path, or that the drive is mapped.";
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            isValid = false;
-            resultText = $"Can't read this folder: {ex.Message}";
-        }
-
-        if (validation.IsCancellationRequested)
-            return;
-        IsFolderValid = isValid;
-        IsCheckingFolder = false;
-        FolderValidationText = resultText;
-    }
-
-    private static int? CountFilesOrNullIfMissing(string folderPath, CancellationToken cancellationToken)
-    {
-        if (!Directory.Exists(folderPath))
-            return null;
-        int count = 0;
-        foreach (var _ in Directory.EnumerateFiles(folderPath))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            count++;
-        }
-        return count;
     }
 
     private static string SuggestedOneDriveCameraRollOrEmpty()

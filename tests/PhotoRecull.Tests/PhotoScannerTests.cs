@@ -157,7 +157,7 @@ public class PhotoScannerTests
         var target = new OneDriveTarget(TestDataDir);
 
         Assert.Equal("OneDrive", target.DisplayName);
-        Assert.Equal(2, target.Scan().Count);
+        Assert.Equal(2, target.Scan(firstDay: null, lastDay: null).Count);
     }
 
     private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>

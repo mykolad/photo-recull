@@ -19,7 +19,8 @@ public static class HtmlReportGenerator
     public static void Write(
         string outputPath,
         MatchResult result,
-        string oneDriveFolder,
+        string targetName,
+        string targetFolder,
         DateOnly? fromDate,
         DateOnly? toDate)
     {
@@ -168,7 +169,7 @@ public static class HtmlReportGenerator
               <h1>PhotoRecull Review</h1>
               <p class="meta">
                 Date range: <strong>{{rangeLabel}}</strong> &nbsp;|&nbsp;
-                OneDrive folder: <code>{{HtmlEncode(oneDriveFolder)}}</code> &nbsp;|&nbsp; Days and times in UTC
+                {{HtmlEncode(targetName)}} folder: <code>{{HtmlEncode(targetFolder)}}</code> &nbsp;|&nbsp; Days and times in UTC
               </p>
 
               <div class="stats">

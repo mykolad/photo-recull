@@ -10,5 +10,11 @@ public interface ISyncTarget
 
     string FolderPath { get; }
 
-    List<PhotoFile> Scan(IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default);
+    // The days let a target skip folders that can't hold photos from them; it may
+    // still return photos from outside, so callers filter by date themselves.
+    List<PhotoFile> Scan(
+        DateOnly? firstDay, DateOnly? lastDay,
+        IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default);
+
+    string DefaultStageFolder(DateOnly firstDay, DateOnly lastDay);
 }

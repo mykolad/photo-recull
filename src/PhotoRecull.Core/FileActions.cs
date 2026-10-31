@@ -25,15 +25,15 @@ public static class FileActions
             return new FileActionResult(0, photos.Select(p => new FileFailure(p, reason)).ToList());
         }
         return ApplyToEachCollectingFailures(photos,
-            p => File.Move(p.Path, Path.Combine(stageFolder, p.FileName), overwrite: false));
+            p => ApplyToPhotoAndItsVideo(p, path => File.Move(path, Path.Combine(stageFolder, Path.GetFileName(path)), overwrite: false)));
     }
 
     public static FileActionResult DeletePermanently(IEnumerable<PhotoFile> photos) =>
-        ApplyToEachCollectingFailures(photos, p => File.Delete(p.Path));
+        ApplyToEachCollectingFailures(photos, p => ApplyToPhotoAndItsVideo(p, File.Delete));
 
     [SupportedOSPlatform("windows")]
     public static FileActionResult MoveToRecycleBin(IEnumerable<PhotoFile> photos) =>
-        ApplyToEachCollectingFailures(photos, p => SendToRecycleBin(p.Path));
+        ApplyToEachCollectingFailures(photos, p => ApplyToPhotoAndItsVideo(p, SendToRecycleBin));
 
     // Short reasons the user can act on, as shown in the Result screen.
     public static string DescribeFailure(Exception exception) => exception switch
@@ -60,7 +60,7 @@ public static class FileActions
         {
             try
             {
-                long size = new FileInfo(photo.Path).Length;
+                long size = CurrentSizeOfPhotoAndItsVideo(photo);
                 action(photo);
                 succeededCount++;
                 succeededBytes += size;
@@ -72,6 +72,19 @@ public static class FileActions
         }
         return new FileActionResult(succeededCount, failures, succeededBytes);
     }
+
+    // A Live Photo's video goes first: if the photo then fails, a retry finds the
+    // video already gone and acts on the photo alone.
+    private static void ApplyToPhotoAndItsVideo(PhotoFile photo, Action<string> action)
+    {
+        if (photo.LivePhotoVideoPath is { } video && File.Exists(video))
+            action(video);
+        action(photo.Path);
+    }
+
+    private static long CurrentSizeOfPhotoAndItsVideo(PhotoFile photo) =>
+        new FileInfo(photo.Path).Length
+        + (photo.LivePhotoVideoPath is { } video && File.Exists(video) ? new FileInfo(video).Length : 0);
 
     // Network and mapped drives have no Recycle Bin: the shell would delete from
     // them permanently, which the app promises not to do.

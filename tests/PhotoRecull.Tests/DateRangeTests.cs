@@ -119,7 +119,7 @@ public class DateRangeTests
                 Unmatched: [ios],
                 Skipped:   []);
 
-            HtmlReportGenerator.Write(tmpPath, fakeResult, TestDataDir,
+            HtmlReportGenerator.Write(tmpPath, fakeResult, "OneDrive", TestDataDir,
                 fromDate: new DateOnly(2026, 4, 1),
                 toDate:   new DateOnly(2026, 4, 30));
 
@@ -149,7 +149,7 @@ public class DateRangeTests
         try
         {
             var emptyResult = new MatchResult([], [], []);
-            HtmlReportGenerator.Write(tmpPath, emptyResult, @"C:\fake", null, null);
+            HtmlReportGenerator.Write(tmpPath, emptyResult, "OneDrive", @"C:\fake", null, null);
 
             var html = File.ReadAllText(tmpPath);
             Assert.Contains("entire library", html);

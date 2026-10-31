@@ -50,6 +50,10 @@ public class CleanupScannerTests
 
         public string FolderPath => @"C:\fake";
 
-        public List<PhotoFile> Scan(IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default) => photos;
+        public List<PhotoFile> Scan(
+            DateOnly? firstDay, DateOnly? lastDay,
+            IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default) => photos;
+
+        public string DefaultStageFolder(DateOnly firstDay, DateOnly lastDay) => @"C:ake_staged";
     }
 }

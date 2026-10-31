@@ -2,12 +2,14 @@ using System.Globalization;
 using Google.Apis.Util.Store;
 using PhotoRecull.Cli;
 using PhotoRecull.Core;
+using PhotoRecull.Core.Settings;
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
 
-string? oneDriveFolder  = null;
+string? targetName      = null;   // --target onedrive|synology
+string? targetFolder    = null;
 string? credentialsPath = "credentials.json";
 string? stageFolder     = null;
 string? outputCsv       = null;
@@ -29,7 +31,9 @@ for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
     {
-        case "--onedrive":    oneDriveFolder  = args[++i]; break;
+        case "--target":      targetName      = args[++i]; break;
+        case "--path":        targetFolder    = args[++i]; break;
+        case "--onedrive":    targetName      = "onedrive"; targetFolder = args[++i]; break;
         case "--credentials": credentialsPath = args[++i]; break;
         case "--stage":
             wantStage = true;
@@ -62,11 +66,21 @@ for (int i = 0; i < args.Length; i++)
     }
 }
 
-if (oneDriveFolder is null)
+if (targetFolder is null)
 {
-    Console.Error.WriteLine("ERROR: --onedrive <folder> is required.");
+    Console.Error.WriteLine("ERROR: --path <folder> is required.");
     PrintHelp();
     return 1;
+}
+
+TargetKind targetKind;
+switch (targetName?.ToLowerInvariant())
+{
+    case null or "onedrive": targetKind = TargetKind.OneDrive;       break;
+    case "synology":         targetKind = TargetKind.SynologyPhotos; break;
+    default:
+        Console.Error.WriteLine($"ERROR: --target must be onedrive or synology, not \"{targetName}\".");
+        return 1;
 }
 
 // Dry run is the default. An action mode (--stage / --delete) overrides it.
@@ -215,16 +229,16 @@ else
 }
 
 // ---------------------------------------------------------------------------
-// Step 2: Scan OneDrive folder, then apply date range filter
+// Step 2: Scan the target folder, then apply date range filter
 // ---------------------------------------------------------------------------
 
-ISyncTarget target = new OneDriveTarget(oneDriveFolder);
+ISyncTarget target = SyncTargets.Create(new TargetSettings(targetKind, targetFolder));
 
 Console.Write($"Scanning {target.DisplayName} folder... ");
 List<PhotoFile> targetPhotos;
 try
 {
-    var all = target.Scan();
+    var all = target.Scan(fromDate, toDate);
 
     // Apply date range: iPhone files outside the range are excluded entirely
     // (the user is only interested in that window).
@@ -302,7 +316,7 @@ if (wantHtml || (dryRun && !noReport))
 {
     var htmlPath = outputHtml ?? $"{DefaultLabel(fromDate, toDate)}.html";
     Console.Write("Generating HTML report (decoding HEIC thumbnails)... ");
-    HtmlReportGenerator.Write(htmlPath, result, oneDriveFolder, fromDate, toDate);
+    HtmlReportGenerator.Write(htmlPath, result, target.DisplayName, target.FolderPath, fromDate, toDate);
     Console.WriteLine("done.");
     Console.WriteLine($"HTML report saved to: {Path.GetFullPath(htmlPath)}");
     // The report is a local file with no Google login — always use the default browser.
@@ -321,7 +335,7 @@ if (dryRun)
 {
     Console.WriteLine("\nDry run complete. No files were moved or deleted.");
     if (result.Unmatched.Count > 0)
-        PrintNextSteps(oneDriveFolder, fromDate, toDate, effectiveCache, stageFolder);
+        PrintNextSteps(targetKind, targetFolder, fromDate, toDate, effectiveCache, stageFolder);
     return 0;
 }
 
@@ -348,6 +362,8 @@ if (deleteMode)
 {
     Console.WriteLine($"\nAbout to PERMANENTLY DELETE {result.Unmatched.Count} file(s).");
     Console.WriteLine("This cannot be undone! Review the report first (run without --delete), or use --stage to move them instead.");
+    if (targetKind == TargetKind.SynologyPhotos)
+        Console.WriteLine("On Synology they can only be restored from #recycle, if the Recycle Bin is on for this shared folder in DSM.");
     if (assumeYes)
     {
         Console.WriteLine("--yes given: skipping confirmation.");
@@ -405,20 +421,29 @@ static string DescribeRange(DateOnly? from, DateOnly? to) => (from, to) switch
 static void PrintHelp()
 {
     Console.WriteLine("""
-        PhotoRecull — Remove OneDrive photos already deleted from Google Photos
+        PhotoRecull — Remove backed-up iPhone photos (OneDrive, Synology Photos)
+        that you already deleted from Google Photos
 
         USAGE:
-          dotnet run --project src/PhotoRecull.Cli -- --onedrive <folder> [options] <mode>
+          dotnet run --project src/PhotoRecull.Cli -- --target <kind> --path <folder> [options] <mode>
 
         REQUIRED:
-          --onedrive <folder>     Path to your local OneDrive Camera Roll folder
+          --path <folder>         The target's photo folder: the OneDrive Camera Roll
+                                  (C:\Users\you\OneDrive\Pictures\Camera Roll),
+                                  or the Synology Photos backup folder, read over
+                                  the network (\\nas\home\Photos\MobileBackup\iPhone)
+
+        TARGET:
+          --target <kind>         onedrive (default) or synology. Synology folders
+                                  are read with their year and month subfolders.
+          --onedrive <folder>     Same as --target onedrive --path <folder>
 
         DATE RANGE (optional — process one month at a time):
           --from <date>           Start date: YYYY-MM or YYYY-MM-DD
           --to   <date>           End date:   YYYY-MM or YYYY-MM-DD
                                   When using YYYY-MM, --from expands to the 1st
                                   and --to expands to the last day of the month.
-                                  NOTE: this filters the OneDrive side only. The
+                                  NOTE: this filters the target side only. The
                                   Google Photos Picker has no date filter, so in
                                   the browser you must select every photo that
                                   still exists in Google Photos for this range.
@@ -490,14 +515,15 @@ static bool IsWholeMonth(DateOnly from, DateOnly to) =>
     && to.Day == DateTime.DaysInMonth(to.Year, to.Month);
 
 // After a dry run, print the exact command to move the candidates to staging.
-static void PrintNextSteps(string oneDriveFolder, DateOnly? from, DateOnly? to,
+static void PrintNextSteps(TargetKind targetKind, string targetFolder, DateOnly? from, DateOnly? to,
     string? effectiveCache, string? stageFolder)
 {
     var stageDir = stageFolder ?? $"_staged_{DefaultLabel(from, to)}";
 
     string BaseCmd()
     {
-        var c = $"dotnet run --project src/PhotoRecull.Cli -- --onedrive \"{oneDriveFolder}\"";
+        var target = targetKind == TargetKind.SynologyPhotos ? "synology" : "onedrive";
+        var c = $"dotnet run --project src/PhotoRecull.Cli -- --target {target} --path \"{targetFolder}\"";
         if (from.HasValue) c += $" --from {from:yyyy-MM-dd}";
         if (to.HasValue)   c += $" --to {to:yyyy-MM-dd}";
         if (effectiveCache is not null) c += $" --cache \"{effectiveCache}\"";

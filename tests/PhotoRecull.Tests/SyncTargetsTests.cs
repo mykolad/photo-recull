@@ -15,9 +15,11 @@ public class SyncTargetsTests
     }
 
     [Fact]
-    public void Create_SynologyPhotos_NotSupportedYet()
+    public void Create_SynologyPhotos_UsesTheConfiguredFolder()
     {
-        Assert.Throws<NotSupportedException>(
-            () => SyncTargets.Create(new TargetSettings(TargetKind.SynologyPhotos, @"Z:\Photos")));
+        var target = SyncTargets.Create(new TargetSettings(TargetKind.SynologyPhotos, @"\\nas\home\Photos\MobileBackup\iPhone"));
+
+        var synology = Assert.IsType<SynologyPhotosTarget>(target);
+        Assert.Equal(@"\\nas\home\Photos\MobileBackup\iPhone", synology.FolderPath);
     }
 }

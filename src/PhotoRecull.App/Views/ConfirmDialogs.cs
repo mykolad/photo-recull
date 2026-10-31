@@ -67,7 +67,7 @@ internal sealed class StageDialog
         var content = new StackPanel { Spacing = 16, Width = 560 };
         content.Children.Add(new TextBlock
         {
-            Text = "Candidates move to a review folder next to each target. Nothing is deleted. Check the folder, move back anything you need, then delete it.",
+            Text = "Candidates move to a review folder outside each target's photos, so they aren't scanned or shown again. Nothing is deleted. Check the folder, move back anything you need, then delete it.",
             TextWrapping = TextWrapping.Wrap,
         });
         foreach (var (target, count, bytes) in perTarget)
@@ -127,7 +127,10 @@ internal sealed class DeleteDialog
         _dialog.SecondaryButtonText = "Stage instead";
         _dialog.CloseButtonText = "Cancel";
 
-        var permanentTargets = perTarget.Where(t => !CleanupFlowViewModel.DeletesGoToRecycleBin(t.Target)).ToList();
+        var dsmRecycleBins = perTarget.ToDictionary(t => t.Target, t => CleanupFlowViewModel.DsmRecycleBinFolder(t.Target));
+        var permanentTargets = perTarget
+            .Where(t => !CleanupFlowViewModel.DeletesGoToRecycleBin(t.Target) && dsmRecycleBins[t.Target] is null)
+            .ToList();
         var content = new StackPanel { Spacing = 12, Width = 560 };
         content.Children.Add(new InfoBar
         {
@@ -136,14 +139,21 @@ internal sealed class DeleteDialog
             Severity = permanentTargets.Count > 0 ? InfoBarSeverity.Error : InfoBarSeverity.Warning,
             Message = permanentTargets.Count > 0
                 ? $"Deletion on {string.Join(" and ", permanentTargets.Select(t => SyncTargets.DisplayName(t.Target.Kind)))} is permanent and can't be undone. Make sure every photo you kept was picked."
-                : "Deleted photos go to the Recycle Bin. Make sure every photo you kept was picked.",
+                    + (permanentTargets.Any(t => t.Target.Kind == TargetKind.SynologyPhotos)
+                        ? " To be able to undo it, first turn on the Recycle Bin for the shared folder in DSM (Control Panel › Shared Folder › Edit)."
+                        : "")
+                : dsmRecycleBins.Values.Any(folder => folder is not null)
+                    ? "Deleted photos go to the Recycle Bin; on Synology Photos, to #recycle on the NAS while DSM's Recycle Bin is on. Make sure every photo you kept was picked."
+                    : "Deleted photos go to the Recycle Bin. Make sure every photo you kept was picked.",
         });
         foreach (var (target, count, bytes) in perTarget)
         {
-            bool isPermanent = !CleanupFlowViewModel.DeletesGoToRecycleBin(target);
+            bool isPermanent = permanentTargets.Any(t => t.Target == target);
             var where = new TextBlock
             {
-                Text = isPermanent ? "Permanent" : "Goes to the Recycle Bin",
+                Text = isPermanent ? "Permanent"
+                    : dsmRecycleBins[target] is not null ? "Goes to #recycle on the NAS"
+                    : "Goes to the Recycle Bin",
                 FontWeight = isPermanent ? FontWeights.SemiBold : FontWeights.Normal,
                 Foreground = XamlFunctions.ThemeBrush(isPermanent ? "SystemFillColorCriticalBrush" : "TextFillColorPrimaryBrush"),
             };
