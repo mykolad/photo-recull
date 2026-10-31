@@ -26,23 +26,21 @@ public static class FileActions
             var reason = $"Can't use the stage folder: {ex.Message}";
             return new FileActionResult(0, photos.Select(p => new FileFailure(p, reason)).ToList());
         }
-        return ApplyToEachCollectingFailures(photos, p => MoveIntoStageFolder(p, stageFolder, targetFolder));
-    }
-
-    // Both destinations of a Live Photo are checked before either part moves, so
-    // a name already taken never leaves the video staged without its photo.
-    private static void MoveIntoStageFolder(PhotoFile photo, string stageFolder, string targetFolder)
-    {
-        var moves = FilesOf(photo)
-            .Select(path => (From: path, To: Path.Combine(stageFolder, FolderBelow(targetFolder, path), Path.GetFileName(path))))
-            .ToList();
-        if (moves.Any(move => File.Exists(move.To)))
-            throw new IOException("A file with this name is already in the stage folder", FileExists);
-        foreach (var (from, to) in moves)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(to)!);
-            File.Move(from, to, overwrite: false);
-        }
+        string StagedPath(string path) => Path.Combine(stageFolder, FolderBelow(targetFolder, path), Path.GetFileName(path));
+        return ApplyToEachCollectingFailures(photos,
+            path =>
+            {
+                var stagedPath = StagedPath(path);
+                Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
+                File.Move(path, stagedPath, overwrite: false);
+            },
+            // Both parts of a Live Photo are checked before either moves, so a name
+            // already taken never leaves the video staged without its photo.
+            checkBeforeActing: photo =>
+            {
+                if (FilesOf(photo).Any(path => File.Exists(StagedPath(path))))
+                    throw new IOException("A file with this name is already in the stage folder", FileExists);
+            });
     }
 
     private static string FolderBelow(string targetFolder, string path)
@@ -54,11 +52,11 @@ public static class FileActions
     }
 
     public static FileActionResult DeletePermanently(IEnumerable<PhotoFile> photos) =>
-        ApplyToEachCollectingFailures(photos, p => ApplyToPhotoAndItsVideo(p, File.Delete));
+        ApplyToEachCollectingFailures(photos, File.Delete);
 
     [SupportedOSPlatform("windows")]
     public static FileActionResult MoveToRecycleBin(IEnumerable<PhotoFile> photos) =>
-        ApplyToEachCollectingFailures(photos, p => ApplyToPhotoAndItsVideo(p, SendToRecycleBin));
+        ApplyToEachCollectingFailures(photos, SendToRecycleBin);
 
     // Short reasons the user can act on, as shown in the Result screen.
     public static string DescribeFailure(Exception exception) => exception switch
@@ -75,8 +73,11 @@ public static class FileActions
     private const int FileExists = unchecked((int)0x80070050);
     private const int AlreadyExists = unchecked((int)0x800700B7);
 
+    // A Live Photo's video goes first: if the photo then fails, a retry finds the
+    // video already gone and acts on the photo alone. The bytes count every file
+    // acted on, so a video deleted before its photo failed still counts as freed.
     private static FileActionResult ApplyToEachCollectingFailures(
-        IEnumerable<PhotoFile> photos, Action<PhotoFile> action)
+        IEnumerable<PhotoFile> photos, Action<string> actOnFile, Action<PhotoFile>? checkBeforeActing = null)
     {
         int succeededCount = 0;
         long succeededBytes = 0;
@@ -85,10 +86,16 @@ public static class FileActions
         {
             try
             {
-                long size = CurrentSizeOfPhotoAndItsVideo(photo);
-                action(photo);
+                if (!File.Exists(photo.Path))
+                    throw new FileNotFoundException(null, photo.Path);
+                checkBeforeActing?.Invoke(photo);
+                foreach (var path in FilesOf(photo).ToList())
+                {
+                    long size = new FileInfo(path).Length;
+                    actOnFile(path);
+                    succeededBytes += size;
+                }
                 succeededCount++;
-                succeededBytes += size;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -98,24 +105,12 @@ public static class FileActions
         return new FileActionResult(succeededCount, failures, succeededBytes);
     }
 
-    // A Live Photo's video goes first: if the photo then fails, a retry finds the
-    // video already gone and acts on the photo alone.
-    private static void ApplyToPhotoAndItsVideo(PhotoFile photo, Action<string> action)
-    {
-        foreach (var path in FilesOf(photo))
-            action(path);
-    }
-
     private static IEnumerable<string> FilesOf(PhotoFile photo)
     {
         if (photo.LivePhotoVideoPath is { } video && File.Exists(video))
             yield return video;
         yield return photo.Path;
     }
-
-    private static long CurrentSizeOfPhotoAndItsVideo(PhotoFile photo) =>
-        new FileInfo(photo.Path).Length
-        + (photo.LivePhotoVideoPath is { } video && File.Exists(video) ? new FileInfo(video).Length : 0);
 
     // Network and mapped drives have no Recycle Bin: the shell would delete from
     // them permanently, which the app promises not to do.

@@ -184,6 +184,23 @@ public class LivePhotoAndVideoTests : IDisposable
     }
 
     [Fact]
+    public void DeletingALivePhotoWhosePhotoIsLocked_CountsItsDeletedVideoAsFreed()
+    {
+        var (still, video) = WriteLivePhoto("IMG_1776");
+        var photo = Assert.Single(PhotoScanner.ScanFolder(_folder));
+        long videoBytes = new FileInfo(video).Length;
+
+        FileActionResult result;
+        using (File.Open(still, FileMode.Open, FileAccess.Read, FileShare.None))
+            result = FileActions.DeletePermanently([photo]);
+
+        Assert.Equal(0, result.SucceededCount);
+        Assert.Single(result.Failures);
+        Assert.False(File.Exists(video));
+        Assert.Equal(videoBytes, result.SucceededBytes);
+    }
+
+    [Fact]
     public void DeletingALivePhoto_DeletesItsVideoToo_AndARetryAfterTheVideoWentStillDeletesThePhoto()
     {
         var (still, video) = WriteLivePhoto("IMG_1776");

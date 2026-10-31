@@ -59,6 +59,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     {
         "filename" => "File name",
         "exif" => "EXIF",
+        "video" => "Video metadata",
         _ => "No capture time",
     };
 

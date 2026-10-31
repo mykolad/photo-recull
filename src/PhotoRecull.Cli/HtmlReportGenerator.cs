@@ -305,7 +305,7 @@ public static class HtmlReportGenerator
 
     private static string PhotoCard(PhotoFile p, string src, ReviewMark mark)
     {
-        var fileUri = "file:///" + p.Path.Replace('\\', '/').TrimStart('/');
+        var fileUri = FileUri(p.Path);
         var ts = p.Timestamp.HasValue
             ? p.Timestamp.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC"
             : "(unknown time)";
@@ -333,6 +333,10 @@ public static class HtmlReportGenerator
             """;
     }
 
+    // file:///C:/... for a local file, file://nas/home/... for a network one, with
+    // characters such as # and spaces escaped, ready for an HTML attribute.
+    private static string FileUri(string path) => HtmlEncode(new Uri(path).AbsoluteUri);
+
     /// <summary>
     /// Returns the value for an &lt;img src&gt;: an embedded JPEG data URI for
     /// HEIC/HEIF (which browsers can't render), otherwise a file:// URI.
@@ -340,7 +344,7 @@ public static class HtmlReportGenerator
     /// </summary>
     private static string BuildImageSrc(string path)
     {
-        var fileUri = "file:///" + path.Replace('\\', '/').TrimStart('/');
+        var fileUri = FileUri(path);
         var ext = Path.GetExtension(path).ToLowerInvariant();
 
         if (ext is ".heic" or ".heif")

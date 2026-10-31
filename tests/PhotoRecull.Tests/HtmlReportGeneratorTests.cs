@@ -54,6 +54,16 @@ public class HtmlReportGeneratorTests : IDisposable
     }
 
     [Fact]
+    public void APhotoOnTheNetwork_LinksToItsServer_WithItsPathEscaped()
+    {
+        var onNas = PhotoAt("IMG_0001.JPG", 9, 0, 0) with { Path = @"\\nas\home\Photos\2026 #1\IMG_0001.JPG" };
+
+        var html = Render(new MatchResult([onNas], [], []));
+
+        Assert.Contains("""href="file://nas/home/Photos/2026%20%231/IMG_0001.JPG" """, html);
+    }
+
+    [Fact]
     public void TheFilterIsThreeRadioButtonsAheadOfTheTimeline()
     {
         var html = Render(new MatchResult([PhotoAt("a.jpg", 9, 0, 0)], [], []));
