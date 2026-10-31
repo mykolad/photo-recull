@@ -56,8 +56,13 @@ internal sealed class StageDialog
     private readonly Dictionary<TargetSettings, TextBox> _folderBoxes = [];
     private readonly Dictionary<TargetSettings, TextBlock> _folderProblems = [];
 
+    // Every target's folder, not only the one being staged from: OneDrive photos
+    // staged inside the Synology backup would come up there in its next scan.
+    private readonly List<TargetSettings> _allTargets;
+
     public StageDialog(XamlRoot xamlRoot, CleanupFlowViewModel flow)
     {
+        _allTargets = [.. flow.Targets.Union(AppServices.Database.LoadSettings().Targets)];
         var perTarget = flow.CandidatesPerTarget();
         int total = perTarget.Sum(t => t.Count);
         _dialog = ConfirmDialogContent.Create(xamlRoot, $"Stage {total:N0} photo{(total == 1 ? "" : "s")}?");
@@ -122,9 +127,11 @@ internal sealed class StageDialog
         foreach (var (target, box) in _folderBoxes)
         {
             var folder = box.Text.Trim();
-            var problem = !Path.IsPathFullyQualified(folder) ? null
-                : FileActions.IsSameOrInside(folder, target.FolderPath) ? $"{FileActions.StageFolderInsideTarget}."
-                : null;
+            var scannedTarget = !Path.IsPathFullyQualified(folder) ? null
+                : _allTargets.FirstOrDefault(t => FileActions.IsSameOrInside(folder, t.FolderPath));
+            var problem = scannedTarget is null ? null
+                : scannedTarget == target ? $"{FileActions.StageFolderInsideTarget}."
+                : $"This is inside {SyncTargets.DisplayName(scannedTarget.Kind)}'s folder, so its next scan would find these photos.";
             _folderProblems[target].Text = problem ?? "";
             _folderProblems[target].Visibility = problem is null ? Visibility.Collapsed : Visibility.Visible;
             allUsable &= Path.IsPathFullyQualified(folder) && problem is null;
