@@ -38,8 +38,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         List<ReviewTileViewModel> Tiles(IEnumerable<ReviewCopy> copies) =>
             TargetCopies.Group(copies.OrderBy(c => targets.ToList().IndexOf(c.Target)).ToList(), c => c.Photo, c => c.Target)
                 .Select(group => new ReviewTileViewModel(
-                    group, group.Any(c => c.Kind == ReviewTileKind.Candidate && _keptPaths.Contains(c.Photo.Path)),
-                    ToggleKeep, OpenPreview, () => IsActionRunning))
+                    group, KeepEveryCopyIfOneIsKept(group), ToggleKeep, OpenPreview, () => IsActionRunning))
                 .ToList();
 
         _timeline = Tiles([.. Copies(ReviewTileKind.Candidate, m => m.Unmatched), .. Copies(ReviewTileKind.Match, m => m.Matched)]);
@@ -52,6 +51,22 @@ public sealed partial class ReviewViewModel : ObservableObject
     }
 
     public IReadOnlyList<TargetSettings> Targets { get; }
+
+    // A photo shows as kept when any of its copies was kept (say, on OneDrive,
+    // before Synology Photos was added). Keep is then saved for the other copies
+    // too, so a later scan that doesn't group them can't make one a candidate.
+    private bool KeepEveryCopyIfOneIsKept(IReadOnlyList<ReviewCopy> copies)
+    {
+        var candidates = copies.Where(c => c.Kind == ReviewTileKind.Candidate).ToList();
+        if (!candidates.Any(c => _keptPaths.Contains(c.Photo.Path)))
+            return false;
+        foreach (var copy in candidates.Where(c => !_keptPaths.Contains(c.Photo.Path)))
+        {
+            AppServices.Database.SetPhotoKept(_cleanup.Id, copy.Photo.Path, isKept: true);
+            _keptPaths.Add(copy.Photo.Path);
+        }
+        return true;
+    }
 
     public ObservableCollection<ReviewDayViewModel> Days { get; } = [];
 
