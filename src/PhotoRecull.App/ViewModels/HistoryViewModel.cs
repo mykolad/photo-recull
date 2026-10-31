@@ -17,8 +17,17 @@ public sealed class HistoryViewModel
         var rangeOfCleanup = AppServices.Database.LoadCleanups()
             .ToDictionary(c => c.Id, c => DateRangeLabel.Format(c.From, c.To));
         foreach (var run in AppServices.Database.LoadRunsNewestFirst())
-            Runs.Add(new HistoryRunViewModel(run, rangeOfCleanup.GetValueOrDefault(run.CleanupId)));
+            Runs.Add(new HistoryRunViewModel(run, rangeOfCleanup.GetValueOrDefault(run.CleanupId))
+            {
+                CanRemove = !HasPhotosStillStaged(run),
+            });
     }
+
+    // A stage run's record is how Review staged finds its photos, so it stays
+    // while any of them are still in the stage folder (or can't be checked).
+    private static bool HasPhotosStillStaged(CleanupRun run) =>
+        run.Action == CleanupAction.Staged
+        && !StagedPhotos.StillStaged([(run, AppServices.Database.LoadRunFiles(run.Id))]).IsVerifiedEmpty;
 
     public ObservableCollection<HistoryRunViewModel> Runs { get; } = [];
 
@@ -35,6 +44,12 @@ public sealed class HistoryViewModel
 public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupRange)
 {
     public CleanupRun Run { get; } = run;
+
+    public bool CanRemove { get; init; } = true;
+
+    public string RemoveToolTip => CanRemove
+        ? "Remove from History. No files are touched."
+        : "Its photos are still staged. Review them from Library first.";
 
     public string WhenText => Run.RanAt.ToLocalTime().ToString("ddd d MMM yyyy, HH:mm", CultureInfo.CurrentCulture);
 

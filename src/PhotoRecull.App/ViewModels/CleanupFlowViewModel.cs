@@ -616,7 +616,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             {
                 // Photos staged earlier and still waiting keep it Staged after the rest are deleted.
                 State = failed > 0 ? CleanupState.ReadyToAct
-                    : action == CleanupAction.Staged || StagedPhotos.StillStaged(AppServices.Database, _cleanup.Id).Count > 0
+                    : action == CleanupAction.Staged || !StagedPhotos.Load(AppServices.Database, _cleanup.Id).IsVerifiedEmpty
                         ? CleanupState.Staged
                         : CleanupState.Done,
                 ToRemoveCount = failed > 0 ? failed : _cleanup.ToRemoveCount,

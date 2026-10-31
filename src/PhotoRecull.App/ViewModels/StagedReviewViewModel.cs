@@ -19,7 +19,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
     public StagedReviewViewModel(Guid cleanupId)
     {
         _cleanup = AppServices.Database.LoadCleanups().First(c => c.Id == cleanupId);
-        LoadStagedPhotos();
+        SettleIfNothingIsLeft(LoadStagedPhotos());
     }
 
     public string Title => DateRangeLabel.Format(_cleanup.From, _cleanup.To);
@@ -48,14 +48,35 @@ public sealed partial class StagedReviewViewModel : ObservableObject
 
     public event EventHandler? AllHandled;
 
-    private void LoadStagedPhotos()
+    // Stage folders that couldn't be checked (a NAS that's off): their photos
+    // aren't listed, and the cleanup isn't taken as done.
+    [ObservableProperty]
+    public partial string? UnreachableMessage { get; set; }
+
+    private StagedInventory LoadStagedPhotos()
     {
+        var inventory = StagedPhotos.Load(AppServices.Database, _cleanup.Id);
         Photos.Clear();
-        foreach (var photo in StagedPhotos.StillStaged(AppServices.Database, _cleanup.Id))
+        foreach (var photo in inventory.Photos)
             Photos.Add(new StagedTileViewModel(photo, MoveBack));
+        UnreachableMessage = inventory.UnreachableFolders.Count == 0 ? null
+            : $"Can't reach {string.Join(", ", inventory.UnreachableFolders)}. Its staged photos show here once it's back.";
         OnPropertyChanged(nameof(HasPhotos));
         OnPropertyChanged(nameof(Summary));
         MoveAllBackCommand.NotifyCanExecuteChanged();
+        return inventory;
+    }
+
+    // Opening a Staged cleanup whose photos have all gone (handled by hand, or
+    // by a run cut off after its last photo) settles it as Done.
+    private void SettleIfNothingIsLeft(StagedInventory inventory)
+    {
+        if (_cleanup.State != CleanupState.Staged || !inventory.IsVerifiedEmpty)
+            return;
+        _cleanup = _cleanup with { State = CleanupState.Done, StagedCount = 0, LastActivityAt = DateTimeOffset.Now };
+        AppServices.Database.SaveCleanup(_cleanup);
+        ResultHasFailures = false;
+        ResultMessage = "No staged photos are left, so this cleanup is now marked Done.";
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -86,13 +107,25 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                 .GroupBy(p => p.Target)
                 .Select(g =>
                 {
+                    var targetPhotos = g.ToList();
+                    bool toRecycleBin = action == CleanupAction.Deleted && targetPhotos.All(p => FileActions.HasRecycleBin(p.StagedPath));
                     var started = new CleanupRun(_cleanup.Id, ranAt, action, g.Key,
-                        action == CleanupAction.MovedBack ? g.Key.FolderPath : null, 0, 0, 0);
+                        action == CleanupAction.MovedBack ? g.Key.FolderPath : null, 0, 0, 0)
+                    {
+                        WentToRecycleBin = action == CleanupAction.Deleted ? toRecycleBin : null,
+                    };
                     long runId = AppServices.Database.StartRun(started);
-                    void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file);
+                    // A photo moved back is kept as soon as it's back, so running the
+                    // cleanup again won't offer it, even if this is cut off.
+                    void Record(RunFile file)
+                    {
+                        AppServices.Database.RecordRunFile(runId, file);
+                        if (action == CleanupAction.MovedBack && file.Succeeded)
+                            AppServices.Database.SetPhotoKept(_cleanup.Id, file.Destination!, isKept: true);
+                    }
                     var result = action == CleanupAction.MovedBack
-                        ? FileActions.MoveBack(g, Record)
-                        : Delete(g.ToList(), Record);
+                        ? FileActions.MoveBack(targetPhotos, Record)
+                        : Delete(targetPhotos, toRecycleBin, Record);
                     return started with
                     {
                         Id = runId,
@@ -103,16 +136,12 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                 })
                 .ToList());
 
-            // Photos moved back are kept: running the cleanup again won't offer them.
-            if (action == CleanupAction.MovedBack)
-                foreach (var file in runs.SelectMany(r => AppServices.Database.LoadRunFiles(r.Id)).Where(f => f.Succeeded))
-                    AppServices.Database.SetPhotoKept(_cleanup.Id, file.Destination!, isKept: true);
-
-            var stillStaged = StagedPhotos.StillStaged(AppServices.Database, _cleanup.Id);
+            var remaining = StagedPhotos.Load(AppServices.Database, _cleanup.Id);
             int succeeded = runs.Sum(r => r.SucceededCount), failed = runs.Sum(r => r.FailedCount);
             _cleanup = _cleanup with
             {
-                State = stillStaged.Count == 0 ? CleanupState.Done : CleanupState.Staged,
+                State = remaining.IsVerifiedEmpty ? CleanupState.Done : CleanupState.Staged,
+                StagedCount = remaining.Photos.Count,
                 RemovedCount = _cleanup.RemovedCount + (action == CleanupAction.Deleted ? succeeded : 0),
                 KeptByUserCount = _cleanup.KeptByUserCount + (action == CleanupAction.MovedBack ? succeeded : 0),
                 FreedBytes = _cleanup.FreedBytes + runs.Sum(r => r.FreedBytes),
@@ -126,8 +155,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
             ResultMessage = $"{verb} {PhotoCount(succeeded)}." + (failed > 0
                 ? $" {PhotoCount(failed)} failed: {string.Join("; ", runs.SelectMany(r => AppServices.Database.LoadRunFiles(r.Id)).Where(f => !f.Succeeded).Select(f => $"{Path.GetFileName(f.Path)} ({f.FailureReason})").Take(3))}"
                 : "");
-            LoadStagedPhotos();
-            if (stillStaged.Count == 0)
+            if (LoadStagedPhotos().IsVerifiedEmpty)
                 AllHandled?.Invoke(this, EventArgs.Empty);
         }
         finally
@@ -138,13 +166,13 @@ public sealed partial class StagedReviewViewModel : ObservableObject
         }
     }
 
-    private static FileActionResult Delete(List<StagedPhoto> photos, Action<RunFile> onPhotoDone)
+    private static FileActionResult Delete(List<StagedPhoto> photos, bool toRecycleBin, Action<RunFile> onPhotoDone)
     {
         var files = photos.Select(p => new PhotoFile(p.StagedPath, p.FileName, null, IsIphone: true, TimestampSource: null)
         {
             LivePhotoVideoPath = p.StagedVideoPath,
         }).ToList();
-        return files.All(f => FileActions.HasRecycleBin(f.Path))
+        return toRecycleBin
             ? FileActions.MoveToRecycleBin(files, onPhotoDone)
             : FileActions.DeletePermanently(files, onPhotoDone);
     }

@@ -32,6 +32,12 @@
                 Severity="{x:Bind views:XamlFunctions.ResultSeverity(ViewModel.ResultHasFailures), Mode=OneWay}"
                 Message="{x:Bind ViewModel.ResultMessage, Mode=OneWay}"
                 IsOpen="{x:Bind views:XamlFunctions.IsNotEmpty(ViewModel.ResultMessage), Mode=OneWay}" />
+            <InfoBar
+                Margin="0,8,0,0"
+                IsClosable="False"
+                Severity="Warning"
+                Message="{x:Bind ViewModel.UnreachableMessage, Mode=OneWay}"
+                IsOpen="{x:Bind views:XamlFunctions.IsNotEmpty(ViewModel.UnreachableMessage), Mode=OneWay}" />
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" Padding="40,0,40,16">
