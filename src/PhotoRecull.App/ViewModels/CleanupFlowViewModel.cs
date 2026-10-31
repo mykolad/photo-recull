@@ -607,6 +607,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         int succeeded = runs.Sum(r => r.SucceededCount);
 
         int failed = runs.Sum(r => r.FailedCount);
+        // Photos staged earlier and still waiting keep it Staged after the rest are
+        // deleted. Checked in the background: a stage folder can be on a NAS.
+        bool earlierPhotosStillStaged = action == CleanupAction.Deleted && failed == 0
+            && await Task.Run(() => !StagedPhotos.Load(AppServices.Database, _cleanup!.Id).IsVerifiedEmpty);
         // A Live Photo whose video went before its photo failed frees space
         // without completing a photo; that space still counts.
         if (succeeded > 0 || runs.Sum(r => r.FreedBytes) > 0)
@@ -615,9 +619,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             // Ready to act, so Library can reopen it and the rest can be retried.
             _cleanup = _cleanup! with
             {
-                // Photos staged earlier and still waiting keep it Staged after the rest are deleted.
                 State = failed > 0 ? CleanupState.ReadyToAct
-                    : action == CleanupAction.Staged || !StagedPhotos.Load(AppServices.Database, _cleanup.Id).IsVerifiedEmpty
+                    : action == CleanupAction.Staged || earlierPhotosStillStaged
                         ? CleanupState.Staged
                         : CleanupState.Done,
                 ToRemoveCount = failed > 0 ? failed : _cleanup.ToRemoveCount,

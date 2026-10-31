@@ -22,6 +22,7 @@
                 <TextBlock Text="{x:Bind ViewModel.Title}" Style="{StaticResource TitleTextBlockStyle}" />
             </StackPanel>
             <TextBlock Text="Staged photos" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,8,0,0" />
+            <ProgressBar IsIndeterminate="True" Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay}" ToolTipService.ToolTip="Checking the stage folders" />
             <TextBlock
                 Text="These photos were moved out of your targets for a last look. Move back any you want to keep, then delete the rest."
                 Style="{StaticResource SecondaryCaptionTextBlockStyle}"

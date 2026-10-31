@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
@@ -17,17 +18,24 @@ public sealed class HistoryViewModel
         var rangeOfCleanup = AppServices.Database.LoadCleanups()
             .ToDictionary(c => c.Id, c => DateRangeLabel.Format(c.From, c.To));
         foreach (var run in AppServices.Database.LoadRunsNewestFirst())
-            Runs.Add(new HistoryRunViewModel(run, rangeOfCleanup.GetValueOrDefault(run.CleanupId))
-            {
-                CanRemove = !HasPhotosStillStaged(run),
-            });
+            Runs.Add(new HistoryRunViewModel(run, rangeOfCleanup.GetValueOrDefault(run.CleanupId)));
+        _ = CheckStageRunsAsync();
     }
 
     // A stage run's record is how Review staged finds its photos, so it stays
     // while any of them are still in the stage folder (or can't be checked).
-    private static bool HasPhotosStillStaged(CleanupRun run) =>
-        run.Action == CleanupAction.Staged
-        && !StagedPhotos.StillStaged([(run, AppServices.Database.LoadRunFiles(run.Id))]).IsVerifiedEmpty;
+    // Checked in the background: a NAS that's off can take a while to answer.
+    private async Task CheckStageRunsAsync()
+    {
+        foreach (var row in Runs.Where(r => r.Run.Action == CleanupAction.Staged).ToList())
+        {
+            var run = row.Run;
+            bool stillStaged = await Task.Run(() =>
+                !StagedPhotos.StillStaged([(run, AppServices.Database.LoadRunFiles(run.Id))]).IsVerifiedEmpty);
+            row.IsCheckingStagedPhotos = false;
+            row.CanRemove = !stillStaged;
+        }
+    }
 
     public ObservableCollection<HistoryRunViewModel> Runs { get; } = [];
 
@@ -41,15 +49,21 @@ public sealed class HistoryViewModel
     }
 }
 
-public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupRange)
+public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupRange) : ObservableObject
 {
     public CleanupRun Run { get; } = run;
 
-    public bool CanRemove { get; init; } = true;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RemoveToolTip))]
+    public partial bool IsCheckingStagedPhotos { get; set; } = run.Action == CleanupAction.Staged;
 
-    public string RemoveToolTip => CanRemove
-        ? "Remove from History. No files are touched."
-        : "Its photos are still staged. Review them from Library first.";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RemoveToolTip))]
+    public partial bool CanRemove { get; set; } = run.Action != CleanupAction.Staged;
+
+    public string RemoveToolTip => CanRemove ? "Remove from History. No files are touched."
+        : IsCheckingStagedPhotos ? "Checking whether its photos are still staged…"
+        : "Its photos are still staged, or their folder can't be reached. Review them from Library first.";
 
     public string WhenText => Run.RanAt.ToLocalTime().ToString("ddd d MMM yyyy, HH:mm", CultureInfo.CurrentCulture);
 
@@ -75,9 +89,9 @@ public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupR
     public bool CanOpenFolder => Run.Action == CleanupAction.Staged && Run.Destination is not null;
 
     [RelayCommand]
-    private void OpenFolder()
+    private async Task OpenFolderAsync()
     {
-        if (Run.Destination is { } folder && Directory.Exists(folder))
+        if (Run.Destination is { } folder && await Task.Run(() => Directory.Exists(folder)))
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
         else
             ShellPage.Current?.ShowToast("The stage folder isn't there any more.", Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);

@@ -16,11 +16,26 @@ public sealed partial class StagedReviewViewModel : ObservableObject
 {
     private Cleanup _cleanup;
 
-    public StagedReviewViewModel(Guid cleanupId)
-    {
+    public StagedReviewViewModel(Guid cleanupId) =>
         _cleanup = AppServices.Database.LoadCleanups().First(c => c.Id == cleanupId);
-        SettleIfNothingIsLeft(LoadStagedPhotos());
+
+    // The staged photos are checked in the background: a NAS that's off can take a
+    // while to answer, and the window mustn't freeze meanwhile.
+    public async Task LoadAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            SettleIfNothingIsLeft(Show(await Task.Run(() => StagedPhotos.Load(AppServices.Database, _cleanup.Id))));
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
+
+    [ObservableProperty]
+    public partial bool IsLoading { get; set; }
 
     public string Title => DateRangeLabel.Format(_cleanup.From, _cleanup.To);
 
@@ -59,9 +74,8 @@ public sealed partial class StagedReviewViewModel : ObservableObject
     [ObservableProperty]
     public partial string? UnreachableMessage { get; set; }
 
-    private StagedInventory LoadStagedPhotos()
+    private StagedInventory Show(StagedInventory inventory)
     {
-        var inventory = StagedPhotos.Load(AppServices.Database, _cleanup.Id);
         Photos.Clear();
         foreach (var photo in inventory.Photos)
             Photos.Add(new StagedTileViewModel(photo, MoveBack));
@@ -138,7 +152,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                 })
                 .ToList());
 
-            var remaining = StagedPhotos.Load(AppServices.Database, _cleanup.Id);
+            var remaining = await Task.Run(() => StagedPhotos.Load(AppServices.Database, _cleanup.Id));
             int succeeded = runs.Sum(r => r.SucceededCount), failed = runs.Sum(r => r.FailedCount);
             _cleanup = _cleanup with
             {
@@ -157,7 +171,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
             ResultMessage = $"{verb} {PhotoCount(succeeded)}." + (failed > 0
                 ? $" {PhotoCount(failed)} failed: {string.Join("; ", runs.SelectMany(r => AppServices.Database.LoadRunFiles(r.Id)).Where(f => !f.Succeeded).Select(f => $"{Path.GetFileName(f.Path)} ({f.FailureReason})").Take(3))}"
                 : "");
-            if (LoadStagedPhotos().IsVerifiedEmpty)
+            if (Show(remaining).IsVerifiedEmpty)
                 AllHandled?.Invoke(this, EventArgs.Empty);
         }
         finally

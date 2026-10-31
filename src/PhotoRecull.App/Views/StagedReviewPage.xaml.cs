@@ -11,7 +11,7 @@ public sealed partial class StagedReviewPage : Page
 
     public StagedReviewViewModel ViewModel { get; private set; } = null!;
 
-    protected override void OnNavigatedTo(NavigationEventArgs e)
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         ViewModel = new StagedReviewViewModel((Guid)e.Parameter);
         ViewModel.AllHandled += (_, _) =>
@@ -25,9 +25,10 @@ public sealed partial class StagedReviewPage : Page
                 ShellPage.Current?.SetNavigationLocked(ViewModel.IsActing);
         };
         Bindings.Update();
+        await ViewModel.LoadAsync();
 #if DEBUG
         if (Services.DebugScreenshot.RequestedCleanupStep() is { Step: "staged-moveback" })
-            _ = ViewModel.MoveAllBackCommand.ExecuteAsync(null);
+            await ViewModel.MoveAllBackCommand.ExecuteAsync(null);
 #endif
     }
 
