@@ -569,10 +569,6 @@ public sealed class AppStateDatabase
         """,
         """
         ALTER TABLE runs ADD COLUMN status TEXT NOT NULL DEFAULT 'Complete';
-        -- Runs saved before photos were recorded one by one have none to read.
-        ALTER TABLE runs ADD COLUMN photos_recorded INTEGER NOT NULL DEFAULT 0;
-        -- What a delete did; null for runs saved before it was recorded.
-        ALTER TABLE runs ADD COLUMN went_to_recycle_bin INTEGER;
 
         CREATE TABLE run_files (
             run_id            INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
@@ -588,6 +584,12 @@ public sealed class AppStateDatabase
         """
         ALTER TABLE cleanups ADD COLUMN has_ever_run INTEGER NOT NULL DEFAULT 0;
         UPDATE cleanups SET has_ever_run = 1 WHERE EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = cleanups.id);
+        """,
+        """
+        -- Runs saved before photos were recorded one by one have none to read.
+        ALTER TABLE runs ADD COLUMN photos_recorded INTEGER NOT NULL DEFAULT 0;
+        -- What a delete did; null for runs saved before it was recorded.
+        ALTER TABLE runs ADD COLUMN went_to_recycle_bin INTEGER;
         """,
     ];
 
