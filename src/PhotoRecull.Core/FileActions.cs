@@ -80,6 +80,20 @@ public static class FileActions
         return Path.EndsInDirectorySeparator(fullPath) ? fullPath : fullPath + Path.DirectorySeparatorChar;
     }
 
+    // One spelling for a path, to compare it with: full, with no ending separator,
+    // and a mapped drive as its share.
+    internal static string ComparablePath(string path)
+    {
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(NetworkPathOf(Path.GetFullPath(path)));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path;
+        }
+    }
+
     // A mapped drive and its share are one folder by two names: Z:\Photos and
     // \\nas\home\Photos. A mapping that's disconnected still has its share.
     private static string NetworkPathOf(string fullPath)

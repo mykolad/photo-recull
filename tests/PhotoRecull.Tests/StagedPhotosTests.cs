@@ -199,11 +199,46 @@ public class StagedPhotosTests : IDisposable
         var staged = FileAt(InStage("IMG_1.HEIC"));
         var older = RecordedStageRun(0) with { Id = 1 };
         var newer = RecordedStageRun(1) with { Id = 2 };
-        var file = new RunFile(InTarget("IMG_1.HEIC"), staged, null, null, true, null, 10);
-        List<(CleanupRun, List<RunFile>)> everyStageRun = [(older, [file]), (newer, [file])];
+        var olderFile = new RunFile(InTarget("IMG_1.HEIC"), staged, null, null, true, null, 10);
+        // The same path, spelled another way (a stage folder setting typed differently).
+        var newerFile = olderFile with { Destination = Path.Combine(Stage, @"2026\.\10", "IMG_1.HEIC") };
+        var owners = new StagePathOwners([(older, [olderFile]), (newer, [newerFile])]);
 
-        Assert.Empty(StagedPhotos.StillStaged([(older, [file])], everyStageRun).Photos);
-        Assert.True(StagedPhotos.StillStaged([(older, [file])], everyStageRun).IsVerifiedEmpty);
-        Assert.Equal(staged, Assert.Single(StagedPhotos.StillStaged([(newer, [file])], everyStageRun).Photos).StagedPath);
+        Assert.True(StagedPhotos.StillStaged([(older, [olderFile])], owners).IsVerifiedEmpty);
+        Assert.Single(StagedPhotos.StillStaged([(newer, [newerFile])], owners).Photos);
+    }
+
+    [Fact]
+    public void StillStaged_KeepsALegacyRunsVideo_WhenAnotherCleanupStagedItsPhotoAgain()
+    {
+        var still = InStage("IMG_1776.JPG");
+        Directory.CreateDirectory(Path.GetDirectoryName(still)!);
+        ExifTestFile.WriteIphoneJpeg(still, "2026:10:11 10:33:33", "+03:00", "9B8F06F7-52F8-4238-BCC4-148AA5EE3FF8");
+        var video = InStage("IMG_1776.MOV");
+        QuickTimeTestFile.Write(video, new DateTime(2026, 10, 11, 7, 33, 35),
+            ("com.apple.quicktime.content.identifier", "9B8F06F7-52F8-4238-BCC4-148AA5EE3FF8"));
+        var legacyRun = RecordedStageRun(0) with { Id = 1, PhotosRecorded = false };
+        var newer = RecordedStageRun(1) with { Id = 2 };
+        var owners = new StagePathOwners(
+            [(legacyRun, []), (newer, [new RunFile(InTarget("IMG_1776.JPG"), still, null, null, true, null, 10)])]);
+
+        var photo = Assert.Single(StagedPhotos.StillStaged([(legacyRun, [])], owners).Photos);
+
+        Assert.Equal((video, InTarget("IMG_1776.MOV"), InTarget("IMG_1776.JPG")),
+            (photo.StagedPath, photo.OriginalPath, photo.OriginalStillPath));
+    }
+
+    [Fact]
+    public void StillStaged_KeepsAVideoThatCantBeChecked_WithItsPhoto()
+    {
+        // A share that isn't there stands in for a NAS that dropped out.
+        const string unreachableVideo = @"\\localhost\photorecull-no-such-share$\IMG_1.MOV";
+        var file = new RunFile(InTarget("IMG_1.HEIC"), FileAt(InStage("IMG_1.HEIC")),
+            InTarget("IMG_1.MOV"), unreachableVideo, true, null, 10);
+
+        var inventory = StagedPhotos.StillStaged([(RecordedStageRun(), [file])]);
+
+        Assert.Equal(unreachableVideo, Assert.Single(inventory.Photos).StagedVideoPath);
+        Assert.NotEmpty(inventory.UnreachableFolders);
     }
 }
