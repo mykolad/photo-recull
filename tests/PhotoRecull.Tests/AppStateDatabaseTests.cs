@@ -23,6 +23,9 @@ public class AppStateDatabaseTests : IDisposable
             PickedAt: new DateTimeOffset(2026, 8, 2, 10, 0, 0, TimeSpan.FromHours(3)),
             LastActivityAt: new DateTimeOffset(2026, 8, 2, 10, 5, 0, TimeSpan.FromHours(3)));
 
+    // Ids are given by the database; the tests compare what was recorded.
+    private static List<CleanupRun> WithoutIds(List<CleanupRun> runs) => runs.Select(r => r with { Id = 0 }).ToList();
+
     [Fact]
     public void FirstLaunch_CreatesTheDatabaseAndItsFolder_WithDefaults()
     {
@@ -238,7 +241,7 @@ public class AppStateDatabaseTests : IDisposable
         Assert.False(database.DiscardCleanup(partlyStaged.Id));
 
         Assert.Equal(2, database.LoadCleanups().Count);
-        Assert.Equal([run], database.LoadRunsNewestFirst());
+        Assert.Equal([run], WithoutIds(database.LoadRunsNewestFirst()));
     }
 
     [Fact]
@@ -251,10 +254,10 @@ public class AppStateDatabaseTests : IDisposable
         database.RecordRunsWithCleanup(cleanup, [failedRun]);
 
         var loaded = Assert.Single(database.LoadCleanups());
-        Assert.True(loaded.HasRuns);
+        Assert.True(loaded.HasEverRun);
         Assert.False(loaded.CanBeDiscarded);
         Assert.False(database.DiscardCleanup(cleanup.Id));
-        Assert.Equal([failedRun], database.LoadRunsNewestFirst());
+        Assert.Equal([failedRun], WithoutIds(database.LoadRunsNewestFirst()));
     }
 
     [Theory]
@@ -271,7 +274,7 @@ public class AppStateDatabaseTests : IDisposable
         {
             StagedCount = staged,
             RemovedCount = removed,
-            HasRuns = hasRuns,
+            HasEverRun = hasRuns,
         };
 
         Assert.Equal(expected, cleanup.CanBeDiscarded);
@@ -297,7 +300,7 @@ public class AppStateDatabaseTests : IDisposable
         database.RecordRunsWithCleanup(cleanup with { State = CleanupState.Done, RemovedCount = 40 }, [deleted]);
 
         var reopened = new AppStateDatabase(DatabasePath);
-        Assert.Equal([deleted, staged], reopened.LoadRunsNewestFirst());
+        Assert.Equal([deleted, staged], WithoutIds(reopened.LoadRunsNewestFirst()));
         Assert.Equal(CleanupState.Done, Assert.Single(reopened.LoadCleanups()).State);
     }
 
@@ -329,7 +332,7 @@ public class AppStateDatabaseTests : IDisposable
         database.RecordRunsWithCleanup(cleanup, [beforeChange]);
         database.RecordRunsWithCleanup(cleanup, [afterChange]);
 
-        Assert.Equal([afterChange, beforeChange], database.LoadRunsNewestFirst());
+        Assert.Equal([afterChange, beforeChange], WithoutIds(database.LoadRunsNewestFirst()));
     }
 
     [Fact]

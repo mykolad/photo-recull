@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using PhotoRecull.Core.Library;
 
 namespace PhotoRecull.Core;
 
@@ -15,18 +16,20 @@ public static class FileActions
     // throwing, so the result can still be shown. Photos keep their folders below
     // the target's (2026\07\IMG_0001.HEIC), so two photos named alike in different
     // months don't collide, and each can be moved back where it came from.
-    public static FileActionResult MoveToStageFolder(IEnumerable<PhotoFile> photos, string stageFolder, string targetFolder)
+    // onPhotoDone hears about each photo as soon as it's done, before the next one
+    // starts, so the outcome can be saved as the run goes.
+    public static FileActionResult MoveToStageFolder(
+        IEnumerable<PhotoFile> photos, string stageFolder, string targetFolder, Action<RunFile>? onPhotoDone = null)
     {
         if (IsSameOrInside(stageFolder, targetFolder))
-            return new FileActionResult(0, photos.Select(p => new FileFailure(p, StageFolderInsideTarget)).ToList());
+            return FailEvery(photos, StageFolderInsideTarget, onPhotoDone);
         try
         {
             Directory.CreateDirectory(stageFolder);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            var reason = $"Can't use the stage folder: {ex.Message}";
-            return new FileActionResult(0, photos.Select(p => new FileFailure(p, reason)).ToList());
+            return FailEvery(photos, $"Can't use the stage folder: {ex.Message}", onPhotoDone);
         }
         string StagedPath(string path) => Path.Combine(stageFolder, FolderBelow(targetFolder, path), Path.GetFileName(path));
         return ApplyToEachCollectingFailures(photos,
@@ -35,7 +38,9 @@ public static class FileActions
                 var stagedPath = StagedPath(path);
                 Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
                 File.Move(path, stagedPath, overwrite: false);
+                return stagedPath;
             },
+            onPhotoDone,
             // Both parts of a Live Photo are checked before either moves, so a name
             // already taken never leaves the video staged without its photo.
             checkBeforeActing: photo =>
@@ -78,12 +83,20 @@ public static class FileActions
             : relative;
     }
 
-    public static FileActionResult DeletePermanently(IEnumerable<PhotoFile> photos) =>
-        ApplyToEachCollectingFailures(photos, File.Delete);
+    public static FileActionResult DeletePermanently(IEnumerable<PhotoFile> photos, Action<RunFile>? onPhotoDone = null) =>
+        ApplyToEachCollectingFailures(photos, path => { File.Delete(path); return null; }, onPhotoDone);
 
     [SupportedOSPlatform("windows")]
-    public static FileActionResult MoveToRecycleBin(IEnumerable<PhotoFile> photos) =>
-        ApplyToEachCollectingFailures(photos, SendToRecycleBin);
+    public static FileActionResult MoveToRecycleBin(IEnumerable<PhotoFile> photos, Action<RunFile>? onPhotoDone = null) =>
+        ApplyToEachCollectingFailures(photos, path => { SendToRecycleBin(path); return null; }, onPhotoDone);
+
+    private static FileActionResult FailEvery(IEnumerable<PhotoFile> photos, string reason, Action<RunFile>? onPhotoDone)
+    {
+        var failures = photos.Select(p => new FileFailure(p, reason)).ToList();
+        foreach (var failure in failures)
+            onPhotoDone?.Invoke(new RunFile(failure.Photo.Path, null, failure.Photo.LivePhotoVideoPath, null, false, reason, 0));
+        return new FileActionResult(0, failures);
+    }
 
     // Short reasons the user can act on, as shown in the Result screen.
     public static string DescribeFailure(Exception exception) => exception switch
@@ -103,14 +116,19 @@ public static class FileActions
     // A Live Photo's video goes first: if the photo then fails, a retry finds the
     // video already gone and acts on the photo alone. The bytes count every file
     // acted on, so a video deleted before its photo failed still counts as freed.
+    // actOnFile returns where the file went (a stage path), or null once deleted.
     private static FileActionResult ApplyToEachCollectingFailures(
-        IEnumerable<PhotoFile> photos, Action<string> actOnFile, Action<PhotoFile>? checkBeforeActing = null)
+        IEnumerable<PhotoFile> photos, Func<string, string?> actOnFile, Action<RunFile>? onPhotoDone,
+        Action<PhotoFile>? checkBeforeActing = null)
     {
         int succeededCount = 0;
         long succeededBytes = 0;
         var failures = new List<FileFailure>();
         foreach (var photo in photos)
         {
+            long photoBytes = 0;
+            var wentTo = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            string? failureReason = null;
             try
             {
                 if (!File.Exists(photo.Path))
@@ -119,8 +137,8 @@ public static class FileActions
                 foreach (var path in FilesOf(photo).ToList())
                 {
                     long size = new FileInfo(path).Length;
-                    actOnFile(path);
-                    succeededBytes += size;
+                    wentTo[path] = actOnFile(path);
+                    photoBytes += size;
                 }
                 succeededCount++;
             }
@@ -129,8 +147,14 @@ public static class FileActions
             // moved, with nothing recorded for them.
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
-                failures.Add(new FileFailure(photo, DescribeFailure(ex)));
+                failureReason = DescribeFailure(ex);
+                failures.Add(new FileFailure(photo, failureReason));
             }
+            succeededBytes += photoBytes;
+            onPhotoDone?.Invoke(new RunFile(
+                photo.Path, wentTo.GetValueOrDefault(photo.Path),
+                photo.LivePhotoVideoPath, photo.LivePhotoVideoPath is { } video ? wentTo.GetValueOrDefault(video) : null,
+                failureReason is null, failureReason, photoBytes));
         }
         return new FileActionResult(succeededCount, failures, succeededBytes);
     }
