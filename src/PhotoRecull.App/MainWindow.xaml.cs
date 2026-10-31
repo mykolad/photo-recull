@@ -21,18 +21,52 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         SizeToDesignSize();
+        AppWindow.Closing += OnClosing;
 
 #if DEBUG
         DebugScreenshot.CaptureIfRequested(this, RootGrid);
 #endif
     }
 
-    public void ShowStartPage()
+    private bool _isCloseConfirmed;
+
+    // Closing mid-run is the usual way a run gets cut off; the run log covers the
+    // rest (crashes, power loss), but asking first avoids most of it.
+    private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (!AppServices.IsRunInProgress || _isCloseConfirmed)
+            return;
+        args.Cancel = true;
+        var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Photos are still being moved or deleted",
+            Content = "Closing now stops partway. What's done so far is kept in History, and the rest can be finished later. Close anyway?",
+            PrimaryButtonText = "Close anyway",
+            CloseButtonText = "Keep going",
+            DefaultButton = Microsoft.UI.Xaml.Controls.ContentDialogButton.Close,
+            Style = (Style)Application.Current.Resources["DefaultContentDialogStyle"],
+        };
+        try
+        {
+            if (await dialog.ShowAsync() != Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary)
+                return;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            // Another dialog (a confirmation) is already open; it has to be answered first.
+            return;
+        }
+        _isCloseConfirmed = true;
+        Close();
+    }
+
+    public void ShowStartPage(string? toastMessage = null)
     {
         if (AppServices.Database.LoadSettings().SetupCompletedAt is null)
             RootFrame.Navigate(typeof(SetupPage));
         else
-            ShowShell();
+            ShowShell(toastMessage);
     }
 
     public void ShowShell(string? toastMessage = null) =>

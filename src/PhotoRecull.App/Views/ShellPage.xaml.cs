@@ -31,8 +31,10 @@ public sealed partial class ShellPage : Page
         if (DebugScreenshot.RequestedCleanupStep() is { } debugRequest)
             OpenCleanupFlow(new CleanupFlowRequest(debugRequest.CleanupId,
                 AppServices.Database.LoadSettings().Targets));
-        else if (DebugScreenshot.IsSettingsPageRequested())
+        else if (DebugScreenshot.RequestedPage() == "settings")
             Navigation.Loaded += (_, _) => Navigation.SelectedItem = Navigation.SettingsItem;
+        else if (DebugScreenshot.RequestedPage() == "history")
+            Navigation.Loaded += (_, _) => ShowHistory();
 #endif
     }
 

@@ -29,9 +29,8 @@ internal static class DebugScreenshot
         };
     }
 
-    // PHOTORECULL_DEBUG_OPEN_PAGE=settings opens Settings instead of Library.
-    public static bool IsSettingsPageRequested() =>
-        Environment.GetEnvironmentVariable("PHOTORECULL_DEBUG_OPEN_PAGE") == "settings";
+    // PHOTORECULL_DEBUG_OPEN_PAGE=settings|history opens that page instead of Library.
+    public static string? RequestedPage() => Environment.GetEnvironmentVariable("PHOTORECULL_DEBUG_OPEN_PAGE");
 
     // PHOTORECULL_DEBUG_OPEN_CLEANUP=<step>:<cleanup id> opens that cleanup's flow
     // and drives it to the step (waiting | range | scan | review | review-expanded |

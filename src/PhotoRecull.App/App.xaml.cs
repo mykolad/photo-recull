@@ -15,8 +15,12 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // A run cut off last time (crash, power loss) is finished from what it recorded.
+        int interruptedRuns = AppServices.Database.FinishInterruptedRuns();
         MainWindow = new MainWindow();
-        MainWindow.ShowStartPage();
+        MainWindow.ShowStartPage(interruptedRuns > 0
+            ? "A stage or delete was interrupted last time. History shows what was done; open its cleanup to finish the rest."
+            : null);
         MainWindow.Activate();
     }
 
