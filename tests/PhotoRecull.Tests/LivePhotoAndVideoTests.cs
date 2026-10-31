@@ -1,4 +1,5 @@
 using PhotoRecull.Core;
+using PhotoRecull.Core.Library;
 
 namespace PhotoRecull.Tests;
 
@@ -96,6 +97,7 @@ public class LivePhotoAndVideoTests : IDisposable
 
         Assert.True(video.IsIphone);
         Assert.Equal("video", video.TimestampSource);
+        Assert.True(video.TimestampInWholeSeconds);
         Assert.Equal(new DateTimeOffset(2025, 12, 31, 23, 40, 50, TimeSpan.Zero), video.Timestamp);
     }
 
@@ -148,6 +150,26 @@ public class LivePhotoAndVideoTests : IDisposable
         Assert.Equal(1, result.SucceededCount);
         Assert.Equal(photo.SizeBytes, result.SucceededBytes);
         Assert.Equal(["IMG_1776.JPG", "IMG_1776.MOV"], Directory.GetFiles(stageFolder).Select(Path.GetFileName).Order());
+    }
+
+    [Fact]
+    public void StagingALivePhotoWhosePhotoIsLocked_ReportsItsVideoAsStaged_AndOnlyTheVideosBytes()
+    {
+        var (still, video) = WriteLivePhoto("IMG_1776");
+        var photo = Assert.Single(PhotoScanner.ScanFolder(_folder));
+        var stageFolder = Path.Combine(_root, "_staged");
+        long videoBytes = new FileInfo(video).Length;
+        var reported = new List<RunFile>();
+
+        using (File.Open(still, FileMode.Open, FileAccess.Read, FileShare.None))
+            FileActions.MoveToStageFolder([photo], stageFolder, _folder, reported.Add);
+
+        var file = Assert.Single(reported);
+        Assert.Equal((still, (string?)null, video, Path.Combine(stageFolder, "IMG_1776.MOV")),
+            (file.Path, file.Destination, file.VideoPath, file.VideoDestination));
+        Assert.False(file.Succeeded);
+        Assert.StartsWith("Locked", file.FailureReason);
+        Assert.Equal(videoBytes, file.Bytes);
     }
 
     [Fact]

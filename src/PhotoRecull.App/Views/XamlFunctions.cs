@@ -56,6 +56,9 @@ public static class XamlFunctions
 
     public static Thickness ToRemoveOutline(bool isMarkedToRemove) => new(isMarkedToRemove ? 2 : 0);
 
+    public static Brush StackBackCardBorder(bool isMarkedToRemove) =>
+        ThemeBrush(isMarkedToRemove ? "SystemFillColorCriticalBrush" : "CardBackgroundFillColorDefaultBrush");
+
     public static Visibility ShowsKeepButton(bool isBurst, bool canBeKept) =>
         !isBurst && canBeKept ? Visibility.Visible : Visibility.Collapsed;
 
@@ -73,6 +76,8 @@ public static class XamlFunctions
     public static bool CanAct(bool hasCandidates, bool isActing) => hasCandidates && !isActing;
 
     public static bool Not(bool value) => !value;
+
+    public static string DiscardLabel(string rangeLabel) => $"Discard {rangeLabel}";
 
     public static Microsoft.UI.Xaml.Controls.InfoBarSeverity ResultSeverity(bool hasFailures) =>
         hasFailures ? Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success;

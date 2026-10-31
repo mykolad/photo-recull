@@ -51,7 +51,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public string SignInBrowserName { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPickStep), nameof(IsRangeStep), nameof(IsScanStep), nameof(IsReviewStep), nameof(IsResultStep))]
+    [NotifyPropertyChangedFor(nameof(IsPickStep), nameof(IsRangeStep), nameof(IsScanStep), nameof(IsReviewStep), nameof(IsResultStep), nameof(CanDiscard))]
     public partial CleanupFlowStep Step { get; set; }
 
     public bool IsPickStep => Step == CleanupFlowStep.Pick;
@@ -114,6 +114,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public partial string? PickError { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDiscard))]
     public partial bool IsPicking { get; set; }
 
     [ObservableProperty]
@@ -274,6 +275,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             EarliestPickedDay = earliest,
             LatestPickedDay = latest,
             ToRemoveCount = null,
+            KeptByUserCount = 0,
         };
 
         try
@@ -416,7 +418,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public ObservableCollection<TargetScanRowViewModel> ScanRows { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ScanTitle))]
+    [NotifyPropertyChangedFor(nameof(ScanTitle), nameof(CanDiscard))]
     public partial bool IsScanComplete { get; set; }
 
     [ObservableProperty]
@@ -529,8 +531,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     public IReadOnlyList<(TargetSettings Target, int Count, long Bytes)> CandidatesPerTarget() =>
         Review?.CandidatesToActOn
-            .GroupBy(t => t.Target)
-            .Select(g => (g.Key, g.Count(), g.Sum(t => t.SizeBytes)))
+            .GroupBy(c => c.Target)
+            .Select(g => (g.Key, g.Count(), g.Sum(c => c.Photo.SizeBytes)))
             .ToList() ?? [];
 
     private CleanupAction _lastAction;
@@ -556,12 +558,14 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         List<(TargetSettings Target, PhotoFile Photo)> photos)
     {
         IsActing = true;
+        AppServices.IsRunInProgress = true;
         try
         {
             await ActAndShowResultAsync(action, stageFolders, photos);
         }
         finally
         {
+            AppServices.IsRunInProgress = false;
             IsActing = false;
         }
     }
@@ -571,25 +575,42 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         List<(TargetSettings Target, PhotoFile Photo)> photos)
     {
         var ranAt = DateTimeOffset.Now;
+        // Each target's run is saved before its first file and each photo as it's
+        // done, so a crash or power loss still leaves a record (finished at the
+        // next start) of what moved or was deleted.
         var perTarget = await Task.Run(() => photos
             .GroupBy(p => p.Target)
             .Select(g =>
             {
                 var targetPhotos = g.Select(p => p.Photo).ToList();
+                var started = new CleanupRun(_cleanup!.Id, ranAt, action, g.Key,
+                    action == CleanupAction.Staged ? stageFolders[g.Key] : null, 0, 0, 0)
+                {
+                    WentToRecycleBin = action == CleanupAction.Deleted ? DeletesGoToRecycleBin(g.Key) : null,
+                };
+                long runId = AppServices.Database.StartRun(started);
+                void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file);
                 var result = action == CleanupAction.Staged
-                    ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key], g.Key.FolderPath)
-                    : DeleteFrom(g.Key, targetPhotos);
-                return (Target: g.Key, Result: result);
+                    ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key], g.Key.FolderPath, Record)
+                    : DeleteFrom(g.Key, targetPhotos, Record);
+                return (Target: g.Key, Result: result, Run: started with
+                {
+                    Id = runId,
+                    SucceededCount = result.SucceededCount,
+                    FailedCount = result.Failures.Count,
+                    FreedBytes = action == CleanupAction.Deleted ? result.SucceededBytes : 0,
+                });
             })
             .ToList());
 
-        var runs = perTarget.Select(r => new CleanupRun(_cleanup!.Id, ranAt, action, r.Target,
-            action == CleanupAction.Staged ? stageFolders[r.Target] : null,
-            r.Result.SucceededCount, r.Result.Failures.Count,
-            action == CleanupAction.Deleted ? r.Result.SucceededBytes : 0)).ToList();
+        var runs = perTarget.Select(r => r.Run).ToList();
         int succeeded = runs.Sum(r => r.SucceededCount);
 
         int failed = runs.Sum(r => r.FailedCount);
+        // Photos staged earlier and still waiting keep it Staged after the rest are
+        // deleted. Checked in the background: a stage folder can be on a NAS.
+        bool earlierPhotosStillStaged = action == CleanupAction.Deleted && failed == 0
+            && await Task.Run(() => !StagedPhotos.Load(AppServices.Database, _cleanup!.Id).IsVerifiedEmpty);
         // A Live Photo whose video went before its photo failed frees space
         // without completing a photo; that space still counts.
         if (succeeded > 0 || runs.Sum(r => r.FreedBytes) > 0)
@@ -599,7 +620,9 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             _cleanup = _cleanup! with
             {
                 State = failed > 0 ? CleanupState.ReadyToAct
-                    : action == CleanupAction.Staged ? CleanupState.Staged : CleanupState.Done,
+                    : action == CleanupAction.Staged || earlierPhotosStillStaged
+                        ? CleanupState.Staged
+                        : CleanupState.Done,
                 ToRemoveCount = failed > 0 ? failed : _cleanup.ToRemoveCount,
                 StagedCount = action == CleanupAction.Staged ? _cleanup.StagedCount + succeeded : _cleanup.StagedCount,
                 RemovedCount = action == CleanupAction.Deleted ? _cleanup.RemovedCount + succeeded : _cleanup.RemovedCount,
@@ -608,7 +631,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                 LastActivityAt = ranAt,
             };
         }
-        AppServices.Database.RecordRunsWithCleanup(_cleanup!, runs);
+        _cleanup = _cleanup! with { HasEverRun = true };
+        AppServices.Database.CompleteRunsWithCleanup(_cleanup, runs);
 
         _lastAction = action;
         _lastStageFolders = stageFolders.ToDictionary();
@@ -616,13 +640,13 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         var dsmRecycleBins = action == CleanupAction.Deleted
             ? await DsmRecycleBinFoldersAsync(perTarget.Select(r => r.Target).ToList())
             : new Dictionary<TargetSettings, string?>();
-        ShowResult(action, perTarget, stageFolders, dsmRecycleBins);
+        ShowResult(action, perTarget.Select(r => (r.Target, r.Result)).ToList(), stageFolders, dsmRecycleBins);
     }
 
-    private static FileActionResult DeleteFrom(TargetSettings target, List<PhotoFile> photos) =>
+    private static FileActionResult DeleteFrom(TargetSettings target, List<PhotoFile> photos, Action<RunFile> onPhotoDone) =>
         DeletesGoToRecycleBin(target)
-            ? FileActions.MoveToRecycleBin(photos)
-            : FileActions.DeletePermanently(photos);
+            ? FileActions.MoveToRecycleBin(photos, onPhotoDone)
+            : FileActions.DeletePermanently(photos, onPhotoDone);
 
     public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;
 
@@ -670,6 +694,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         if (Review is not null)
             Review.IsActionRunning = value;
         ShellPage.Current?.SetNavigationLocked(value);
+        OnPropertyChanged(nameof(CanDiscard));
     }
 
     public ObservableCollection<ResultTargetRow> ResultTargets { get; } = [];
@@ -697,7 +722,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         ResultTitle = $"{verb} {FileCount(succeeded)}.";
         ResultMessage = failed > 0
             ? $"{FileCount(failed)} failed. {Title} stays Ready to act in Library, so you can retry them now or later."
-            : $"{Title} is now marked {(action == CleanupAction.Staged ? "Staged" : "Done")} in Library.";
+            : $"{Title} is now marked {(_cleanup!.State == CleanupState.Staged ? "Staged" : "Done")} in Library.";
         ResultHasFailures = failed > 0;
 
         ResultTargets.Clear();
@@ -759,6 +784,19 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         BackToLibraryRequested?.Invoke(this, EventArgs.Empty);
     }
 
+    // Not while a pick or a scan is running: either would save the cleanup again
+    // when it finishes. Not once files were moved or deleted (see CanBeDiscarded).
+    public bool CanDiscard => _cleanup is { CanBeDiscarded: true } && !IsActing
+        && (Step is CleanupFlowStep.Range or CleanupFlowStep.Review
+            || (Step == CleanupFlowStep.Pick && !IsPicking)
+            || (Step == CleanupFlowStep.Scan && IsScanComplete));
+
+    public bool Discard()
+    {
+        CancelRunningWork();
+        return AppServices.Database.DiscardCleanup(_cleanup!.Id);
+    }
+
     public void CancelRunningWork()
     {
         _pickCancellation?.Cancel();
@@ -771,6 +809,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(RangeDaysLine));
+        OnPropertyChanged(nameof(CanDiscard));
         TitleChanged?.Invoke(this, EventArgs.Empty);
     }
 

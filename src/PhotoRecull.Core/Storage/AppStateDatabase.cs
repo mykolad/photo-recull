@@ -82,7 +82,8 @@ public sealed class AppStateDatabase
         command.CommandText = """
             SELECT id, from_day, to_day, state, picked_count, picked_at, last_activity_at, targets,
                    earliest_picked_day, latest_picked_day, to_remove_count, kept_by_user_count,
-                   staged_count, removed_count, freed_bytes
+                   staged_count, removed_count, freed_bytes,
+                   has_ever_run
             FROM cleanups
             ORDER BY from_day, to_day
             """;
@@ -107,6 +108,7 @@ public sealed class AppStateDatabase
                 StagedCount = reader.GetInt32(12),
                 RemovedCount = reader.GetInt32(13),
                 FreedBytes = reader.GetInt64(14),
+                HasEverRun = reader.GetBoolean(15),
             });
         }
         return cleanups;
@@ -148,6 +150,8 @@ public sealed class AppStateDatabase
     }
 
     // The pick and the cleanup that describes it are replaced together.
+    // A new pick starts the cleanup's review afresh: the photos kept in the
+    // previous one were kept against that pick, so they go with it.
     public void SavePickWithCleanup(Cleanup cleanup, IReadOnlyCollection<DateTimeOffset> pickedTimestamps)
     {
         using var connection = Open();
@@ -157,7 +161,10 @@ public sealed class AppStateDatabase
         using (var delete = connection.CreateCommand())
         {
             delete.Transaction = transaction;
-            delete.CommandText = "DELETE FROM picked_photos WHERE cleanup_id = $cleanupId";
+            delete.CommandText = """
+                DELETE FROM picked_photos WHERE cleanup_id = $cleanupId;
+                DELETE FROM kept_photos WHERE cleanup_id = $cleanupId;
+                """;
             delete.Parameters.AddWithValue("$cleanupId", cleanup.Id.ToString());
             delete.ExecuteNonQuery();
         }
@@ -200,6 +207,24 @@ public sealed class AppStateDatabase
                 : "DELETE FROM kept_photos WHERE cleanup_id = $cleanupId AND path_key = $key",
             ("$cleanupId", cleanupId.ToString()), ("$key", filePath.ToUpperInvariant()), ("$path", filePath));
 
+    // Forgets a cleanup with its pick and the photos kept in it; files are never
+    // touched. Checked again here, against what's saved, so a screen opened before
+    // a stage or delete can't discard a cleanup that has run one since: its runs
+    // stay in History. Returns whether it was discarded.
+    public bool DiscardCleanup(Guid cleanupId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM cleanups
+            WHERE id = $cleanupId
+              AND state IN ('Picked', 'ReadyToAct') AND staged_count = 0 AND removed_count = 0
+              AND has_ever_run = 0 AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = $cleanupId)
+            """;
+        command.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
+        return command.ExecuteNonQuery() > 0;
+    }
+
     // ------------------------------------------------------------------ stage and delete runs
 
     // The runs and the cleanup's new state (Staged or Done, counts) belong together.
@@ -208,6 +233,13 @@ public sealed class AppStateDatabase
         using var connection = Open();
         using var transaction = connection.BeginTransaction();
         UpsertCleanup(transaction, cleanup);
+        using (var markRun = connection.CreateCommand())
+        {
+            markRun.Transaction = transaction;
+            markRun.CommandText = "UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId";
+            markRun.Parameters.AddWithValue("$cleanupId", cleanup.Id.ToString());
+            markRun.ExecuteNonQuery();
+        }
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
         insert.CommandText = """
@@ -241,7 +273,7 @@ public sealed class AppStateDatabase
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT cleanup_id, ran_at, action, target_kind, target_folder, destination,
-                   succeeded_count, failed_count, freed_bytes
+                   succeeded_count, failed_count, freed_bytes, id, status, photos_recorded, went_to_recycle_bin
             FROM runs ORDER BY ran_at DESC, id DESC
             """;
         using var reader = command.ExecuteReader();
@@ -256,10 +288,179 @@ public sealed class AppStateDatabase
                 reader.IsDBNull(5) ? null : reader.GetString(5),
                 reader.GetInt32(6),
                 reader.GetInt32(7),
-                reader.GetInt64(8)));
+                reader.GetInt64(8))
+            {
+                Id = reader.GetInt64(9),
+                Status = Enum.Parse<RunStatus>(reader.GetString(10)),
+                PhotosRecorded = reader.GetBoolean(11),
+                WentToRecycleBin = reader.IsDBNull(12) ? null : reader.GetBoolean(12),
+            });
         }
         return runs;
     }
+
+    // ------------------------------------------------------------------ the run log, written as a run goes
+
+    // Saved before the first file is touched. Counts start at zero; the photos'
+    // outcomes follow one by one, and CompleteRunsWithCleanup sums them up.
+    public long StartRun(CleanupRun run)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId;
+            INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, destination,
+                              succeeded_count, failed_count, freed_bytes, status, photos_recorded, went_to_recycle_bin)
+            VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination, 0, 0, 0, 'InProgress', 1, $recycled);
+            SELECT last_insert_rowid();
+            """;
+        command.Parameters.AddWithValue("$cleanupId", run.CleanupId.ToString());
+        command.Parameters.AddWithValue("$ranAt", run.RanAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$action", run.Action.ToString());
+        command.Parameters.AddWithValue("$targetKind", run.Target.Kind.ToString());
+        command.Parameters.AddWithValue("$targetFolder", run.Target.FolderPath);
+        command.Parameters.AddWithValue("$recycled", run.WentToRecycleBin is { } recycled ? (object)(recycled ? 1 : 0) : DBNull.Value);
+        command.Parameters.AddWithValue("$destination", (object?)run.Destination ?? DBNull.Value);
+        return (long)command.ExecuteScalar()!;
+    }
+
+    // Each photo is saved as soon as it's done, so a crash loses at most the one
+    // being moved at that moment. keptFor marks a photo that went back (to where
+    // file.Destination says) as kept in that cleanup, in the same transaction, with
+    // alsoKept: the still a Live Photo's video belongs to, when only the video went back.
+    public void RecordRunFile(long runId, RunFile file, Guid? keptFor = null, string? alsoKept = null)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO run_files (run_id, path, destination, video_path, video_destination, succeeded, failure_reason, bytes)
+                VALUES ($runId, $path, $destination, $videoPath, $videoDestination, $succeeded, $reason, $bytes)
+                """;
+            insert.Parameters.AddWithValue("$runId", runId);
+            insert.Parameters.AddWithValue("$path", file.Path);
+            insert.Parameters.AddWithValue("$destination", (object?)file.Destination ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$videoPath", (object?)file.VideoPath ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$videoDestination", (object?)file.VideoDestination ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$succeeded", file.Succeeded ? 1 : 0);
+            insert.Parameters.AddWithValue("$reason", (object?)file.FailureReason ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$bytes", file.Bytes);
+            insert.ExecuteNonQuery();
+        }
+        if (keptFor is { } cleanupId && file.Succeeded && file.Destination is { } keptPath)
+        {
+            foreach (var path in alsoKept is null ? [keptPath] : new[] { keptPath, alsoKept })
+            {
+                using var keep = connection.CreateCommand();
+                keep.Transaction = transaction;
+                keep.CommandText = "INSERT OR IGNORE INTO kept_photos (cleanup_id, path_key, file_path) VALUES ($cleanupId, $key, $path)";
+                keep.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
+                keep.Parameters.AddWithValue("$key", path.ToUpperInvariant());
+                keep.Parameters.AddWithValue("$path", path);
+                keep.ExecuteNonQuery();
+            }
+        }
+        transaction.Commit();
+    }
+
+    public List<RunFile> LoadRunFiles(long runId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT path, destination, video_path, video_destination, succeeded, failure_reason, bytes
+            FROM run_files WHERE run_id = $runId ORDER BY rowid
+            """;
+        command.Parameters.AddWithValue("$runId", runId);
+        using var reader = command.ExecuteReader();
+        var files = new List<RunFile>();
+        while (reader.Read())
+        {
+            files.Add(new RunFile(
+                reader.GetString(0),
+                reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.GetBoolean(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetInt64(6)));
+        }
+        return files;
+    }
+
+    // The runs' totals and the cleanup's new state (Staged or Done, counts) are
+    // saved together, as one step.
+    public void CompleteRunsWithCleanup(Cleanup cleanup, IReadOnlyCollection<CleanupRun> runs)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        UpsertCleanup(transaction, cleanup);
+        using var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = """
+            UPDATE runs SET succeeded_count = $succeeded, failed_count = $failed, freed_bytes = $freed, status = 'Complete'
+            WHERE id = $id
+            """;
+        foreach (var run in runs)
+        {
+            update.Parameters.Clear();
+            update.Parameters.AddWithValue("$id", run.Id);
+            update.Parameters.AddWithValue("$succeeded", run.SucceededCount);
+            update.Parameters.AddWithValue("$failed", run.FailedCount);
+            update.Parameters.AddWithValue("$freed", run.FreedBytes);
+            update.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+
+    // At startup, a run still in progress was cut off by a crash or power loss
+    // (only one PhotoRecull runs per data folder). Its totals come from the photos
+    // it recorded, and its cleanup's counts take them in; the cleanup stays as it
+    // was (Ready to act), so the rest can be done when it's opened again.
+    // Returns how many runs were interrupted.
+    public int FinishInterruptedRuns()
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            UPDATE runs SET
+                succeeded_count = (SELECT COALESCE(SUM(succeeded), 0) FROM run_files WHERE run_id = runs.id),
+                failed_count    = (SELECT COUNT(*) - COALESCE(SUM(succeeded), 0) FROM run_files WHERE run_id = runs.id),
+                freed_bytes     = CASE action WHEN 'Deleted'
+                                  THEN (SELECT COALESCE(SUM(bytes), 0) FROM run_files WHERE run_id = runs.id) ELSE 0 END,
+                status = 'Interrupting'
+            WHERE status = 'InProgress';
+
+            UPDATE cleanups SET
+                staged_count  = staged_count  + (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting' AND action = 'Staged'),
+                removed_count = removed_count + (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting' AND action = 'Deleted'),
+                freed_bytes   = freed_bytes   + (SELECT COALESCE(SUM(freed_bytes), 0) FROM runs
+                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting'),
+                to_remove_count = CASE WHEN to_remove_count IS NULL THEN NULL ELSE MAX(0, to_remove_count
+                                  - (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                     WHERE cleanup_id = cleanups.id AND status = 'Interrupting'
+                                       AND action IN ('Staged', 'Deleted'))) END,
+                -- Photos moved back were kept as each one went back.
+                kept_by_user_count = kept_by_user_count + (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                     WHERE cleanup_id = cleanups.id AND status = 'Interrupting' AND action = 'MovedBack')
+            WHERE id IN (SELECT cleanup_id FROM runs WHERE status = 'Interrupting');
+
+            UPDATE runs SET status = 'Interrupted' WHERE status = 'Interrupting';
+            SELECT changes();
+            """;
+        int interrupted = Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        transaction.Commit();
+        return interrupted;
+    }
+
+    // Forgets a run in History: only the record goes, never any file.
+    public void RemoveRun(long runId) => Execute("DELETE FROM runs WHERE id = $id", ("$id", runId));
 
     // ------------------------------------------------------------------ key/value used by the Google token store
 
@@ -401,6 +602,33 @@ public sealed class AppStateDatabase
             failed_count    INTEGER NOT NULL,
             freed_bytes     INTEGER NOT NULL);
         CREATE INDEX runs_by_time ON runs (ran_at);
+        """,
+        """
+        CREATE INDEX runs_by_cleanup ON runs (cleanup_id);
+        """,
+        """
+        ALTER TABLE runs ADD COLUMN status TEXT NOT NULL DEFAULT 'Complete';
+
+        CREATE TABLE run_files (
+            run_id            INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+            path              TEXT NOT NULL,
+            destination       TEXT,
+            video_path        TEXT,
+            video_destination TEXT,
+            succeeded         INTEGER NOT NULL,
+            failure_reason    TEXT,
+            bytes             INTEGER NOT NULL);
+        CREATE INDEX run_files_by_run ON run_files (run_id);
+        """,
+        """
+        ALTER TABLE cleanups ADD COLUMN has_ever_run INTEGER NOT NULL DEFAULT 0;
+        UPDATE cleanups SET has_ever_run = 1 WHERE EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = cleanups.id);
+        """,
+        """
+        -- Runs saved before photos were recorded one by one have none to read.
+        ALTER TABLE runs ADD COLUMN photos_recorded INTEGER NOT NULL DEFAULT 0;
+        -- What a delete did; null for runs saved before it was recorded.
+        ALTER TABLE runs ADD COLUMN went_to_recycle_bin INTEGER;
         """,
     ];
 

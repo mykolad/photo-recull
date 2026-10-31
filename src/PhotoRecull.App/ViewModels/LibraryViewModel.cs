@@ -96,6 +96,18 @@ public sealed partial class LibraryViewModel : ObservableObject
             Open(cleanup);
     }
 
+    // Library is rebuilt afterwards: the cards, Coverage and the gaps all change.
+    public void Discard(Cleanup cleanup)
+    {
+        var label = DateRangeLabel.Format(cleanup.From, cleanup.To);
+        bool discarded = AppServices.Database.DiscardCleanup(cleanup.Id);
+        ShellPage.Current?.ShowLibrary();
+        if (discarded)
+            ShellPage.Current?.ShowToast($"Discarded {label}. No files were moved or deleted.");
+        else
+            ShellPage.Current?.ShowToast($"{label} can't be discarded: it has moved or deleted files.", Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning);
+    }
+
     private void StartCleanupFor(LibraryEntry gap) => _ = NewCleanupAsync();
 
     private void OpenCleanup(LibraryEntry entry)
@@ -114,13 +126,13 @@ public sealed partial class LibraryViewModel : ObservableObject
         return stillConfigured.Count > 0 ? stillConfigured : configured;
     }
 
-    // Reviewing staged files is part of the Review step, the next pull request;
-    // every other state reopens the cleanup at its saved pick.
+    // A Staged cleanup opens its staged photos; every other state reopens the
+    // cleanup at its saved pick.
     private void Open(Cleanup cleanup)
     {
         if (cleanup.State == CleanupState.Staged)
         {
-            ShellPage.Current?.ShowToast("Reviewing staged photos opens here in the next update.");
+            ShellPage.Current?.OpenStagedReview(cleanup.Id);
             return;
         }
         ShellPage.Current?.OpenCleanupFlow(new CleanupFlowRequest(cleanup.Id, TargetsToReopen(cleanup)));

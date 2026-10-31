@@ -150,6 +150,9 @@ public static class HtmlReportGenerator
                   position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px;
                   background: #0009; color: #fff; font-size: 0.75rem;
                 }
+                .cover .count.split { padding: 0; overflow: hidden; display: flex; }
+                .cover .count.split span { padding: 1px 6px; display: flex; align-items: center; gap: 3px; }
+                .cover .count.split .goes { background: #c0392b; }
                 .stack .stack-header { display: none; font-size: 0.8rem; color: #444; padding: 10px 12px; }
                 .stack .stack-header span { float: right; color: #2c3e50; }
                 .stack[open] { grid-column: 1 / -1; background: #e6e6e6; box-shadow: none; padding-bottom: 12px; }
@@ -266,9 +269,9 @@ public static class HtmlReportGenerator
 
         var covers = new StringBuilder();
         if (stack.Frames.FirstOrDefault(f => markOf(f) == ReviewMark.Stays) is { } stayingCover)
-            covers.Append(StackCover(stayingCover, srcMap[stayingCover.Path], ReviewMark.Stays, stack.Frames.Count));
+            covers.Append(StackCover(stayingCover, srcMap[stayingCover.Path], ReviewMark.Stays, staying, toRemove));
         if (stack.Frames.FirstOrDefault(f => markOf(f) == ReviewMark.ToRemove) is { } removedCover)
-            covers.Append(StackCover(removedCover, srcMap[removedCover.Path], ReviewMark.ToRemove, stack.Frames.Count));
+            covers.Append(StackCover(removedCover, srcMap[removedCover.Path], ReviewMark.ToRemove, staying, toRemove));
 
         var frames = string.Concat(stack.Frames.Select(f => PhotoCard(f, srcMap[f.Path], markOf(f))));
         return $"""
@@ -286,14 +289,19 @@ public static class HtmlReportGenerator
             """;
     }
 
-    private static string StackCover(PhotoFile p, string src, ReviewMark mark, int frameCount)
+    // A burst with frames that stay and frames that go shows both counts, so a
+    // cover that stays doesn't read as the whole burst.
+    private static string StackCover(PhotoFile p, string src, ReviewMark mark, int staying, int toRemove)
     {
         var name = HtmlEncode(p.FileName);
+        var count = staying > 0 && toRemove > 0
+            ? $"""<span class="count split" title="{staying} stay, {toRemove} to remove"><span>&#x2713; {staying}</span><span class="goes">{TrashIcon} {toRemove}</span></span>"""
+            : $"""<span class="count">&#x2750; {staying + toRemove}</span>""";
         return $"""
               <div class="cover {MarkClass(mark)}">
                 <img src="{src}" alt="{name}" loading="lazy" onerror="this.style.visibility='hidden'">
                 <span class="remove-badge" title="To remove">{TrashIcon}</span>
-                <span class="count">&#x2750; {frameCount}</span>
+                {count}
               </div>
             """;
     }

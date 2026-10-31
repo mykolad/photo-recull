@@ -39,6 +39,8 @@ public sealed class LibraryCardViewModel
     public IRelayCommand ActionCommand { get; }
     public bool IsNotCleanedGap => Entry is NotCleanedGap;
     public bool IsReadyToAct => Status == LibraryCardStatus.ReadyToAct;
+    public Cleanup? Cleanup => (Entry as CleanupEntry)?.Cleanup;
+    public bool CanBeDiscarded => Cleanup?.CanBeDiscarded == true;
 
     public static string StatusLabel(LibraryCardStatus status) => status switch
     {

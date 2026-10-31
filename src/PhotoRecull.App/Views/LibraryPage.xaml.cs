@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PhotoRecull.App.ViewModels;
 
@@ -22,6 +23,27 @@ public sealed partial class LibraryPage : Page
 
     private void ShowCoverageForSelectedYear() =>
         Coverage.Show(ViewModel.CoverageYear, ViewModel.CoverageSegments, ViewModel.NotCleanedGaps, ViewModel.Today);
+
+    // WinUI allows one open ContentDialog; a quick second click while the first
+    // is opening would otherwise throw.
+    private bool _isConfirmingDiscard;
+
+    private async void OnDiscardClick(object sender, RoutedEventArgs e)
+    {
+        if (_isConfirmingDiscard
+            || (sender as FrameworkElement)?.DataContext is not LibraryCardViewModel { Cleanup: { } cleanup } card)
+            return;
+        _isConfirmingDiscard = true;
+        try
+        {
+            if (await DiscardDialog.ConfirmAsync(XamlRoot, card.RangeLabel))
+                ViewModel.Discard(cleanup);
+        }
+        finally
+        {
+            _isConfirmingDiscard = false;
+        }
+    }
 
     // Pill and border brushes are looked up once when a card is created, so the
     // cards are rebuilt to pick up the new theme's brushes.

@@ -23,6 +23,9 @@ public class AppStateDatabaseTests : IDisposable
             PickedAt: new DateTimeOffset(2026, 8, 2, 10, 0, 0, TimeSpan.FromHours(3)),
             LastActivityAt: new DateTimeOffset(2026, 8, 2, 10, 5, 0, TimeSpan.FromHours(3)));
 
+    // Ids are given by the database; the tests compare what was recorded.
+    private static List<CleanupRun> WithoutIds(List<CleanupRun> runs) => runs.Select(r => r with { Id = 0 }).ToList();
+
     [Fact]
     public void FirstLaunch_CreatesTheDatabaseAndItsFolder_WithDefaults()
     {
@@ -127,6 +130,23 @@ public class AppStateDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Pick_SavedAgainForgetsThePhotosKeptInThePreviousReview()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));
+        var other = CleanupFor(new(2026, 9, 1), new(2026, 9, 30));
+        database.SavePickWithCleanup(cleanup, [DateTimeOffset.UnixEpoch]);
+        database.SavePickWithCleanup(other, [DateTimeOffset.UnixEpoch]);
+        database.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\IMG_1.HEIC", isKept: true);
+        database.SetPhotoKept(other.Id, @"C:\Camera Roll\IMG_9.HEIC", isKept: true);
+
+        database.SavePickWithCleanup(cleanup, [DateTimeOffset.UnixEpoch.AddDays(1)]);
+
+        Assert.Empty(database.LoadKeptPhotoPaths(cleanup.Id));
+        Assert.Single(database.LoadKeptPhotoPaths(other.Id));
+    }
+
+    [Fact]
     public void Pick_MissingForACleanup_IsNull()
     {
         Assert.Null(new AppStateDatabase(DatabasePath).LoadPick(Guid.NewGuid()));
@@ -188,6 +208,79 @@ public class AppStateDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void DiscardCleanup_ForgetsItWithItsPickAndKeptPhotos()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var discarded = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.ReadyToAct);
+        var other = CleanupFor(new(2026, 9, 1), new(2026, 9, 30));
+        database.SavePickWithCleanup(discarded, [DateTimeOffset.UnixEpoch]);
+        database.SavePickWithCleanup(other, [DateTimeOffset.UnixEpoch]);
+        database.SetPhotoKept(discarded.Id, @"C:\Camera Roll\IMG_1.HEIC", isKept: true);
+
+        Assert.True(database.DiscardCleanup(discarded.Id));
+
+        Assert.Equal(other.Id, Assert.Single(database.LoadCleanups()).Id);
+        Assert.Null(database.LoadPick(discarded.Id));
+        Assert.Empty(database.LoadKeptPhotoPaths(discarded.Id));
+        Assert.NotNull(database.LoadPick(other.Id));
+    }
+
+    [Fact]
+    public void DiscardCleanup_ThatMovedOrDeletedFiles_KeepsItAndItsHistory()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var staged = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.Staged) with { StagedCount = 2 };
+        // Partly staged: some photos failed, so it's still Ready to act, but files moved.
+        var partlyStaged = CleanupFor(new(2026, 9, 1), new(2026, 9, 30), CleanupState.ReadyToAct);
+        var run = new CleanupRun(partlyStaged.Id, DateTimeOffset.UnixEpoch, CleanupAction.Staged, oneDrive, @"C:\_staged", 3, 1, 0);
+        database.SaveCleanup(staged);
+        database.RecordRunsWithCleanup(partlyStaged, [run]);
+
+        Assert.False(database.DiscardCleanup(staged.Id));
+        Assert.False(database.DiscardCleanup(partlyStaged.Id));
+
+        Assert.Equal(2, database.LoadCleanups().Count);
+        Assert.Equal([run], WithoutIds(database.LoadRunsNewestFirst()));
+    }
+
+    [Fact]
+    public void DiscardCleanup_WhoseRunCompletedNoPhoto_StillKeepsIt_SinceALivePhotosVideoMayHaveMoved()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.ReadyToAct);
+        var failedRun = new CleanupRun(cleanup.Id, DateTimeOffset.UnixEpoch, CleanupAction.Deleted, oneDrive, null, 0, 1, 4_000_000);
+        database.RecordRunsWithCleanup(cleanup, [failedRun]);
+
+        var loaded = Assert.Single(database.LoadCleanups());
+        Assert.True(loaded.HasEverRun);
+        Assert.False(loaded.CanBeDiscarded);
+        Assert.False(database.DiscardCleanup(cleanup.Id));
+        Assert.Equal([failedRun], WithoutIds(database.LoadRunsNewestFirst()));
+    }
+
+    [Theory]
+    [InlineData(CleanupState.Picked, 0, 0, false, true)]
+    [InlineData(CleanupState.ReadyToAct, 0, 0, false, true)]
+    [InlineData(CleanupState.ReadyToAct, 0, 0, true, false)]
+    [InlineData(CleanupState.ReadyToAct, 3, 0, true, false)]
+    [InlineData(CleanupState.ReadyToAct, 0, 3, true, false)]
+    [InlineData(CleanupState.Staged, 3, 0, true, false)]
+    [InlineData(CleanupState.Done, 0, 3, true, false)]
+    public void CanBeDiscarded_OnlyBeforeAnyStageOrDelete(CleanupState state, int staged, int removed, bool hasRuns, bool expected)
+    {
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), state) with
+        {
+            StagedCount = staged,
+            RemovedCount = removed,
+            HasEverRun = hasRuns,
+        };
+
+        Assert.Equal(expected, cleanup.CanBeDiscarded);
+    }
+
+    [Fact]
     public void Runs_AreRecordedWithTheCleanupsNewStateAndListedNewestFirst()
     {
         var database = new AppStateDatabase(DatabasePath);
@@ -207,7 +300,7 @@ public class AppStateDatabaseTests : IDisposable
         database.RecordRunsWithCleanup(cleanup with { State = CleanupState.Done, RemovedCount = 40 }, [deleted]);
 
         var reopened = new AppStateDatabase(DatabasePath);
-        Assert.Equal([deleted, staged], reopened.LoadRunsNewestFirst());
+        Assert.Equal([deleted, staged], WithoutIds(reopened.LoadRunsNewestFirst()));
         Assert.Equal(CleanupState.Done, Assert.Single(reopened.LoadCleanups()).State);
     }
 
@@ -239,7 +332,7 @@ public class AppStateDatabaseTests : IDisposable
         database.RecordRunsWithCleanup(cleanup, [beforeChange]);
         database.RecordRunsWithCleanup(cleanup, [afterChange]);
 
-        Assert.Equal([afterChange, beforeChange], database.LoadRunsNewestFirst());
+        Assert.Equal([afterChange, beforeChange], WithoutIds(database.LoadRunsNewestFirst()));
     }
 
     [Fact]
