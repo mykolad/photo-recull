@@ -575,6 +575,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         List<(TargetSettings Target, PhotoFile Photo)> photos)
     {
         var ranAt = DateTimeOffset.Now;
+        var ownerWindow = App.MainWindow.Handle;
         // Each target's run is saved before its first file and each photo as it's
         // done, so a crash or power loss still leaves a record (finished at the
         // next start) of what moved or was deleted.
@@ -592,7 +593,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                 void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file);
                 var result = action == CleanupAction.Staged
                     ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key], g.Key.FolderPath, Record)
-                    : DeleteFrom(g.Key, targetPhotos, Record);
+                    : DeleteFrom(g.Key, targetPhotos, Record, ownerWindow);
                 return (Target: g.Key, Result: result, Run: started with
                 {
                     Id = runId,
@@ -643,9 +644,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         ShowResult(action, perTarget.Select(r => (r.Target, r.Result)).ToList(), stageFolders, dsmRecycleBins);
     }
 
-    private static FileActionResult DeleteFrom(TargetSettings target, List<PhotoFile> photos, Action<RunFile> onPhotoDone) =>
+    private static FileActionResult DeleteFrom(
+        TargetSettings target, List<PhotoFile> photos, Action<RunFile> onPhotoDone, IntPtr ownerWindow) =>
         DeletesGoToRecycleBin(target)
-            ? FileActions.MoveToRecycleBin(photos, onPhotoDone)
+            ? FileActions.MoveToRecycleBin(photos, onPhotoDone, ownerWindow)
             : FileActions.DeletePermanently(photos, onPhotoDone);
 
     public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;

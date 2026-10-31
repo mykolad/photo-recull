@@ -40,22 +40,61 @@ public sealed record StagedInventory(List<StagedPhoto> Photos, List<string> Unre
     public bool IsVerifiedEmpty => Photos.Count == 0 && UnreachableFolders.Count == 0;
 }
 
+// A stage path belongs to the newest run that put a file there: a photo moved back
+// and staged again by another cleanup for the same months lands on the same path,
+// and the first cleanup mustn't delete it. Built once from every stage run; paths
+// are compared as one spelling (full, a mapped drive as its share).
+public sealed class StagePathOwners
+{
+    private readonly Dictionary<string, long> _newestRunOf = new(StringComparer.OrdinalIgnoreCase);
+
+    public StagePathOwners(IEnumerable<(CleanupRun Run, List<RunFile> Files)> stageRuns)
+    {
+        foreach (var (run, files) in stageRuns.OrderBy(r => r.Run.RanAt).ThenBy(r => r.Run.Id))
+        {
+            foreach (var file in files)
+            {
+                if (file.Destination is { } staged)
+                    _newestRunOf[FileActions.ComparablePath(staged)] = run.Id;
+                if (file.VideoDestination is { } stagedVideo)
+                    _newestRunOf[FileActions.ComparablePath(stagedVideo)] = run.Id;
+            }
+        }
+    }
+
+    public bool IsOwnedByAny(string path, IReadOnlySet<long> runIds) =>
+        !_newestRunOf.TryGetValue(FileActions.ComparablePath(path), out long runId) || runIds.Contains(runId);
+}
+
 public static class StagedPhotos
 {
-    public static StagedInventory Load(AppStateDatabase database, Guid cleanupId) =>
-        StillStaged(database.LoadRunsNewestFirst()
-            .Where(r => r.CleanupId == cleanupId && r.Action == CleanupAction.Staged)
-            .Select(r => (r, database.LoadRunFiles(r.Id))));
+    public static StagedInventory Load(AppStateDatabase database, Guid cleanupId)
+    {
+        var everyStageRun = LoadEveryStageRun(database);
+        return StillStaged(everyStageRun.Where(r => r.Run.CleanupId == cleanupId), new StagePathOwners(everyStageRun));
+    }
+
+    public static List<(CleanupRun Run, List<RunFile> Files)> LoadEveryStageRun(AppStateDatabase database) =>
+        database.LoadRunsNewestFirst()
+            .Where(r => r.Action == CleanupAction.Staged)
+            .Select(r => (r, database.LoadRunFiles(r.Id)))
+            .ToList();
 
     // The photos a cleanup's stage runs moved that are still in a stage folder: not
     // yet deleted, moved back, or moved away by hand. A file only counts as gone
     // when the file system says it isn't there; one that can't be checked (no
     // access, a NAS that's off) puts its stage folder among the unreachable ones.
-    public static StagedInventory StillStaged(IEnumerable<(CleanupRun Run, List<RunFile> Files)> stageRuns)
+    // owners, built from every stage run, leaves out a path a newer run of
+    // another cleanup put a file on.
+    public static StagedInventory StillStaged(
+        IEnumerable<(CleanupRun Run, List<RunFile> Files)> stageRuns, StagePathOwners? owners = null)
     {
         var runs = stageRuns.ToList();
+        var ownRuns = runs.Select(r => r.Run.Id).ToHashSet();
+        owners ??= new StagePathOwners(runs);
+        bool IsOwn(string path) => owners.IsOwnedByAny(path, ownRuns);
         var unreachable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var photos = FromRecordedPhotos(runs.Where(r => r.Run.PhotosRecorded).ToList(), unreachable);
+        var photos = FromRecordedPhotos(runs.Where(r => r.Run.PhotosRecorded).ToList(), IsOwn, unreachable);
 
         // Runs saved before photos were recorded one by one: their stage folder is
         // all there is to go by, the original places rebuilt from its folders.
@@ -87,9 +126,27 @@ public static class StagedPhotos
                 // record) keeps whichever knows its Live Photo video.
                 .GroupBy(p => p.StagedPath, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.FirstOrDefault(p => p.StagedVideoPath is not null) ?? g.First())
+                .SelectMany(p => OwnParts(p, IsOwn))
+                .DistinctBy(p => p.StagedPath, StringComparer.OrdinalIgnoreCase)
                 .Select(p => p.WithSizeRead())
                 .ToList(),
             unreachable.ToList());
+    }
+
+    // A Live Photo whose still another cleanup staged again keeps its video here,
+    // on its own, so the video isn't left behind unlisted.
+    private static IEnumerable<StagedPhoto> OwnParts(StagedPhoto photo, Func<string, bool> isOwn)
+    {
+        bool videoIsOwn = photo.StagedVideoPath is { } video && isOwn(video);
+        if (isOwn(photo.StagedPath))
+            yield return photo.StagedVideoPath is null || videoIsOwn
+                ? photo
+                : photo with { StagedVideoPath = null, OriginalVideoPath = null };
+        else if (videoIsOwn && photo.OriginalVideoPath is { } originalVideo)
+            yield return new StagedPhoto(photo.Target, photo.StagedVideoPath!, originalVideo, null, null)
+            {
+                OriginalStillPath = photo.OriginalPath,
+            };
     }
 
     // A photo's outcomes are put together across runs, oldest first: a retry of a
@@ -97,7 +154,7 @@ public static class StagedPhotos
     // that came back and was staged again can be in two places; each one still
     // there is listed, the newest with the newest video, any other video on its own.
     private static List<StagedPhoto> FromRecordedPhotos(
-        List<(CleanupRun Run, List<RunFile> Files)> runs, HashSet<string> unreachable)
+        List<(CleanupRun Run, List<RunFile> Files)> runs, Func<string, bool> isOwn, HashSet<string> unreachable)
     {
         var byOriginal = new Dictionary<string, RecordedPhoto>(StringComparer.OrdinalIgnoreCase);
         foreach (var (run, files) in runs.OrderBy(r => r.Run.RanAt).ThenBy(r => r.Run.Id))
@@ -114,23 +171,29 @@ public static class StagedPhotos
             }
         }
 
-        bool IsStillThere((string Path, string? StageFolder) staged)
+        PathCheck CheckOwn((string Path, string? StageFolder) staged)
         {
+            if (!isOwn(staged.Path))
+                return PathCheck.Missing;
             var check = Check(staged.Path);
             if (check == PathCheck.Unknown)
                 unreachable.Add(staged.StageFolder ?? Path.GetDirectoryName(staged.Path)!);
-            return check == PathCheck.Present;
+            return check;
         }
 
         var photos = new List<StagedPhoto>();
         foreach (var (original, photo) in byOriginal)
         {
             var stills = photo.Stills.DistinctBy(s => s.Path, StringComparer.OrdinalIgnoreCase)
-                .Where(IsStillThere).Select(s => s.Path).ToList();
+                .Where(s => CheckOwn(s) == PathCheck.Present).Select(s => s.Path).ToList();
+            // A video that can't be checked stays with its still: moving back or
+            // deleting the pair then fails, instead of acting on the still alone.
             var videos = photo.VideoPath is null ? []
                 : photo.Videos.DistinctBy(v => v.Path, StringComparer.OrdinalIgnoreCase)
-                    .Where(IsStillThere).Select(v => v.Path).ToList();
-            var newestVideo = videos.LastOrDefault();
+                    .Select(v => (v.Path, Check: CheckOwn(v)))
+                    .Where(v => v.Check != PathCheck.Missing)
+                    .ToList();
+            var newestVideo = videos.Count > 0 ? videos[^1].Path : null;
             for (int i = 0; i < stills.Count; i++)
             {
                 bool withVideo = i == stills.Count - 1 && newestVideo is not null;
@@ -138,9 +201,10 @@ public static class StagedPhotos
                     withVideo ? newestVideo : null, withVideo ? photo.VideoPath : null));
             }
             // A video with no still left to go with (the photo failed to stage, or
-            // was moved away by hand) goes back or is deleted on its own.
-            foreach (var video in stills.Count > 0 ? videos.SkipLast(1) : videos)
-                photos.Add(new StagedPhoto(photo.Target, video, photo.VideoPath!, null, null) { OriginalStillPath = original });
+            // was moved away by hand) goes back or is deleted on its own; one that
+            // can't be checked isn't listed, its stage folder is unreachable.
+            foreach (var video in (stills.Count > 0 ? videos.SkipLast(1) : videos).Where(v => v.Check == PathCheck.Present))
+                photos.Add(new StagedPhoto(photo.Target, video.Path, photo.VideoPath!, null, null) { OriginalStillPath = original });
         }
         return photos;
     }
