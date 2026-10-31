@@ -222,3 +222,24 @@ internal sealed class DeleteDialog
             : DeleteChoice.Cancel;
     }
 }
+
+// Discarding forgets a cleanup that hasn't moved or deleted anything; the
+// dialog says plainly that files stay where they are.
+internal static class DiscardDialog
+{
+    public static async Task<bool> ConfirmAsync(XamlRoot xamlRoot, string rangeLabel)
+    {
+        var dialog = ConfirmDialogContent.Create(xamlRoot, $"Discard {rangeLabel}?");
+        dialog.PrimaryButtonText = "Discard";
+        dialog.CloseButtonText = "Cancel";
+        dialog.DefaultButton = ContentDialogButton.Close;
+        dialog.Content = new TextBlock
+        {
+            Text = "PhotoRecull forgets this cleanup: its pick from Google Photos and the photos you marked Keep. " +
+                "No files are moved or deleted. Its days no longer count as cleaned up, and you can start a new cleanup for them.",
+            TextWrapping = TextWrapping.Wrap,
+            Width = 480,
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+}

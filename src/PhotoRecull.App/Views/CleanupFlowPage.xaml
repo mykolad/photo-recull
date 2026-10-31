@@ -39,6 +39,18 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         VerticalAlignment="Center" />
                     <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" Style="{StaticResource TitleTextBlockStyle}" />
+                    <HyperlinkButton
+                        Margin="8,4,0,0"
+                        VerticalAlignment="Center"
+                        Click="OnDiscardClick"
+                        Visibility="{x:Bind ViewModel.CanDiscard, Mode=OneWay}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        ToolTipService.ToolTip="Forget this cleanup. No files are moved or deleted.">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                            <TextBlock Text="Discard" />
+                        </StackPanel>
+                    </HyperlinkButton>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
                     <FontIcon Glyph="&#xE91B;" FontSize="12" />
