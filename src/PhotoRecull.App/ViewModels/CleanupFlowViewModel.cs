@@ -549,11 +549,27 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     private Task RetryFailedAsync() =>
         ActOnAsync(_lastAction, _lastStageFolders, _lastFailures.Select(f => (f.Target, f.Failure.Photo)).ToList());
 
+    // The review stays locked until the result shows, including while the NAS is
+    // asked about its Recycle Bin, so no second run can start on the same photos.
     private async Task ActOnAsync(
         CleanupAction action, IReadOnlyDictionary<TargetSettings, string> stageFolders,
         List<(TargetSettings Target, PhotoFile Photo)> photos)
     {
         IsActing = true;
+        try
+        {
+            await ActAndShowResultAsync(action, stageFolders, photos);
+        }
+        finally
+        {
+            IsActing = false;
+        }
+    }
+
+    private async Task ActAndShowResultAsync(
+        CleanupAction action, IReadOnlyDictionary<TargetSettings, string> stageFolders,
+        List<(TargetSettings Target, PhotoFile Photo)> photos)
+    {
         var ranAt = DateTimeOffset.Now;
         var perTarget = await Task.Run(() => photos
             .GroupBy(p => p.Target)
@@ -566,7 +582,6 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                 return (Target: g.Key, Result: result);
             })
             .ToList());
-        IsActing = false;
 
         var runs = perTarget.Select(r => new CleanupRun(_cleanup!.Id, ranAt, action, r.Target,
             action == CleanupAction.Staged ? stageFolders[r.Target] : null,
@@ -622,6 +637,21 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         return await Task.WhenAny(probe, Task.Delay(TimeSpan.FromSeconds(3))) == probe
             ? await probe
             : targets.ToDictionary(t => t, _ => (string?)null);
+    }
+
+    // Before the Delete dialog opens: the review is locked as during a run, so
+    // nothing can be staged, deleted or left while the NAS answers.
+    public async Task<IReadOnlyDictionary<TargetSettings, string?>> CheckDsmRecycleBinsBeforeDeleteAsync()
+    {
+        IsActing = true;
+        try
+        {
+            return await DsmRecycleBinFoldersAsync(CandidatesPerTarget().Select(t => t.Target).ToList());
+        }
+        finally
+        {
+            IsActing = false;
+        }
     }
 
     private static string? DsmRecycleBinFolder(TargetSettings target) =>
