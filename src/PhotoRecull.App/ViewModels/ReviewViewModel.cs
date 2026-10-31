@@ -28,17 +28,22 @@ public sealed partial class ReviewViewModel : ObservableObject
         _keptPaths = AppServices.Database.LoadKeptPhotoPaths(cleanup.Id);
         Targets = targets;
 
-        List<ReviewTileViewModel> Tiles(ReviewTileKind kind, Func<MatchResult, List<PhotoFile>> photos) =>
+        IEnumerable<ReviewCopy> Copies(ReviewTileKind kind, Func<MatchResult, List<PhotoFile>> photos) =>
             scanResults
                 .Zip(targets)
-                .SelectMany(pair => photos(pair.First.Match).Select(photo => new ReviewTileViewModel(
-                    photo, pair.Second, kind, kind == ReviewTileKind.Candidate && _keptPaths.Contains(photo.Path),
-                    ToggleKeep, OpenPreview, () => IsActionRunning)))
+                .SelectMany(pair => photos(pair.First.Match).Select(photo => new ReviewCopy(photo, pair.Second, kind)));
+
+        // A photo on several targets is one tile; matched and unmatched copies are
+        // grouped together, since one target can keep a photo another removes.
+        List<ReviewTileViewModel> Tiles(IEnumerable<ReviewCopy> copies) =>
+            TargetCopies.Group(copies.OrderBy(c => targets.ToList().IndexOf(c.Target)).ToList(), c => c.Photo, c => c.Target)
+                .Select(group => new ReviewTileViewModel(
+                    group, KeepEveryCopyIfOneIsKept(group), ToggleKeep, OpenPreview, () => IsActionRunning))
                 .ToList();
 
-        _candidates = Tiles(ReviewTileKind.Candidate, m => m.Unmatched);
-        _timeline = [.. _candidates, .. Tiles(ReviewTileKind.Match, m => m.Matched)];
-        _skipped = Tiles(ReviewTileKind.Skipped, m => m.Skipped);
+        _timeline = Tiles([.. Copies(ReviewTileKind.Candidate, m => m.Unmatched), .. Copies(ReviewTileKind.Match, m => m.Matched)]);
+        _candidates = _timeline.Where(t => t.CanBeKept).ToList();
+        _skipped = Tiles(Copies(ReviewTileKind.Skipped, m => m.Skipped));
         var settings = AppServices.Database.LoadSettings();
         ShowTimesInUtc = settings.ShowCaptureTimesInUtc;
         Filter = settings.ReviewFilter;
@@ -46,6 +51,22 @@ public sealed partial class ReviewViewModel : ObservableObject
     }
 
     public IReadOnlyList<TargetSettings> Targets { get; }
+
+    // A photo shows as kept when any of its copies was kept (say, on OneDrive,
+    // before Synology Photos was added). Keep is then saved for the other copies
+    // too, so a later scan that doesn't group them can't make one a candidate.
+    private bool KeepEveryCopyIfOneIsKept(IReadOnlyList<ReviewCopy> copies)
+    {
+        var candidates = copies.Where(c => c.Kind == ReviewTileKind.Candidate).ToList();
+        if (!candidates.Any(c => _keptPaths.Contains(c.Photo.Path)))
+            return false;
+        foreach (var copy in candidates.Where(c => !_keptPaths.Contains(c.Photo.Path)))
+        {
+            AppServices.Database.SetPhotoKept(_cleanup.Id, copy.Photo.Path, isKept: true);
+            _keptPaths.Add(copy.Photo.Path);
+        }
+        return true;
+    }
 
     public ObservableCollection<ReviewDayViewModel> Days { get; } = [];
 
@@ -181,7 +202,9 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     // ---------------------------------------------------------------- keep overrides
 
-    public IReadOnlyList<ReviewTileViewModel> CandidatesToActOn => _candidates.Where(t => !t.IsKept).ToList();
+    // The files to stage or delete: every copy of every photo still marked to remove.
+    public IReadOnlyList<ReviewCopy> CandidatesToActOn =>
+        _candidates.Where(t => !t.IsKept).SelectMany(t => t.CandidateCopies).ToList();
 
     public int KeptByUserCount => _candidates.Count(t => t.IsKept);
 
@@ -189,8 +212,12 @@ public sealed partial class ReviewViewModel : ObservableObject
     {
         get
         {
-            var candidates = CandidatesToActOn;
-            return $"{candidates.Count:N0} photo{(candidates.Count == 1 ? "" : "s")} to stage or delete · {FileSizeText.Format(candidates.Sum(t => t.SizeBytes))}";
+            int photos = _candidates.Count(t => !t.IsKept);
+            var copies = CandidatesToActOn;
+            // A Live Photo's video is a file of its own, staged or deleted with its photo.
+            int files = copies.Sum(c => c.Photo.LivePhotoVideoPath is null ? 1 : 2);
+            var fileCount = files == photos ? "" : $" · {files:N0} files";
+            return $"{photos:N0} photo{(photos == 1 ? "" : "s")} to stage or delete{fileCount} · {FileSizeText.Format(copies.Sum(c => c.Photo.SizeBytes))}";
         }
     }
 
@@ -199,7 +226,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         get
         {
             var perTarget = string.Join(" · ", CandidatesToActOn
-                .GroupBy(t => t.TargetName)
+                .GroupBy(c => SyncTargets.DisplayName(c.Target.Kind))
                 .Select(g => $"{g.Key} {g.Count():N0}"));
             var kept = KeptByUserCount;
             return kept > 0
@@ -229,7 +256,10 @@ public sealed partial class ReviewViewModel : ObservableObject
         if (!tile.CanBeKept || IsActionRunning)
             return;
         tile.IsKept = !tile.IsKept;
-        AppServices.Database.SetPhotoKept(_cleanup.Id, tile.FullPath, tile.IsKept);
+        // Undo clears every copy, matched ones too: a copy kept earlier and matched
+        // now would otherwise bring the Keep back if a later scan leaves it unmatched.
+        foreach (var copy in tile.IsKept ? tile.CandidateCopies : tile.Copies)
+            AppServices.Database.SetPhotoKept(_cleanup.Id, copy.Photo.Path, tile.IsKept);
         if (_stackOfTile.TryGetValue(tile, out var stack))
         {
             stack.Refresh();
@@ -251,7 +281,7 @@ public sealed partial class ReviewViewModel : ObservableObject
             return;
         try
         {
-            CandidateCsv.WriteNewestFirst(path, CandidatesToActOn.Select(t => t.Photo));
+            CandidateCsv.WriteNewestFirst(path, CandidatesToActOn.Select(c => c.Photo));
             ShellPage.Current?.ShowToast($"Exported {CandidatesToActOn.Count:N0} candidates to {Path.GetFileName(path)}.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -273,6 +303,7 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     public string PreviewStatusText => PreviewTile?.Mark switch
     {
+        ReviewMark.ToRemove when PreviewTile.Copies.Any(c => c.Kind == ReviewTileKind.Match) => PreviewTile.MarkText,
         ReviewMark.ToRemove => "To remove · no match in Google Photos",
         ReviewMark.KeptByYou => "Kept by you · not staged or deleted",
         _ when PreviewTile?.Kind == ReviewTileKind.Skipped => "Skipped · never moved or deleted",

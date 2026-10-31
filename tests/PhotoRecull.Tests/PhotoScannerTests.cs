@@ -46,6 +46,7 @@ public class PhotoScannerTests
         var photo = photos.Single(p => p.FileName.EndsWith("_iOS.heic", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal("filename", photo.TimestampSource);
+        Assert.False(photo.TimestampInWholeSeconds);
         Assert.NotNull(photo.Timestamp);
     }
 
@@ -78,6 +79,7 @@ public class PhotoScannerTests
         var photo = photos.Single(p => p.FileName.Equals("IMG_5587.HEIC", StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal("exif", photo.TimestampSource);
+        Assert.False(photo.TimestampInWholeSeconds);
         Assert.NotNull(photo.Timestamp);
     }
 
