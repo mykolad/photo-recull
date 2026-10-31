@@ -150,6 +150,8 @@ public sealed class AppStateDatabase
     }
 
     // The pick and the cleanup that describes it are replaced together.
+    // A new pick starts the cleanup's review afresh: the photos kept in the
+    // previous one were kept against that pick, so they go with it.
     public void SavePickWithCleanup(Cleanup cleanup, IReadOnlyCollection<DateTimeOffset> pickedTimestamps)
     {
         using var connection = Open();
@@ -159,7 +161,10 @@ public sealed class AppStateDatabase
         using (var delete = connection.CreateCommand())
         {
             delete.Transaction = transaction;
-            delete.CommandText = "DELETE FROM picked_photos WHERE cleanup_id = $cleanupId";
+            delete.CommandText = """
+                DELETE FROM picked_photos WHERE cleanup_id = $cleanupId;
+                DELETE FROM kept_photos WHERE cleanup_id = $cleanupId;
+                """;
             delete.Parameters.AddWithValue("$cleanupId", cleanup.Id.ToString());
             delete.ExecuteNonQuery();
         }
