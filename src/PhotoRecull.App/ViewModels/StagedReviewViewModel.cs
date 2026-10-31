@@ -132,6 +132,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
         try
         {
             var ranAt = DateTimeOffset.Now;
+            var ownerWindow = App.MainWindow.Handle;
             var runs = await Task.Run(() => photos
                 .GroupBy(p => p.Target)
                 .Select(g =>
@@ -153,7 +154,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                         alsoKept: stillOfVideo.GetValueOrDefault(file.Path));
                     var result = action == CleanupAction.MovedBack
                         ? FileActions.MoveBack(targetPhotos, Record)
-                        : Delete(targetPhotos, toRecycleBin, Record);
+                        : Delete(targetPhotos, toRecycleBin, Record, ownerWindow);
                     return started with
                     {
                         Id = runId,
@@ -194,14 +195,15 @@ public sealed partial class StagedReviewViewModel : ObservableObject
         }
     }
 
-    private static FileActionResult Delete(List<StagedPhoto> photos, bool toRecycleBin, Action<RunFile> onPhotoDone)
+    private static FileActionResult Delete(
+        List<StagedPhoto> photos, bool toRecycleBin, Action<RunFile> onPhotoDone, IntPtr ownerWindow)
     {
         var files = photos.Select(p => new PhotoFile(p.StagedPath, p.FileName, null, IsIphone: true, TimestampSource: null)
         {
             LivePhotoVideoPath = p.StagedVideoPath,
         }).ToList();
         return toRecycleBin
-            ? FileActions.MoveToRecycleBin(files, onPhotoDone)
+            ? FileActions.MoveToRecycleBin(files, onPhotoDone, ownerWindow)
             : FileActions.DeletePermanently(files, onPhotoDone);
     }
 

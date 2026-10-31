@@ -9,6 +9,11 @@ public record FileFailure(PhotoFile Photo, string Reason);
 
 public record FileActionResult(int SucceededCount, List<FileFailure> Failures, long SucceededBytes = 0);
 
+// What the shell said about deleting one file: its error code, and whether it
+// gave up (the file couldn't be recycled, or the user said no to deleting it
+// permanently).
+internal readonly record struct ShellDeleteOutcome(int ErrorCode, bool Aborted);
+
 public static class FileActions
 {
     // A stage folder that can't be created (the path names a file, a drive that
@@ -71,9 +76,29 @@ public static class FileActions
     // Roll isn't taken to contain "Camera Roll staged".
     private static string WithEndingSeparator(string folder)
     {
-        var fullPath = Path.GetFullPath(folder);
+        var fullPath = NetworkPathOf(Path.GetFullPath(folder));
         return Path.EndsInDirectorySeparator(fullPath) ? fullPath : fullPath + Path.DirectorySeparatorChar;
     }
+
+    // A mapped drive and its share are one folder by two names: Z:\Photos and
+    // \\nas\home\Photos. A mapping that's disconnected still has its share.
+    private static string NetworkPathOf(string fullPath)
+    {
+        if (!OperatingSystem.IsWindows() || fullPath is not [_, ':', ..])
+            return fullPath;
+        var share = new char[1024];
+        int length = share.Length;
+        int result = WNetGetConnectionW(fullPath[..2], share, ref length);
+        if (result is not (NoError or ConnectionUnavailable))
+            return fullPath;
+        return new string(share, 0, Array.IndexOf(share, '\0')) + fullPath[2..];
+    }
+
+    private const int NoError = 0;
+    private const int ConnectionUnavailable = 1201;
+
+    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
+    private static extern int WNetGetConnectionW(string localName, char[] remoteName, ref int length);
 
     private static string FolderBelow(string targetFolder, string path)
     {
@@ -86,9 +111,18 @@ public static class FileActions
     public static FileActionResult DeletePermanently(IEnumerable<PhotoFile> photos, Action<RunFile>? onPhotoDone = null) =>
         ApplyToEachCollectingFailures(photos, path => { File.Delete(path); return null; }, onPhotoDone);
 
+    // ownerWindow is the window Windows' own "delete permanently?" prompt belongs
+    // to, so it opens over the app instead of behind it.
     [SupportedOSPlatform("windows")]
-    public static FileActionResult MoveToRecycleBin(IEnumerable<PhotoFile> photos, Action<RunFile>? onPhotoDone = null) =>
-        ApplyToEachCollectingFailures(photos, path => { SendToRecycleBin(path); return null; }, onPhotoDone);
+    public static FileActionResult MoveToRecycleBin(
+        IEnumerable<PhotoFile> photos, Action<RunFile>? onPhotoDone = null, IntPtr ownerWindow = default) =>
+        MoveToRecycleBin(photos, onPhotoDone, path => ShellDelete(path, ownerWindow));
+
+    // Tests answer for the shell: a real decline or failure can't be set up.
+    [SupportedOSPlatform("windows")]
+    internal static FileActionResult MoveToRecycleBin(
+        IEnumerable<PhotoFile> photos, Action<RunFile>? onPhotoDone, Func<string, ShellDeleteOutcome> shellDelete) =>
+        ApplyToEachCollectingFailures(photos, path => { SendToRecycleBin(path, shellDelete); return null; }, onPhotoDone);
 
     private static FileActionResult FailEvery(IEnumerable<PhotoFile> photos, string reason, Action<RunFile>? onPhotoDone)
     {
@@ -119,9 +153,11 @@ public static class FileActions
     // video already gone and acts on the photo alone. The bytes count every file
     // acted on, so a video deleted before its photo failed still counts as freed.
     // actOnFile returns where the file went (a stage path), or null once deleted.
+    // undoFile, when given, puts back each file of a photo that then failed (from
+    // where it went to where it was), so the photo's parts stay together.
     private static FileActionResult ApplyToEachCollectingFailures(
         IEnumerable<PhotoFile> photos, Func<string, string?> actOnFile, Action<RunFile>? onPhotoDone,
-        Action<PhotoFile>? checkBeforeActing = null)
+        Action<PhotoFile>? checkBeforeActing = null, Action<string, string>? undoFile = null)
     {
         int succeededCount = 0;
         long succeededBytes = 0;
@@ -151,6 +187,8 @@ public static class FileActions
             {
                 failureReason = DescribeFailure(ex);
                 failures.Add(new FileFailure(photo, failureReason));
+                if (undoFile is not null)
+                    photoBytes -= UndoWhatMoved(wentTo, undoFile);
             }
             succeededBytes += photoBytes;
             onPhotoDone?.Invoke(new RunFile(
@@ -161,11 +199,54 @@ public static class FileActions
         return new FileActionResult(succeededCount, failures, succeededBytes);
     }
 
+    // Returns the bytes of the files put back. A file that can't be put back stays
+    // where it went, and is still recorded there.
+    private static long UndoWhatMoved(Dictionary<string, string?> wentTo, Action<string, string> undoFile)
+    {
+        long undoneBytes = 0;
+        foreach (var (from, to) in wentTo.ToList())
+        {
+            if (to is null)
+                continue;
+            try
+            {
+                long size = new FileInfo(to).Length;
+                undoFile(from, to);
+                wentTo.Remove(from);
+                undoneBytes += size;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+        return undoneBytes;
+    }
+
+    // A Live Photo's video that's gone is skipped (moved or deleted on its own).
+    // One that can't be checked (no access, a NAS that dropped out) fails the
+    // photo: acting on the photo alone would split the pair.
     private static IEnumerable<string> FilesOf(PhotoFile photo)
     {
-        if (photo.LivePhotoVideoPath is { } video && File.Exists(video))
+        if (photo.LivePhotoVideoPath is { } video && IsThere(video))
             yield return video;
         yield return photo.Path;
+    }
+
+    private static bool IsThere(string path)
+    {
+        try
+        {
+            File.GetAttributes(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException($"Can't reach its Live Photo video: {ex.Message}", ex);
+        }
     }
 
     // Staged photos go back to where they were on their target. A file already
@@ -196,7 +277,10 @@ public static class FileActions
             {
                 if (FilesOf(photo).Any(path => File.Exists(originalOf[path])))
                     throw new IOException("A file with this name is already back in its place", FileExists);
-            });
+            },
+            // A video that went back before its photo failed returns to the stage
+            // folder: back on the target alone, nothing would keep it.
+            undoFile: (staged, original) => File.Move(original, staged, overwrite: false));
     }
 
     // Network and mapped drives have no Recycle Bin: the shell would delete from
@@ -216,24 +300,31 @@ public static class FileActions
     // larger than the Recycle Bin), so the shell is also asked to warn first; if
     // the user declines, the file is left alone and reported as not deleted.
     [SupportedOSPlatform("windows")]
-    private static void SendToRecycleBin(string path)
+    private static void SendToRecycleBin(string path, Func<string, ShellDeleteOutcome> shellDelete)
     {
         if (!File.Exists(path))
             throw new FileNotFoundException(null, path);
         if (!HasRecycleBin(path))
             throw new IOException("Not deleted: this drive has no Recycle Bin");
 
+        var (errorCode, aborted) = shellDelete(Path.GetFullPath(path));
+        if (aborted)
+            throw new IOException("Not deleted: it couldn't go to the Recycle Bin");
+        if (errorCode != 0)
+            throw new IOException($"Couldn't move to the Recycle Bin: {new Win32Exception(errorCode).Message}", errorCode);
+    }
+
+    private static ShellDeleteOutcome ShellDelete(string fullPath, IntPtr ownerWindow)
+    {
         var operation = new ShellFileOperation
         {
+            Window = ownerWindow,
             Function = FileOperationDelete,
-            From = Path.GetFullPath(path) + "\0\0",
+            From = fullPath + "\0\0",
             Flags = AllowUndo | NoConfirmation | WantNukeWarning | NoErrorUi | Silent,
         };
-        int result = SHFileOperationW(ref operation);
-        if (operation.AnyOperationsAborted)
-            throw new IOException("Not deleted: it couldn't go to the Recycle Bin");
-        if (result != 0)
-            throw new IOException($"Couldn't move to the Recycle Bin: {new Win32Exception(result).Message}", result);
+        int errorCode = SHFileOperationW(ref operation);
+        return new ShellDeleteOutcome(errorCode, operation.AnyOperationsAborted);
     }
 
     private const uint FileOperationDelete = 0x0003;

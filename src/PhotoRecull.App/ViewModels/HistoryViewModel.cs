@@ -27,11 +27,12 @@ public sealed class HistoryViewModel
     // Checked in the background: a NAS that's off can take a while to answer.
     private async Task CheckStageRunsAsync()
     {
+        var everyStageRun = await Task.Run(() => StagedPhotos.LoadEveryStageRun(AppServices.Database));
         foreach (var row in Runs.Where(r => r.Run.Action == CleanupAction.Staged).ToList())
         {
-            var run = row.Run;
+            var stageRun = everyStageRun.First(r => r.Run.Id == row.Run.Id);
             bool stillStaged = await Task.Run(() =>
-                !StagedPhotos.StillStaged([(run, AppServices.Database.LoadRunFiles(run.Id))]).IsVerifiedEmpty);
+                !StagedPhotos.StillStaged([stageRun], everyStageRun).IsVerifiedEmpty);
             row.IsCheckingStagedPhotos = false;
             row.CanRemove = !stillStaged;
         }

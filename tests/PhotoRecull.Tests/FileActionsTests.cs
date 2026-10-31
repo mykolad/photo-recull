@@ -222,4 +222,56 @@ public class FileActionsTests : IDisposable
 
         Assert.Equal("A file with this name is already in the stage folder", Assert.Single(result.Failures).Reason);
     }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void MoveToRecycleBin_WhenTheShellGivesUp_LeavesTheFileAndSaysItWasntDeleted()
+    {
+        // The shell gives up when a file can't be recycled, or the user says no to
+        // its "delete permanently?" prompt.
+        var photo = CreatePhoto("a.heic");
+
+        var result = FileActions.MoveToRecycleBin([photo], null, _ => new ShellDeleteOutcome(ErrorCode: 0, Aborted: true));
+
+        Assert.Equal("Not deleted: it couldn't go to the Recycle Bin", Assert.Single(result.Failures).Reason);
+        Assert.True(File.Exists(photo.Path));
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void MoveToRecycleBin_WhenTheShellFails_SaysWhy()
+    {
+        const int AccessDenied = 5;
+
+        var result = FileActions.MoveToRecycleBin([CreatePhoto("a.heic")], null, _ => new ShellDeleteOutcome(AccessDenied, Aborted: false));
+
+        Assert.StartsWith("Couldn't move to the Recycle Bin: ", Assert.Single(result.Failures).Reason);
+    }
+
+    [Fact]
+    public void ALivePhotoWhoseVideoCantBeReached_IsLeftWhole()
+    {
+        // A share that isn't there stands in for a NAS that dropped out.
+        var photo = CreatePhoto("a.heic") with { LivePhotoVideoPath = @"\\localhost\photorecull-no-such-share$\a.mov" };
+        var recorded = new List<RunFile>();
+
+        var stageResult = FileActions.MoveToStageFolder([photo], _stageFolder, _targetFolder);
+        var deleteResult = FileActions.DeletePermanently([photo], recorded.Add);
+
+        Assert.StartsWith("Can't reach its Live Photo video", Assert.Single(stageResult.Failures).Reason);
+        Assert.StartsWith("Can't reach its Live Photo video", Assert.Single(deleteResult.Failures).Reason);
+        Assert.True(File.Exists(photo.Path));
+        Assert.False(Assert.Single(recorded).Succeeded);
+    }
+
+    [Fact]
+    public void ALivePhotoWhoseVideoIsGone_IsActedOnAlone()
+    {
+        var photo = CreatePhoto("a.heic") with { LivePhotoVideoPath = Path.Combine(_targetFolder, "a.mov") };
+
+        var result = FileActions.DeletePermanently([photo]);
+
+        Assert.Equal(1, result.SucceededCount);
+        Assert.False(File.Exists(photo.Path));
+    }
 }

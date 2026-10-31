@@ -28,6 +28,8 @@ public sealed partial class MainWindow : Window
 #endif
     }
 
+    public IntPtr Handle => WinRT.Interop.WindowNative.GetWindowHandle(this);
+
     private bool _isCloseConfirmed;
 
     // Closing mid-run is the usual way a run gets cut off; the run log covers the
@@ -89,7 +91,7 @@ public sealed partial class MainWindow : Window
     {
         // AppWindow sizes are in physical pixels, so scale the design size by the
         // monitor's DPI to get the intended 1280×800 at any display scaling.
-        double scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
+        double scale = GetDpiForWindow(Handle) / 96.0;
         AppWindow.Resize(new SizeInt32((int)(DesignWidth * scale), (int)(DesignHeight * scale)));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {

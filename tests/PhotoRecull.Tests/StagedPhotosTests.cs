@@ -171,4 +171,39 @@ public class StagedPhotosTests : IDisposable
         Assert.True(File.Exists(taken.StagedPath));
         Assert.Equal([photo.OriginalPath, null], recorded.Select(r => r.Destination));
     }
+
+    [Fact]
+    public void MoveBack_ALivePhotoWhosePhotoFails_TakesItsVideoBackToTheStageFolder()
+    {
+        var photo = new StagedPhoto(OneDrive,
+            FileAt(InStage("IMG_1.HEIC")), InTarget("IMG_1.HEIC"),
+            FileAt(InStage("IMG_1.MOV")), InTarget("IMG_1.MOV"));
+        var recorded = new List<RunFile>();
+
+        FileActionResult result;
+        using (File.Open(photo.StagedPath, FileMode.Open, FileAccess.Read, FileShare.None))
+            result = FileActions.MoveBack([photo], recorded.Add);
+
+        Assert.Equal("Locked: another app or OneDrive sync is using it", Assert.Single(result.Failures).Reason);
+        Assert.True(File.Exists(photo.StagedVideoPath));
+        Assert.False(File.Exists(photo.OriginalVideoPath));
+        var file = Assert.Single(recorded);
+        Assert.Equal((null, null, 0L), (file.Destination, file.VideoDestination, file.Bytes));
+    }
+
+    [Fact]
+    public void StillStaged_LeavesAPathStagedAgainByAnotherCleanup_ToThatCleanup()
+    {
+        // Cleanup A staged IMG_1 and moved it back; cleanup B, for the same months,
+        // staged it again to the same path.
+        var staged = FileAt(InStage("IMG_1.HEIC"));
+        var older = RecordedStageRun(0) with { Id = 1 };
+        var newer = RecordedStageRun(1) with { Id = 2 };
+        var file = new RunFile(InTarget("IMG_1.HEIC"), staged, null, null, true, null, 10);
+        List<(CleanupRun, List<RunFile>)> everyStageRun = [(older, [file]), (newer, [file])];
+
+        Assert.Empty(StagedPhotos.StillStaged([(older, [file])], everyStageRun).Photos);
+        Assert.True(StagedPhotos.StillStaged([(older, [file])], everyStageRun).IsVerifiedEmpty);
+        Assert.Equal(staged, Assert.Single(StagedPhotos.StillStaged([(newer, [file])], everyStageRun).Photos).StagedPath);
+    }
 }
