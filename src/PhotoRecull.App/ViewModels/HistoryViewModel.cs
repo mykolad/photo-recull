@@ -52,7 +52,7 @@ public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupR
 
     public string WhereText => Run.Action == CleanupAction.Staged ? $"Moved to {Run.Destination}"
         : Run.Action == CleanupAction.MovedBack ? $"Back to {Run.Target.FolderPath}, and kept"
-        : CleanupFlowViewModel.DeletesGoToRecycleBin(Run.Target) ? "Moved to the Recycle Bin"
+        : Run.WentToRecycleBin ?? CleanupFlowViewModel.DeletesGoToRecycleBin(Run.Target) ? "Moved to the Recycle Bin"
         : "Deleted on the NAS (to #recycle if DSM's Recycle Bin was on)";
 
     public bool IsInterrupted => Run.Status == RunStatus.Interrupted;

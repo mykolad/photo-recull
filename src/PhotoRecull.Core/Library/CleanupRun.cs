@@ -33,6 +33,13 @@ public record CleanupRun(
 {
     public long Id { get; init; }
     public RunStatus Status { get; init; } = RunStatus.Complete;
+
+    // False for runs saved before each photo was recorded: their photos aren't
+    // in the run log.
+    public bool PhotosRecorded { get; init; }
+
+    // Whether a delete went to the Windows Recycle Bin; null when not recorded.
+    public bool? WentToRecycleBin { get; init; }
 }
 
 // One photo of a run: where it was, where it went (for a stage), and how it went.

@@ -46,6 +46,7 @@ public class RunJournalTests : IDisposable
 
         var saved = Assert.Single(_database.LoadRunsNewestFirst());
         Assert.Equal((id, RunStatus.Complete, 2), (saved.Id, saved.Status, saved.SucceededCount));
+        Assert.True(saved.PhotosRecorded);
         Assert.Equal([Moved("a.heic", 100), Moved("b.heic", 200)], _database.LoadRunFiles(id));
         Assert.Equal(CleanupState.Staged, Assert.Single(_database.LoadCleanups()).State);
     }
@@ -53,6 +54,7 @@ public class RunJournalTests : IDisposable
     [Fact]
     public void ARunCutOff_IsFinishedAtTheNextStartFromThePhotosItRecorded()
     {
+        _database.SaveCleanup(_cleanup with { ToRemoveCount = 4 });
         long staged = _database.StartRun(RunOf(CleanupAction.Staged, @"C:\_staged"));
         _database.RecordRunFile(staged, Moved("a.heic", 100));
         _database.RecordRunFile(staged, new(@"C:\Camera Roll\b.heic", null, null, null, Succeeded: false, "Locked", 0));
@@ -67,8 +69,20 @@ public class RunJournalTests : IDisposable
         Assert.Equal((RunStatus.Interrupted, 1, 1, 0L), (runs[staged].Status, runs[staged].SucceededCount, runs[staged].FailedCount, runs[staged].FreedBytes));
         Assert.Equal((RunStatus.Interrupted, 1, 1, 3_500L), (runs[deleted].Status, runs[deleted].SucceededCount, runs[deleted].FailedCount, runs[deleted].FreedBytes));
         var cleanup = Assert.Single(_database.LoadCleanups());
-        Assert.Equal((CleanupState.ReadyToAct, 1, 1, 3_500L), (cleanup.State, cleanup.StagedCount, cleanup.RemovedCount, cleanup.FreedBytes));
+        Assert.Equal((CleanupState.ReadyToAct, 1, 1, 3_500L, (int?)2),
+            (cleanup.State, cleanup.StagedCount, cleanup.RemovedCount, cleanup.FreedBytes, cleanup.ToRemoveCount));
         Assert.Equal(0, _database.FinishInterruptedRuns());
+    }
+
+    [Fact]
+    public void ADeleteRemembersWhetherItWentToTheRecycleBin()
+    {
+        _database.StartRun(RunOf(CleanupAction.Deleted) with { WentToRecycleBin = true });
+        _database.StartRun(RunOf(CleanupAction.Staged, @"C:\_staged"));
+
+        var wentToRecycleBin = _database.LoadRunsNewestFirst().ToDictionary(r => r.Action, r => r.WentToRecycleBin);
+        Assert.Equal(true, wentToRecycleBin[CleanupAction.Deleted]);
+        Assert.Null(wentToRecycleBin[CleanupAction.Staged]);
     }
 
     [Fact]

@@ -583,7 +583,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             {
                 var targetPhotos = g.Select(p => p.Photo).ToList();
                 var started = new CleanupRun(_cleanup!.Id, ranAt, action, g.Key,
-                    action == CleanupAction.Staged ? stageFolders[g.Key] : null, 0, 0, 0);
+                    action == CleanupAction.Staged ? stageFolders[g.Key] : null, 0, 0, 0)
+                {
+                    WentToRecycleBin = action == CleanupAction.Deleted ? DeletesGoToRecycleBin(g.Key) : null,
+                };
                 long runId = AppServices.Database.StartRun(started);
                 void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file);
                 var result = action == CleanupAction.Staged
