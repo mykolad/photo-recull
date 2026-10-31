@@ -3,6 +3,10 @@
 The Windows app ships as an MSIX package. Normal builds stay unpackaged, so
 `dotnet run` keeps working; a Store build adds `-p:PhotoRecullPackage=true`.
 
+> **Submit once #17–#20 are merged.** This guide, the listing text and the smoke test
+> describe the app with them: one tile per photo across backups (#17), Discard (#18),
+> History (#19) and Review staged (#20). Until then those screens are placeholders.
+
 ## One-time setup (the publisher does these)
 
 1. **Partner Center account.** Register as an individual developer at
