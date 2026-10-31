@@ -66,7 +66,7 @@ The cache stores only timestamps (no image data). If a cache's date range differ
 
 | Flag | Description |
 |------|-------------|
-| `--report [file.html]` | Generate a visual HTML review with thumbnails (HEIC decoded to JPEG). **Generated automatically on `--dry-run`.** `file` is optional and defaults to `<range>.html` (e.g. `2026-08.html`). Opens in your default browser. Cards are clickable to open the original file. |
+| `--report [file.html]` | Generate a visual HTML review with thumbnails (HEIC decoded to JPEG). **Generated automatically on `--dry-run`.** `file` is optional and defaults to `<range>.html` (e.g. `2026-08.html`). Opens in your default browser. One timeline, newest first and grouped by day (UTC): photos to remove are dimmed and outlined in red next to the ones that stay, and bursts are stacked (click a stack to see its frames). A filter at the top shows all photos, hides the ones to remove, or shows only those. Click a photo to open the original file. |
 | `--no-report` | Suppress the automatic dry-run report. |
 | `--output <file.csv>` | Write the candidate list to CSV. |
 

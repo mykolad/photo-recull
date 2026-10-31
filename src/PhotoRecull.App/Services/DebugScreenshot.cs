@@ -30,8 +30,9 @@ internal static class DebugScreenshot
     }
 
     // PHOTORECULL_DEBUG_OPEN_CLEANUP=<step>:<cleanup id> opens that cleanup's flow
-    // and drives it to the step (waiting | saved | range | scan) using its saved
-    // pick, without signing in to Google, so each step can be captured.
+    // and drives it to the step (waiting | range | scan | review | review-expanded |
+    // preview | stage) using its saved pick, without signing in to Google, so each
+    // step can be captured.
     public static (string Step, Guid CleanupId)? RequestedCleanupStep()
     {
         var request = Environment.GetEnvironmentVariable("PHOTORECULL_DEBUG_OPEN_CLEANUP")?.Split(':');
@@ -53,12 +54,15 @@ internal static class DebugScreenshot
                 await flow.ContinueFromSavedPickCommand.ExecuteAsync(null);
                 await flow.ScanTargetsCommand.ExecuteAsync(null);
                 break;
-            case "review" or "preview" or "stage":
+            case "review" or "review-expanded" or "preview" or "stage":
                 await flow.ContinueFromSavedPickCommand.ExecuteAsync(null);
                 await flow.ScanTargetsCommand.ExecuteAsync(null);
                 flow.ReviewResultsCommand.Execute(null);
-                if (step == "preview" && flow.Review?.Days.FirstOrDefault()?.Segments.FirstOrDefault()?.Tiles.FirstOrDefault() is { } tile)
-                    tile.OpenPreviewCommand.Execute(null);
+                var stacks = flow.Review?.Days.SelectMany(d => d.Stacks).ToList() ?? [];
+                if (step == "review-expanded" && stacks.FirstOrDefault(s => s.IsBurst) is { } burst)
+                    burst.ToggleExpandedCommand.Execute(null);
+                if (step == "preview" && stacks.FirstOrDefault() is { } stack)
+                    stack.Cover.OpenPreviewCommand.Execute(null);
                 if (step == "stage")
                     await flow.StageAsync(flow.CandidatesPerTarget().ToDictionary(t => t.Target, t => flow.DefaultStageFolderFor(t.Target)));
                 break;

@@ -51,6 +51,17 @@ public static class XamlFunctions
     public static Brush BurstBackground(bool isBurst) =>
         isBurst ? ThemeBrush("SubtleFillColorSecondaryBrush") : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
+    // A burst's cover sits lower left, so the frame behind it shows upper right.
+    public static Thickness StackCoverMargin(bool isBurst) => isBurst ? new Thickness(0, 6, 6, 0) : new Thickness(0);
+
+    public static Thickness ToRemoveOutline(bool isMarkedToRemove) => new(isMarkedToRemove ? 2 : 0);
+
+    public static Visibility ShowsKeepButton(bool isBurst, bool canBeKept) =>
+        !isBurst && canBeKept ? Visibility.Visible : Visibility.Collapsed;
+
+    public static Brush PreviewStatusBrush(bool isMarkedToRemove) =>
+        ThemeBrush(isMarkedToRemove ? "SystemFillColorCriticalBrush" : "TextFillColorSecondaryBrush");
+
     public static Brush KeepButtonBackground(bool isKept) =>
         ThemeBrush(isKept ? "PillDoneBackground" : "ControlFillColorDefaultBrush");
 

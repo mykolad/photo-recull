@@ -1,3 +1,5 @@
+using PhotoRecull.Core.Library;
+
 namespace PhotoRecull.Core.Settings;
 
 public enum TargetKind
@@ -16,6 +18,8 @@ public record AppSettings
     public List<TargetSettings> Targets { get; init; } = [];
 
     public bool ShowCaptureTimesInUtc { get; init; }
+
+    public ReviewFilter ReviewFilter { get; init; }
 
     // Only used by builds without a built-in Google OAuth client (forks, local
     // development); Store builds have one baked in.
