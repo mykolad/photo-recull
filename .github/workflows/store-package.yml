@@ -1,0 +1,67 @@
+name: Store package
+
+# Builds the Microsoft Store package (.msix) with the built-in Google OAuth client,
+# for uploading in Partner Center. Run it by hand, or push a tag like v1.2.0.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version (major.minor.build; the Store needs the fourth part to be 0)"
+        required: true
+        default: "1.0.0"
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  store-package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set the package version
+        shell: pwsh
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          $version = $env:VERSION.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version '$version' isn't major.minor.build" }
+          $manifest = 'src/PhotoRecull.App/Package.appxmanifest'
+          [xml]$xml = Get-Content $manifest
+          $xml.Package.Identity.Version = "$version.0"
+          $xml.Save((Resolve-Path $manifest))
+          "Package version $version.0"
+
+      - name: Build the package
+        env:
+          # MSBuild reads these as the built-in Google OAuth client's properties.
+          PhotoRecullGoogleClientId: ${{ secrets.PHOTORECULLGOOGLECLIENTID }}
+          PhotoRecullGoogleClientSecret: ${{ secrets.PHOTORECULLGOOGLECLIENTSECRET }}
+        run: dotnet build src/PhotoRecull.App -c Release -p:Platform=x64 -p:PhotoRecullPackage=true
+
+      - name: Check the Google client is built in
+        shell: pwsh
+        # The client goes in as assembly metadata, whose key is stored as plain text.
+        run: |
+          $dll = Get-ChildItem src/PhotoRecull.App/bin/x64/Release -Recurse -Filter PhotoRecull.App.dll | Select-Object -First 1
+          if (-not (Select-String -Path $dll.FullName -Pattern 'PhotoRecull.GoogleClientId' -SimpleMatch -Quiet)) {
+            throw "The package has no built-in Google client: add the PHOTORECULLGOOGLECLIENTID and PHOTORECULLGOOGLECLIENTSECRET secrets"
+          }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: store-package
+          path: artifacts/store/**/*.msix
+          retention-days: 30
