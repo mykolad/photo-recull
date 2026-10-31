@@ -43,6 +43,8 @@
   -->
   <PropertyGroup Condition="'$(PhotoRecullPackage)' == 'true'">
     <WindowsPackageType>MSIX</WindowsPackageType>
+    <!-- Customers' PCs needn't have .NET installed: the package carries the runtime too. -->
+    <SelfContained>true</SelfContained>
     <EnableMsixTooling>true</EnableMsixTooling>
     <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
     <!-- A plain .msix, which Partner Center accepts; the .msixupload wrapper needs Visual Studio's MSBuild. -->
