@@ -20,7 +20,7 @@ public static class CleanupScanner
         IProgress<ScanProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var allPhotos = target.Scan(progress, cancellationToken);
+        var allPhotos = target.Scan(firstDay, lastDay, progress, cancellationToken);
         var photosInRange = DateRangeFilter.KeepPhotosCapturedInRange(allPhotos, firstDay, lastDay, captureDayTimeZone);
         var pickedInRange = pickedTimestamps.Where(t =>
         {

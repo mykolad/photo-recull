@@ -59,6 +59,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     {
         "filename" => "File name",
         "exif" => "EXIF",
+        "video" => "Video metadata",
         _ => "No capture time",
     };
 
@@ -120,7 +121,9 @@ public sealed partial class ReviewTileViewModel : ObservableObject
         ? time.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) + " UTC"
         : "Unknown";
 
-    public string TypeAndSizeText => $"{(IsVideo ? "Video" : Path.GetExtension(Photo.Path).TrimStart('.').ToUpperInvariant())} · {FileSizeText.Format(SizeBytes)}";
+    public string TypeAndSizeText => $"{(IsVideo ? "Video" : Extension(Photo.Path))}{(Photo.LivePhotoVideoPath is { } video ? $" + {Extension(video)} (Live Photo)" : "")} · {FileSizeText.Format(SizeBytes)}";
+
+    private static string Extension(string path) => Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
 
     private async void LoadThumbnailOnce()
     {

@@ -1,19 +1,27 @@
 # Usage
 
 ```bash
-dotnet run --project src/PhotoRecull.Cli -- --onedrive <folder> [options] <mode>
+dotnet run --project src/PhotoRecull.Cli -- --target <onedrive|synology> --path <folder> [options] <mode>
 ```
 
-You must supply `--onedrive`. The **mode** defaults to a dry run; pass `--stage` or
+You must supply `--path`. The **mode** defaults to a dry run; pass `--stage` or
 `--delete` to act on the candidates.
 
 ## Parameters
 
-### Required
+### Target
 
 | Flag | Description |
 |------|-------------|
-| `--onedrive <folder>` | Path to your local (synced) OneDrive Camera Roll folder. |
+| `--path <folder>` | **Required.** The target's photo folder. |
+| `--target <kind>` | `onedrive` (the default) or `synology`. |
+| `--onedrive <folder>` | Same as `--target onedrive --path <folder>`. |
+
+- **OneDrive:** your local (synced) Camera Roll folder, e.g.
+  `C:\Users\you\OneDrive\Pictures\Camera Roll`. Only the folder itself is read.
+- **Synology Photos:** the mobile backup folder, read over the network, e.g.
+  `\\nas\home\Photos\MobileBackup\iPhone`, or a mapped drive. File Explorer must
+  already be able to open it. See [Synology Photos](#synology-photos).
 
 ### Mode (default: dry run)
 
@@ -34,7 +42,7 @@ After a dry run with candidates, the tool prints the ready-to-run `--stage` and
 | `--from <date>` | Start of range: `YYYY-MM` or `YYYY-MM-DD`. `YYYY-MM` expands to the 1st. |
 | `--to <date>` | End of range: `YYYY-MM` or `YYYY-MM-DD`. `YYYY-MM` expands to the last day. |
 
-The date range filters the **OneDrive** side. The Google Photos Picker has no date
+The date range filters the **target** side. The Google Photos Picker has no date
 filter, so in the browser you select the surviving photos for that range yourself.
 Omit both flags to scan the entire library (not recommended — the manual pick becomes
 huge). Process one month at a time.
@@ -102,12 +110,36 @@ dotnet run --project src/PhotoRecull.Cli -- --onedrive "C:\...\Camera Roll" --fr
 After a dry run with candidates, the tool prints the exact stage command, pre-filled with
 your paths, range, and cache.
 
+For Synology Photos, swap `--onedrive "C:\...\Camera Roll"` for
+`--target synology --path "\\nas\home\Photos\MobileBackup\iPhone"`.
+
+## Synology Photos
+
+PhotoRecull reads the Synology Photos mobile backup as a network folder; it doesn't use
+the Synology API.
+
+- **Folders:** the backup's date folders (`2026\01`, or `2026-01`) are read below the
+  folder you give. Only the months a cleanup's dates can be in are read, with two days'
+  margin for time zones, so a month takes seconds rather than a scan of the whole
+  library. Synology's own folders (`@eaDir`, `#recycle`, `#snapshot`) are skipped.
+- **Stage folder:** the app stages photos outside the `Photos` folder that Synology Photos
+  shows, e.g. `\\nas\home\PhotoRecull staged\2026-08-01_2026-08-31`, so they don't show up
+  in Synology Photos again. With the CLI, `--stage` defaults to `_staged_<range>` in the
+  current folder; pass a folder on the NAS to keep the move on the NAS.
+- **Delete:** deleting over the network skips the Windows Recycle Bin. Turn on the
+  Recycle Bin for the shared folder in DSM (Control Panel › Shared Folder › Edit) to be
+  able to undo it: deleted photos then wait in the share's `#recycle` folder.
+
 ## How matching works
 
-- OneDrive iPhone photos are detected by filename (`YYYYMMDD_hhmmssSSS_iOS.ext`) or by
-  EXIF (`Make=Apple`, `Model` contains `iPhone`). Non-iPhone files are skipped.
+- OneDrive iPhone photos are detected by filename (`YYYYMMDD_hhmmssSSS_iOS.ext`); other
+  photos (such as Synology's `IMG_1234.HEIC`) by EXIF (`Make=Apple`, `Model` contains
+  `iPhone`), and videos by their QuickTime metadata. Non-iPhone files are skipped.
 - Capture time is normalized to UTC: OneDrive filenames encode UTC directly; EXIF times
-  use `DateTimeOriginal` + `OffsetTimeOriginal` + `SubSecTimeOriginal`.
+  use `DateTimeOriginal` + `OffsetTimeOriginal` + `SubSecTimeOriginal`; videos use the
+  time recording started (Apple's `creationdate`).
+- A Live Photo's video (`IMG_1234.MOV` next to `IMG_1234.HEIC`) counts as part of its
+  photo, as in Google Photos: it's kept, staged or deleted together with the photo.
 - Matching is **one-to-one** within a ±2s tolerance: each Google photo keeps at most one
-  OneDrive file (the nearest). Burst frames you culled in Google Photos therefore show
+  target file (the nearest). Burst frames you culled in Google Photos therefore show
   up as removal candidates instead of all being kept.

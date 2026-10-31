@@ -101,7 +101,28 @@ public sealed partial class CleanupFlowPage : Page
         }
     }
 
-    private async void OnStageClick(object sender, RoutedEventArgs e) => await StageAsync();
+    // Only one confirmation at a time: WinUI allows one open ContentDialog, and a
+    // second click while the first is opening would otherwise throw.
+    private bool _isConfirming;
+
+    private async void OnStageClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(StageAsync);
+
+    private async void OnDeleteClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DeleteAsync);
+
+    private async Task ConfirmOnceAsync(Func<Task> confirm)
+    {
+        if (_isConfirming)
+            return;
+        _isConfirming = true;
+        try
+        {
+            await confirm();
+        }
+        finally
+        {
+            _isConfirming = false;
+        }
+    }
 
     private async Task StageAsync()
     {
@@ -113,10 +134,11 @@ public sealed partial class CleanupFlowPage : Page
             ViewModel.CancelConfirm();
     }
 
-    private async void OnDeleteClick(object sender, RoutedEventArgs e)
+    private async Task DeleteAsync()
     {
         ViewModel.BeginConfirm();
-        var choice = await new DeleteDialog(XamlRoot, ViewModel, ViewModel.Review?.KeptByUserCount ?? 0).ChooseAsync();
+        var dsmRecycleBins = await ViewModel.CheckDsmRecycleBinsBeforeDeleteAsync();
+        var choice = await new DeleteDialog(XamlRoot, ViewModel, ViewModel.Review?.KeptByUserCount ?? 0, dsmRecycleBins).ChooseAsync();
         switch (choice)
         {
             case DeleteChoice.Delete:

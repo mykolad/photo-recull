@@ -164,41 +164,26 @@
                     </Grid>
 
                     <Border Style="{StaticResource SettingRowDividerStyle}">
-                        <RadioButtons SelectedIndex="0" MaxColumns="2">
+                        <RadioButtons
+                            SelectedIndex="{x:Bind ViewModel.SelectedTargetIndex, Mode=TwoWay}"
+                            MaxColumns="2">
                             <RadioButton>
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon Glyph="&#xE753;" FontSize="16" />
                                     <TextBlock Text="OneDrive" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton IsEnabled="False">
+                            <RadioButton>
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon Glyph="&#xE968;" FontSize="16" />
-                                    <TextBlock Text="Synology Photos (coming soon)" />
+                                    <TextBlock Text="Synology Photos" />
                                 </StackPanel>
                             </RadioButton>
                         </RadioButtons>
                     </Border>
 
                     <Border Style="{StaticResource SettingRowDividerStyle}">
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Camera Roll folder" />
-                            <Grid ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox
-                                    Text="{x:Bind ViewModel.FolderPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="C:\Users\you\OneDrive\Pictures\Camera Roll" />
-                                <Button Grid.Column="1" Content="Browse…" Command="{x:Bind ViewModel.BrowseFolderCommand}" />
-                            </Grid>
-                            <TextBlock Text="Local folder or mapped drive" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
-                            <TextBlock
-                                Text="{x:Bind ViewModel.FolderValidationText, Mode=OneWay}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Foreground="{x:Bind views:XamlFunctions.ValidationResultBrush(ViewModel.IsFolderValid, ViewModel.IsCheckingFolder), Mode=OneWay}" />
-                        </StackPanel>
+                        <views:TargetFolderEditor Folder="{x:Bind ViewModel.SelectedFolder, Mode=OneWay}" />
                     </Border>
                 </StackPanel>
             </Border>

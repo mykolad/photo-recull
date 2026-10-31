@@ -15,7 +15,7 @@ public class HtmlReportGeneratorTests : IDisposable
 
     private string Render(MatchResult result)
     {
-        HtmlReportGenerator.Write(_reportPath, result, @"C:\fake", new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
+        HtmlReportGenerator.Write(_reportPath, result, "OneDrive", @"C:\fake", new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
         return File.ReadAllText(_reportPath);
     }
 
@@ -51,6 +51,26 @@ public class HtmlReportGeneratorTests : IDisposable
         Assert.Matches("""<div class="cover stays">\s*<img src="file:///C:/fake/b.jpg""", stack.Value);
         Assert.Matches("""<div class="cover remove">\s*<img src="file:///C:/fake/c.jpg""", stack.Value);
         Assert.Equal(3, Regex.Matches(stack.Value, """<div class="card """).Count);
+    }
+
+    [Fact]
+    public void APhotoOnTheNetwork_LinksToItsServer_WithItsPathEscaped()
+    {
+        var onNas = PhotoAt("IMG_0001.JPG", 9, 0, 0) with { Path = @"\\nas\home\Photos\2026 #1\IMG_0001.JPG" };
+
+        var html = Render(new MatchResult([onNas], [], []));
+
+        Assert.Contains("""href="file://nas/home/Photos/2026%20%231/IMG_0001.JPG" """, html);
+    }
+
+    [Fact]
+    public void APhotoFromARelativeTargetPath_LinksToItsFullPath()
+    {
+        var relative = PhotoAt("IMG_0001.JPG", 9, 0, 0) with { Path = @"backup\IMG_0001.JPG" };
+
+        var html = Render(new MatchResult([relative], [], []));
+
+        Assert.Contains($"""href="{new Uri(Path.GetFullPath(@"backup\IMG_0001.JPG")).AbsoluteUri}" """, html);
     }
 
     [Fact]

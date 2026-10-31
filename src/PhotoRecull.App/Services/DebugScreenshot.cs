@@ -29,6 +29,10 @@ internal static class DebugScreenshot
         };
     }
 
+    // PHOTORECULL_DEBUG_OPEN_PAGE=settings opens Settings instead of Library.
+    public static bool IsSettingsPageRequested() =>
+        Environment.GetEnvironmentVariable("PHOTORECULL_DEBUG_OPEN_PAGE") == "settings";
+
     // PHOTORECULL_DEBUG_OPEN_CLEANUP=<step>:<cleanup id> opens that cleanup's flow
     // and drives it to the step (waiting | range | scan | review | review-expanded |
     // preview | stage) using its saved pick, without signing in to Google, so each
@@ -64,7 +68,7 @@ internal static class DebugScreenshot
                 if (step == "preview" && stacks.FirstOrDefault() is { } stack)
                     stack.Cover.OpenPreviewCommand.Execute(null);
                 if (step == "stage")
-                    await flow.StageAsync(flow.CandidatesPerTarget().ToDictionary(t => t.Target, t => flow.DefaultStageFolderFor(t.Target)));
+                    await flow.StageAsync(flow.CandidatesPerTarget().ToDictionary(t => t.Target, t => flow.DefaultStageFolderFor(t.Target)!));
                 break;
         }
     }

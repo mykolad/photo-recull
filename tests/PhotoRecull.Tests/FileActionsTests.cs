@@ -4,12 +4,18 @@ namespace PhotoRecull.Tests;
 
 public class FileActionsTests : IDisposable
 {
-    private readonly string _targetFolder = Directory.CreateTempSubdirectory("photorecull-target-").FullName;
+    // The stage folder sits next to the target, as the app's default does.
+    private readonly string _root = Directory.CreateTempSubdirectory("photorecull-target-").FullName;
+    private readonly string _targetFolder;
     private readonly string _stageFolder;
 
-    public FileActionsTests() => _stageFolder = Path.Combine(_targetFolder, "_staged_test");
+    public FileActionsTests()
+    {
+        _targetFolder = Directory.CreateDirectory(Path.Combine(_root, "Camera Roll")).FullName;
+        _stageFolder = Path.Combine(_root, "_staged_test");
+    }
 
-    public void Dispose() => Directory.Delete(_targetFolder, recursive: true);
+    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private PhotoFile CreatePhoto(string fileName)
     {
@@ -23,7 +29,7 @@ public class FileActionsTests : IDisposable
     {
         var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
 
-        var result = FileActions.MoveToStageFolder(photos, _stageFolder);
+        var result = FileActions.MoveToStageFolder(photos, _stageFolder, _targetFolder);
 
         Assert.Equal(2, result.SucceededCount);
         Assert.Empty(result.Failures);
@@ -33,13 +39,36 @@ public class FileActionsTests : IDisposable
     }
 
     [Fact]
+    public void MoveToStageFolder_InsideTheTarget_MovesNothing()
+    {
+        var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
+
+        var result = FileActions.MoveToStageFolder(photos, Path.Combine(_targetFolder, "PhotoRecull staged"), _targetFolder);
+
+        Assert.Equal(0, result.SucceededCount);
+        Assert.All(result.Failures, f => Assert.Equal(FileActions.StageFolderInsideTarget, f.Reason));
+        Assert.All(photos, p => Assert.True(File.Exists(p.Path)));
+    }
+
+    [Theory]
+    [InlineData(@"Z:\PhotoRecull staged", @"Z:\", true)]
+    [InlineData(@"\\nas\home\Photos\staged", @"\\nas\home\Photos", true)]
+    [InlineData(@"\\nas\home\Photos", @"\\nas\home\Photos\", true)]
+    [InlineData(@"\\nas\home\PhotoRecull staged", @"\\nas\home\Photos", false)]
+    [InlineData(@"D:\Pictures\Camera Roll staged", @"D:\Pictures\Camera Roll", false)]
+    public void IsSameOrInside_ComparesWholeFolderNames(string folder, string parent, bool expected)
+    {
+        Assert.Equal(expected, FileActions.IsSameOrInside(folder, parent));
+    }
+
+    [Fact]
     public void MoveToStageFolder_NeverOverwritesAndContinuesAfterAFailure()
     {
         Directory.CreateDirectory(_stageFolder);
         File.WriteAllText(Path.Combine(_stageFolder, "a.heic"), "already staged");
         var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
 
-        var result = FileActions.MoveToStageFolder(photos, _stageFolder);
+        var result = FileActions.MoveToStageFolder(photos, _stageFolder, _targetFolder);
 
         Assert.Equal(1, result.SucceededCount);
         var failure = Assert.Single(result.Failures);
@@ -93,7 +122,7 @@ public class FileActionsTests : IDisposable
         var missing = new PhotoFile(Path.Combine(_targetFolder, "gone.heic"), "gone.heic",
             DateTimeOffset.UtcNow, IsIphone: true, TimestampSource: "filename");
 
-        var stageResult = FileActions.MoveToStageFolder([missing], _stageFolder);
+        var stageResult = FileActions.MoveToStageFolder([missing], _stageFolder, _targetFolder);
         var recycleResult = FileActions.MoveToRecycleBin([missing]);
 
         Assert.Equal("Missing: moved or deleted since the scan", Assert.Single(stageResult.Failures).Reason);
@@ -103,11 +132,11 @@ public class FileActionsTests : IDisposable
     [Fact]
     public void MoveToStageFolder_UnusableFolder_FailsEveryPhotoWithoutThrowing()
     {
-        var notAFolder = Path.Combine(_targetFolder, "taken-by-a-file");
+        var notAFolder = Path.Combine(_root, "taken-by-a-file");
         File.WriteAllText(notAFolder, "a file where the stage folder should go");
         var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
 
-        var result = FileActions.MoveToStageFolder(photos, notAFolder);
+        var result = FileActions.MoveToStageFolder(photos, notAFolder, _targetFolder);
 
         Assert.Equal(0, result.SucceededCount);
         Assert.Equal(2, result.Failures.Count);
@@ -159,7 +188,7 @@ public class FileActionsTests : IDisposable
         Directory.CreateDirectory(_stageFolder);
         File.WriteAllText(Path.Combine(_stageFolder, "a.heic"), "already staged");
 
-        var result = FileActions.MoveToStageFolder([CreatePhoto("a.heic")], _stageFolder);
+        var result = FileActions.MoveToStageFolder([CreatePhoto("a.heic")], _stageFolder, _targetFolder);
 
         Assert.Equal("A file with this name is already in the stage folder", Assert.Single(result.Failures).Reason);
     }

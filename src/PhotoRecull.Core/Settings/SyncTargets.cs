@@ -5,8 +5,7 @@ public static class SyncTargets
     public static ISyncTarget Create(TargetSettings settings) => settings.Kind switch
     {
         TargetKind.OneDrive => new OneDriveTarget(settings.FolderPath),
-        TargetKind.SynologyPhotos => throw new NotSupportedException(
-            "Synology Photos isn't supported yet (https://github.com/mykolad/photo-recull/issues/1)."),
+        TargetKind.SynologyPhotos => new SynologyPhotosTarget(settings.FolderPath),
         _ => throw new ArgumentOutOfRangeException(nameof(settings), settings.Kind, null),
     };
 

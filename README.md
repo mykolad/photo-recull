@@ -3,7 +3,7 @@
 # PhotoRecull
 
 Repeat your Google Photos culls on your other copies: find and remove OneDrive
-Camera Roll photos that you've already deleted from Google Photos.
+and Synology Photos copies of photos you've already deleted from Google Photos.
 
 🌐 **Website:** [mykolad.github.io/photo-recull](https://mykolad.github.io/photo-recull/)
 (setup and usage guides, [privacy policy](https://mykolad.github.io/photo-recull/privacy),
@@ -11,20 +11,20 @@ Camera Roll photos that you've already deleted from Google Photos.
 
 ## Why
 
-iPhone photos back up to Google Photos, iCloud, **and** OneDrive. Deleting a photo
-from Google Photos also removes it from iCloud (they sync) — but OneDrive keeps its
-copy forever. Over years, OneDrive accumulates thousands of stale duplicates you
+iPhone photos back up to Google Photos, iCloud, **and** OneDrive or a Synology NAS. Deleting
+a photo from Google Photos also removes it from iCloud (they sync), but OneDrive and
+Synology Photos keep their copy forever. Over years, they accumulate thousands of stale duplicates you
 already curated out of Google Photos. PhotoRecull finds them.
 
 ## How it works
 
 1. You select the photos you **still have** in Google Photos using the Google Photos
    Picker (opens in your browser, multi-select).
-2. PhotoRecull scans your local OneDrive folder, identifies iPhone photos, and reads
+2. PhotoRecull scans your OneDrive or Synology Photos folder, identifies iPhone photos, and reads
    each one's capture time.
-3. It matches OneDrive photos to Google photos by UTC timestamp (±2s, **one-to-one** —
+3. It matches those photos to Google photos by UTC timestamp (±2s, **one-to-one** —
    so a culled burst doesn't keep every frame).
-4. OneDrive iPhone photos with **no** match were deleted from Google Photos → they're
+4. iPhone photos with **no** match were deleted from Google Photos → they're
    flagged as removal candidates.
 5. Review them in an HTML report, then **stage** (move for review) or **delete**.
 
@@ -51,6 +51,17 @@ dotnet run --project src/PhotoRecull.Cli -- --onedrive "<Camera Roll folder>" --
 #    or re-run with --delete (permanent).
 ```
 
+For Synology Photos, point at the mobile backup folder on the NAS instead (File Explorer
+must already be able to open it). Only that month's folders are read:
+
+```bash
+dotnet run --project src/PhotoRecull.Cli -- --target synology --path "\\nas\home\Photos\MobileBackup\iPhone" --from 2026-08 --to 2026-08
+```
+
+Add `--stage "\\nas\home\PhotoRecull staged"` to keep the staged photos on the NAS,
+outside the `Photos` folder that Synology Photos shows. See
+[docs/USAGE.md](docs/USAGE.md#synology-photos).
+
 Work **one month at a time** so the manual pick stays manageable, and prefer
 `--dry-run`/`--stage` over `--delete`.
 
@@ -68,7 +79,7 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 |---|---|
 | `src/PhotoRecull.Core` | Scanning, matching, the Google Photos Picker client, stage/delete, the cleanup library. Shared by every front end. |
 | `src/PhotoRecull.Cli` | The command-line app, including the HTML review report |
-| `src/PhotoRecull.App` | The Windows app (WinUI 3): setup, the Library, and a full cleanup for OneDrive (pick, date range, scan, review, stage or delete to the Recycle Bin) |
+| `src/PhotoRecull.App` | The Windows app (WinUI 3): setup, the Library, and a full cleanup for OneDrive and Synology Photos (pick, date range, scan, review, stage or delete); targets in Settings |
 | `tests/PhotoRecull.Tests` | xUnit tests |
 
 To run the Windows app: `dotnet run --project src/PhotoRecull.App`. It keeps its settings,
