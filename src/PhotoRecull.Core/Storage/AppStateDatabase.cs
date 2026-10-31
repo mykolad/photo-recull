@@ -200,6 +200,24 @@ public sealed class AppStateDatabase
                 : "DELETE FROM kept_photos WHERE cleanup_id = $cleanupId AND path_key = $key",
             ("$cleanupId", cleanupId.ToString()), ("$key", filePath.ToUpperInvariant()), ("$path", filePath));
 
+    // Forgets a cleanup with its pick and the photos kept in it; files are never
+    // touched. Checked again here, against what's saved, so a screen opened before
+    // a stage or delete can't discard a cleanup that has since moved files: runs
+    // that moved or deleted any stay in History. Returns whether it was discarded.
+    public bool DiscardCleanup(Guid cleanupId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM cleanups
+            WHERE id = $cleanupId
+              AND state IN ('Picked', 'ReadyToAct') AND staged_count = 0 AND removed_count = 0
+              AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = $cleanupId AND runs.succeeded_count > 0)
+            """;
+        command.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
+        return command.ExecuteNonQuery() > 0;
+    }
+
     // ------------------------------------------------------------------ stage and delete runs
 
     // The runs and the cleanup's new state (Staged or Done, counts) belong together.

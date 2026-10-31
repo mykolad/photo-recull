@@ -188,6 +188,57 @@ public class AppStateDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void DiscardCleanup_ForgetsItWithItsPickAndKeptPhotos()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var discarded = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.ReadyToAct);
+        var other = CleanupFor(new(2026, 9, 1), new(2026, 9, 30));
+        database.SavePickWithCleanup(discarded, [DateTimeOffset.UnixEpoch]);
+        database.SavePickWithCleanup(other, [DateTimeOffset.UnixEpoch]);
+        database.SetPhotoKept(discarded.Id, @"C:\Camera Roll\IMG_1.HEIC", isKept: true);
+
+        Assert.True(database.DiscardCleanup(discarded.Id));
+
+        Assert.Equal(other.Id, Assert.Single(database.LoadCleanups()).Id);
+        Assert.Null(database.LoadPick(discarded.Id));
+        Assert.Empty(database.LoadKeptPhotoPaths(discarded.Id));
+        Assert.NotNull(database.LoadPick(other.Id));
+    }
+
+    [Fact]
+    public void DiscardCleanup_ThatMovedOrDeletedFiles_KeepsItAndItsHistory()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var staged = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.Staged) with { StagedCount = 2 };
+        // Partly staged: some photos failed, so it's still Ready to act, but files moved.
+        var partlyStaged = CleanupFor(new(2026, 9, 1), new(2026, 9, 30), CleanupState.ReadyToAct);
+        var run = new CleanupRun(partlyStaged.Id, DateTimeOffset.UnixEpoch, CleanupAction.Staged, oneDrive, @"C:\_staged", 3, 1, 0);
+        database.SaveCleanup(staged);
+        database.RecordRunsWithCleanup(partlyStaged, [run]);
+
+        Assert.False(database.DiscardCleanup(staged.Id));
+        Assert.False(database.DiscardCleanup(partlyStaged.Id));
+
+        Assert.Equal(2, database.LoadCleanups().Count);
+        Assert.Equal([run], database.LoadRunsNewestFirst());
+    }
+
+    [Theory]
+    [InlineData(CleanupState.Picked, 0, 0, true)]
+    [InlineData(CleanupState.ReadyToAct, 0, 0, true)]
+    [InlineData(CleanupState.ReadyToAct, 3, 0, false)]
+    [InlineData(CleanupState.ReadyToAct, 0, 3, false)]
+    [InlineData(CleanupState.Staged, 3, 0, false)]
+    [InlineData(CleanupState.Done, 0, 3, false)]
+    public void CanBeDiscarded_OnlyBeforeAnythingWasMovedOrDeleted(CleanupState state, int staged, int removed, bool expected)
+    {
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), state) with { StagedCount = staged, RemovedCount = removed };
+
+        Assert.Equal(expected, cleanup.CanBeDiscarded);
+    }
+
+    [Fact]
     public void Runs_AreRecordedWithTheCleanupsNewStateAndListedNewestFirst()
     {
         var database = new AppStateDatabase(DatabasePath);

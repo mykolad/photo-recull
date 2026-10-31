@@ -109,6 +109,21 @@ public sealed partial class CleanupFlowPage : Page
 
     private async void OnDeleteClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DeleteAsync);
 
+    private async void OnDiscardClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DiscardAsync);
+
+    private async Task DiscardAsync()
+    {
+        var title = ViewModel.Title;
+        if (!await DiscardDialog.ConfirmAsync(XamlRoot, title) || !ViewModel.CanDiscard)
+            return;
+        bool discarded = ViewModel.Discard();
+        ShellPage.Current?.ShowLibrary();
+        if (discarded)
+            ShellPage.Current?.ShowToast($"Discarded {title}. No files were moved or deleted.");
+        else
+            ShellPage.Current?.ShowToast($"{title} can't be discarded: it has moved or deleted files.", InfoBarSeverity.Warning);
+    }
+
     private async Task ConfirmOnceAsync(Func<Task> confirm)
     {
         if (_isConfirming)

@@ -27,4 +27,10 @@ public record Cleanup(
     public int StagedCount { get; init; }
     public int RemovedCount { get; init; }
     public long FreedBytes { get; init; }
+
+    // Only a cleanup that hasn't moved or deleted anything: once files have gone to
+    // a stage folder or been deleted there's no going back to before, and History
+    // keeps what happened.
+    public bool CanBeDiscarded => State is CleanupState.Picked or CleanupState.ReadyToAct
+        && StagedCount == 0 && RemovedCount == 0;
 }

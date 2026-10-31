@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PhotoRecull.App.ViewModels;
 
@@ -22,6 +23,14 @@ public sealed partial class LibraryPage : Page
 
     private void ShowCoverageForSelectedYear() =>
         Coverage.Show(ViewModel.CoverageYear, ViewModel.CoverageSegments, ViewModel.NotCleanedGaps, ViewModel.Today);
+
+    private async void OnDiscardClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not LibraryCardViewModel { Cleanup: { } cleanup } card
+            || !await DiscardDialog.ConfirmAsync(XamlRoot, card.RangeLabel))
+            return;
+        ViewModel.Discard(cleanup);
+    }
 
     // Pill and border brushes are looked up once when a card is created, so the
     // cards are rebuilt to pick up the new theme's brushes.

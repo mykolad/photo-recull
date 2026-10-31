@@ -61,12 +61,28 @@
                         Style="{StaticResource SecondaryCaptionTextBlockStyle}"
                         Visibility="{x:Bind views:XamlFunctions.VisibleWhenNotEmpty(PickedLine)}" />
                     <TextBlock Grid.Row="5" Text="{x:Bind StateLine}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
-                    <HyperlinkButton Grid.Row="6" Margin="-8,4,0,0" Padding="8,4" Command="{x:Bind ActionCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="{x:Bind ActionText}" FontSize="13" />
-                            <FontIcon Glyph="&#xE76C;" FontSize="10" />
-                        </StackPanel>
-                    </HyperlinkButton>
+                    <Grid Grid.Row="6" Margin="-8,4,-8,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <HyperlinkButton Padding="8,4" Command="{x:Bind ActionCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="{x:Bind ActionText}" FontSize="13" />
+                                <FontIcon Glyph="&#xE76C;" FontSize="10" />
+                            </StackPanel>
+                        </HyperlinkButton>
+                        <HyperlinkButton
+                            Grid.Column="1"
+                            Padding="8,4"
+                            Click="OnDiscardClick"
+                            Visibility="{x:Bind CanBeDiscarded}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            ToolTipService.ToolTip="Forget this cleanup. No files are moved or deleted."
+                            AutomationProperties.Name="{x:Bind views:XamlFunctions.DiscardLabel(RangeLabel)}">
+                            <TextBlock Text="Discard" FontSize="13" />
+                        </HyperlinkButton>
+                    </Grid>
                 </Grid>
             </Grid>
         </DataTemplate>
