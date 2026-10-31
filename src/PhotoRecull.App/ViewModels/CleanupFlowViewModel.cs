@@ -590,7 +590,9 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         int succeeded = runs.Sum(r => r.SucceededCount);
 
         int failed = runs.Sum(r => r.FailedCount);
-        if (succeeded > 0)
+        // A Live Photo whose video went before its photo failed frees space
+        // without completing a photo; that space still counts.
+        if (succeeded > 0 || runs.Sum(r => r.FreedBytes) > 0)
         {
             // Only a complete run moves the cleanup on: with failures left it stays
             // Ready to act, so Library can reopen it and the rest can be retried.

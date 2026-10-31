@@ -64,6 +64,16 @@ public class HtmlReportGeneratorTests : IDisposable
     }
 
     [Fact]
+    public void APhotoFromARelativeTargetPath_LinksToItsFullPath()
+    {
+        var relative = PhotoAt("IMG_0001.JPG", 9, 0, 0) with { Path = @"backup\IMG_0001.JPG" };
+
+        var html = Render(new MatchResult([relative], [], []));
+
+        Assert.Contains($"""href="{new Uri(Path.GetFullPath(@"backup\IMG_0001.JPG")).AbsoluteUri}" """, html);
+    }
+
+    [Fact]
     public void TheFilterIsThreeRadioButtonsAheadOfTheTimeline()
     {
         var html = Render(new MatchResult([PhotoAt("a.jpg", 9, 0, 0)], [], []));

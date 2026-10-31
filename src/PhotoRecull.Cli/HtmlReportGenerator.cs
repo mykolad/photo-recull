@@ -335,7 +335,7 @@ public static class HtmlReportGenerator
 
     // file:///C:/... for a local file, file://nas/home/... for a network one, with
     // characters such as # and spaces escaped, ready for an HTML attribute.
-    private static string FileUri(string path) => HtmlEncode(new Uri(path).AbsoluteUri);
+    private static string FileUri(string path) => HtmlEncode(new Uri(Path.GetFullPath(path)).AbsoluteUri);
 
     /// <summary>
     /// Returns the value for an &lt;img src&gt;: an embedded JPEG data URI for
