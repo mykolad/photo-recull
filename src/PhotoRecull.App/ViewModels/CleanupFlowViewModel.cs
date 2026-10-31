@@ -274,6 +274,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             EarliestPickedDay = earliest,
             LatestPickedDay = latest,
             ToRemoveCount = null,
+            KeptByUserCount = 0,
         };
 
         try
