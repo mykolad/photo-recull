@@ -104,6 +104,8 @@ public static class FileActions
         FileNotFoundException or DirectoryNotFoundException => "Missing: moved or deleted since the scan",
         UnauthorizedAccessException => "Access denied",
         IOException { HResult: SharingViolation or LockViolation } => "Locked: another app or OneDrive sync is using it",
+        // PhotoRecull's own name checks say where the name is taken.
+        IOException { HResult: FileExists } io when io.Message.StartsWith("A file with this name", StringComparison.Ordinal) => io.Message,
         IOException { HResult: FileExists or AlreadyExists } => "A file with this name is already in the stage folder",
         _ => exception.Message,
     };
@@ -164,6 +166,37 @@ public static class FileActions
         if (photo.LivePhotoVideoPath is { } video && File.Exists(video))
             yield return video;
         yield return photo.Path;
+    }
+
+    // Staged photos go back to where they were on their target. A file already
+    // there under that name is never overwritten: the photo stays staged.
+    public static FileActionResult MoveBack(IEnumerable<StagedPhoto> photos, Action<RunFile>? onPhotoDone = null)
+    {
+        var originalOf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var stagedFiles = photos.Select(p =>
+        {
+            originalOf[p.StagedPath] = p.OriginalPath;
+            if (p.StagedVideoPath is { } video && p.OriginalVideoPath is { } originalVideo)
+                originalOf[video] = originalVideo;
+            return new PhotoFile(p.StagedPath, p.FileName, null, IsIphone: true, TimestampSource: null)
+            {
+                LivePhotoVideoPath = p.StagedVideoPath,
+            };
+        }).ToList();
+        return ApplyToEachCollectingFailures(stagedFiles,
+            path =>
+            {
+                var original = originalOf[path];
+                Directory.CreateDirectory(Path.GetDirectoryName(original)!);
+                File.Move(path, original, overwrite: false);
+                return original;
+            },
+            onPhotoDone,
+            checkBeforeActing: photo =>
+            {
+                if (FilesOf(photo).Any(path => File.Exists(originalOf[path])))
+                    throw new IOException("A file with this name is already back in its place", FileExists);
+            });
     }
 
     // Network and mapped drives have no Recycle Bin: the shell would delete from

@@ -34,7 +34,7 @@ internal static class DebugScreenshot
 
     // PHOTORECULL_DEBUG_OPEN_CLEANUP=<step>:<cleanup id> opens that cleanup's flow
     // and drives it to the step (waiting | range | scan | review | review-expanded |
-    // preview | stage) using its saved pick, without signing in to Google, so each
+    // preview | stage | staged | staged-moveback) using its saved pick, without signing in to Google, so each
     // step can be captured.
     public static (string Step, Guid CleanupId)? RequestedCleanupStep()
     {

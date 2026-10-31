@@ -6,6 +6,8 @@ public enum CleanupAction
 {
     Staged,
     Deleted,
+    // Staged photos moved back to where they were: the user decided to keep them.
+    MovedBack,
 }
 
 public enum RunStatus

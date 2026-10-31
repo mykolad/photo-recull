@@ -38,7 +38,7 @@ public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupR
 
     public string WhenText => Run.RanAt.ToLocalTime().ToString("ddd d MMM yyyy, HH:mm", CultureInfo.CurrentCulture);
 
-    public string Title => $"{(Run.Action == CleanupAction.Staged ? "Staged" : "Deleted")} {PhotoCount(Run.SucceededCount)}"
+    public string Title => $"{Run.Action switch { CleanupAction.Staged => "Staged", CleanupAction.MovedBack => "Moved back", _ => "Deleted" }} {PhotoCount(Run.SucceededCount)}"
         + (Run.Action == CleanupAction.Deleted && Run.FreedBytes > 0 ? $" · {FileSizeText.Format(Run.FreedBytes)} freed" : "");
 
     public string TargetGlyph => ShellPage.TargetGlyph(Run.Target.Kind);
@@ -51,6 +51,7 @@ public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupR
     }.OfType<string>());
 
     public string WhereText => Run.Action == CleanupAction.Staged ? $"Moved to {Run.Destination}"
+        : Run.Action == CleanupAction.MovedBack ? $"Back to {Run.Target.FolderPath}, and kept"
         : CleanupFlowViewModel.DeletesGoToRecycleBin(Run.Target) ? "Moved to the Recycle Bin"
         : "Deleted on the NAS (to #recycle if DSM's Recycle Bin was on)";
 
