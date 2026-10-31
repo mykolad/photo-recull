@@ -114,6 +114,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public partial string? PickError { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDiscard))]
     public partial bool IsPicking { get; set; }
 
     [ObservableProperty]
@@ -764,7 +765,9 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     // Not while a pick or a scan is running: either would save the cleanup again
     // when it finishes. Not once files were moved or deleted (see CanBeDiscarded).
     public bool CanDiscard => _cleanup is { CanBeDiscarded: true } && !IsActing
-        && (Step is CleanupFlowStep.Range or CleanupFlowStep.Review || (Step == CleanupFlowStep.Scan && IsScanComplete));
+        && (Step is CleanupFlowStep.Range or CleanupFlowStep.Review
+            || (Step == CleanupFlowStep.Pick && !IsPicking)
+            || (Step == CleanupFlowStep.Scan && IsScanComplete));
 
     public bool Discard()
     {

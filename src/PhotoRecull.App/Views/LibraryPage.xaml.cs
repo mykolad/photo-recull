@@ -24,12 +24,25 @@ public sealed partial class LibraryPage : Page
     private void ShowCoverageForSelectedYear() =>
         Coverage.Show(ViewModel.CoverageYear, ViewModel.CoverageSegments, ViewModel.NotCleanedGaps, ViewModel.Today);
 
-    private async void OnDiscardClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    // WinUI allows one open ContentDialog; a quick second click while the first
+    // is opening would otherwise throw.
+    private bool _isConfirmingDiscard;
+
+    private async void OnDiscardClick(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is not LibraryCardViewModel { Cleanup: { } cleanup } card
-            || !await DiscardDialog.ConfirmAsync(XamlRoot, card.RangeLabel))
+        if (_isConfirmingDiscard
+            || (sender as FrameworkElement)?.DataContext is not LibraryCardViewModel { Cleanup: { } cleanup } card)
             return;
-        ViewModel.Discard(cleanup);
+        _isConfirmingDiscard = true;
+        try
+        {
+            if (await DiscardDialog.ConfirmAsync(XamlRoot, card.RangeLabel))
+                ViewModel.Discard(cleanup);
+        }
+        finally
+        {
+            _isConfirmingDiscard = false;
+        }
     }
 
     // Pill and border brushes are looked up once when a card is created, so the

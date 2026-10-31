@@ -422,6 +422,9 @@ public sealed class AppStateDatabase
             freed_bytes     INTEGER NOT NULL);
         CREATE INDEX runs_by_time ON runs (ran_at);
         """,
+        """
+        CREATE INDEX runs_by_cleanup ON runs (cleanup_id);
+        """,
     ];
 
     private static void UpsertCleanup(SqliteTransaction transaction, Cleanup cleanup)
