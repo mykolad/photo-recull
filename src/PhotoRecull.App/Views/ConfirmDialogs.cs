@@ -152,7 +152,11 @@ internal sealed class DeleteDialog
     private readonly ContentDialog _dialog;
     private DeleteChoice _choice = DeleteChoice.Cancel;
 
-    public DeleteDialog(XamlRoot xamlRoot, CleanupFlowViewModel flow, int keptByUserCount)
+    // A #recycle folder on the NAS only shows DSM's Recycle Bin was turned on
+    // once, so a Synology delete is always presented as permanent unless it's on.
+    public DeleteDialog(
+        XamlRoot xamlRoot, CleanupFlowViewModel flow, int keptByUserCount,
+        IReadOnlyDictionary<TargetSettings, string?> dsmRecycleBins)
     {
         var perTarget = flow.CandidatesPerTarget();
         int total = perTarget.Sum(t => t.Count);
@@ -160,10 +164,7 @@ internal sealed class DeleteDialog
         _dialog.SecondaryButtonText = "Stage instead";
         _dialog.CloseButtonText = "Cancel";
 
-        var dsmRecycleBins = perTarget.ToDictionary(t => t.Target, t => CleanupFlowViewModel.DsmRecycleBinFolder(t.Target));
-        var permanentTargets = perTarget
-            .Where(t => !CleanupFlowViewModel.DeletesGoToRecycleBin(t.Target) && dsmRecycleBins[t.Target] is null)
-            .ToList();
+        var permanentTargets = perTarget.Where(t => !CleanupFlowViewModel.DeletesGoToRecycleBin(t.Target)).ToList();
         var content = new StackPanel { Spacing = 12, Width = 560 };
         content.Children.Add(new InfoBar
         {
@@ -171,22 +172,19 @@ internal sealed class DeleteDialog
             IsClosable = false,
             Severity = permanentTargets.Count > 0 ? InfoBarSeverity.Error : InfoBarSeverity.Warning,
             Message = permanentTargets.Count > 0
-                ? $"Deletion on {string.Join(" and ", permanentTargets.Select(t => SyncTargets.DisplayName(t.Target.Kind)))} is permanent and can't be undone. Make sure every photo you kept was picked."
-                    + (permanentTargets.Any(t => t.Target.Kind == TargetKind.SynologyPhotos)
-                        ? " To be able to undo it, first turn on the Recycle Bin for the shared folder in DSM (Control Panel › Shared Folder › Edit)."
-                        : "")
-                : dsmRecycleBins.Values.Any(folder => folder is not null)
-                    ? "Deleted photos go to the Recycle Bin; on Synology Photos, to #recycle on the NAS while DSM's Recycle Bin is on. Make sure every photo you kept was picked."
-                    : "Deleted photos go to the Recycle Bin. Make sure every photo you kept was picked.",
+                ? $"Deleting on {string.Join(" and ", permanentTargets.Select(t => SyncTargets.DisplayName(t.Target.Kind)))} skips the Windows Recycle Bin, so it's permanent unless DSM's Recycle Bin is on for the shared folder. "
+                    + (permanentTargets.Any(t => dsmRecycleBins.GetValueOrDefault(t.Target) is not null)
+                        ? "Its #recycle folder shows it was turned on once; check it still is (Control Panel › Shared Folder › Edit). "
+                        : "To be able to undo it, turn it on first (Control Panel › Shared Folder › Edit). ")
+                    + "Make sure every photo you kept was picked."
+                : "Deleted photos go to the Recycle Bin. Make sure every photo you kept was picked.",
         });
         foreach (var (target, count, bytes) in perTarget)
         {
             bool isPermanent = permanentTargets.Any(t => t.Target == target);
             var where = new TextBlock
             {
-                Text = isPermanent ? "Permanent"
-                    : dsmRecycleBins[target] is not null ? "Goes to #recycle on the NAS"
-                    : "Goes to the Recycle Bin",
+                Text = isPermanent ? "Permanent unless DSM's Recycle Bin is on" : "Goes to the Recycle Bin",
                 FontWeight = isPermanent ? FontWeights.SemiBold : FontWeights.Normal,
                 Foreground = XamlFunctions.ThemeBrush(isPermanent ? "SystemFillColorCriticalBrush" : "TextFillColorPrimaryBrush"),
             };

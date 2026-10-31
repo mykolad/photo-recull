@@ -596,7 +596,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         _lastAction = action;
         _lastStageFolders = stageFolders.ToDictionary();
         _lastFailures = perTarget.SelectMany(r => r.Result.Failures.Select(f => (r.Target, f))).ToList();
-        ShowResult(action, perTarget, stageFolders);
+        var dsmRecycleBins = action == CleanupAction.Deleted
+            ? await DsmRecycleBinFoldersAsync(perTarget.Select(r => r.Target).ToList())
+            : new Dictionary<TargetSettings, string?>();
+        ShowResult(action, perTarget, stageFolders, dsmRecycleBins);
     }
 
     private static FileActionResult DeleteFrom(TargetSettings target, List<PhotoFile> photos) =>
@@ -608,7 +611,20 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     // Synology photos are deleted over the network, past the Windows Recycle
     // Bin; they can only be restored if DSM's Recycle Bin is on for the share.
-    public static string? DsmRecycleBinFolder(TargetSettings target) =>
+    // A #recycle folder there shows it was turned on once, not that it still
+    // is. The NAS is asked off the UI thread, and given up on after a few
+    // seconds: one that dropped off the network would otherwise freeze the app
+    // until the SMB request times out.
+    public static async Task<IReadOnlyDictionary<TargetSettings, string?>> DsmRecycleBinFoldersAsync(
+        IReadOnlyCollection<TargetSettings> targets)
+    {
+        var probe = Task.Run(() => targets.ToDictionary(t => t, DsmRecycleBinFolder));
+        return await Task.WhenAny(probe, Task.Delay(TimeSpan.FromSeconds(3))) == probe
+            ? await probe
+            : targets.ToDictionary(t => t, _ => (string?)null);
+    }
+
+    private static string? DsmRecycleBinFolder(TargetSettings target) =>
         SyncTargets.Create(target) is SynologyPhotosTarget { HasRecycleBin: true } synology ? synology.RecycleBinFolder : null;
 
     [ObservableProperty]
@@ -640,7 +656,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     private void ShowResult(
         CleanupAction action,
         List<(TargetSettings Target, FileActionResult Result)> perTarget,
-        IReadOnlyDictionary<TargetSettings, string> stageFolders)
+        IReadOnlyDictionary<TargetSettings, string> stageFolders,
+        IReadOnlyDictionary<TargetSettings, string?> dsmRecycleBins)
     {
         int succeeded = perTarget.Sum(r => r.Result.SucceededCount);
         int failed = perTarget.Sum(r => r.Result.Failures.Count);
@@ -654,12 +671,12 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         ResultTargets.Clear();
         foreach (var (target, result) in perTarget)
         {
-            var dsmRecycleBin = action == CleanupAction.Deleted ? DsmRecycleBinFolder(target) : null;
+            var dsmRecycleBin = dsmRecycleBins.GetValueOrDefault(target);
             var (location, folderToOpen, openButtonText) = action == CleanupAction.Staged
                 ? (stageFolders[target], stageFolders[target], "Open folder")
                 : DeletesGoToRecycleBin(target) ? ("Moved to the Recycle Bin", null, "Recycle Bin")
-                : dsmRecycleBin is not null ? ("Moved to #recycle on the NAS, if DSM's Recycle Bin is on", dsmRecycleBin, "Open #recycle")
-                : ("Deleted permanently", (string?)null, (string?)null);
+                : dsmRecycleBin is not null ? ("Deleted. If DSM's Recycle Bin is on, they're in #recycle on the NAS", dsmRecycleBin, "Open #recycle")
+                : ("Deleted permanently, unless DSM's Recycle Bin is on", (string?)null, (string?)null);
             ResultTargets.Add(new ResultTargetRow(
                 ShellPage.TargetGlyph(target.Kind), SyncTargets.DisplayName(target.Kind), location,
                 action == CleanupAction.Staged ? "Moved" : "Deleted", result.SucceededCount, result.Failures.Count,

@@ -109,11 +109,17 @@ public class LivePhotoAndVideoTests : IDisposable
     }
 
     [Fact]
-    public void VideoCaptureTime_FallsBackToTheMovieHeader_ReadAsUtc()
+    public void AnIphoneVideoWithoutItsRecordingStart_IsSkipped_RatherThanTimedFromItsEnd()
     {
-        Assert.Equal(new DateTimeOffset(2026, 1, 1, 0, 21, 39, TimeSpan.Zero),
-            PhotoScanner.VideoCaptureTime(appleCreationDate: null, new DateTime(2026, 1, 1, 0, 21, 39, DateTimeKind.Unspecified)));
-        Assert.Null(PhotoScanner.VideoCaptureTime(null, null));
+        QuickTimeTestFile.Write(PathOf("IMG_4721.MOV"), new DateTime(2026, 1, 1, 0, 21, 39),
+            ("com.apple.quicktime.make", "Apple"),
+            ("com.apple.quicktime.model", "iPhone 16 Pro"));
+
+        var video = Assert.Single(PhotoScanner.ScanFolder(_folder));
+
+        Assert.True(video.IsIphone);
+        Assert.Null(video.Timestamp);
+        Assert.Equal([video], PhotoMatcher.Match([], [video]).Skipped);
     }
 
     [Theory]

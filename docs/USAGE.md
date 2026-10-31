@@ -119,7 +119,7 @@ PhotoRecull reads the Synology Photos mobile backup as a network folder; it does
 the Synology API.
 
 - **Folders:** the backup's date folders (`2026\01`, or `2026-01`) are read below the
-  folder you give. Only the months a cleanup's dates can be in are read, with a day's
+  folder you give. Only the months a cleanup's dates can be in are read, with two days'
   margin for time zones, so a month takes seconds rather than a scan of the whole
   library. Synology's own folders (`@eaDir`, `#recycle`, `#snapshot`) are skipped.
 - **Stage folder:** the app stages photos outside the `Photos` folder that Synology Photos

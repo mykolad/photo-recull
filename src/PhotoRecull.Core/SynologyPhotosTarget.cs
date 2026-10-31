@@ -43,13 +43,14 @@ public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
     public bool HasRecycleBin => Directory.Exists(RecycleBinFolder);
 
     // A folder is named after the capture date where the photo was taken, while
-    // the days are in the user's time zone; a day's margin covers the difference.
+    // the days are in the user's time zone. Those can be up to 26 hours apart
+    // (UTC-12 and UTC+14), so two days' margin covers the difference.
     // A folder skipped by mistake is only a photo left alone, never one removed.
     public static List<string> ListPhotoFiles(
         string rootFolder, DateOnly? firstDay, DateOnly? lastDay, CancellationToken cancellationToken = default)
     {
-        var firstDayWithMargin = firstDay?.AddDays(-1);
-        var lastDayWithMargin = lastDay?.AddDays(1);
+        var firstDayWithMargin = firstDay?.AddDays(-2);
+        var lastDayWithMargin = lastDay?.AddDays(2);
         var files = new List<string>();
         var foldersToList = new Stack<(string Path, DateFolder? Dates)>();
         foldersToList.Push((rootFolder, null));

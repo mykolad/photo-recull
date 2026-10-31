@@ -171,7 +171,7 @@ public static class PhotoScanner
         {
             var dirs = ImageMetadataReader.ReadMetadata(path);
             if (dirs.OfType<QuickTimeMetadataHeaderDirectory>().FirstOrDefault() is { } quickTime)
-                return ClassifyVideo(quickTime, dirs.OfType<QuickTimeMovieHeaderDirectory>().FirstOrDefault());
+                return ClassifyVideo(quickTime);
 
             var ifd0 = dirs.OfType<ExifIfd0Directory>().FirstOrDefault();
             var subIfd = dirs.OfType<ExifSubIfdDirectory>().FirstOrDefault();
@@ -193,28 +193,22 @@ public static class PhotoScanner
         }
     }
 
+    // Apple's creation date is when recording started, which is what Google Photos
+    // shows; the reader returns it in local time. The movie header's date isn't
+    // a fallback: it's when the file was written, so a long video's end, which
+    // would match nothing and make a kept video look deleted. Without a start
+    // time the video is skipped and left alone.
     private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source) ClassifyVideo(
-        QuickTimeMetadataHeaderDirectory quickTime, QuickTimeMovieHeaderDirectory? movieHeader)
+        QuickTimeMetadataHeaderDirectory quickTime)
     {
         bool isIphone = IsIphone(
             quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagMake),
             quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagModel));
-        DateTime? appleCreationDate = quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var created)
-            ? created : null;
-        DateTime? movieCreated = movieHeader?.TryGetDateTime(QuickTimeMovieHeaderDirectory.TagCreated, out var written) == true
-            ? written : null;
-        var timestamp = isIphone ? VideoCaptureTime(appleCreationDate, movieCreated) : null;
+        DateTimeOffset? timestamp = isIphone && quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var started)
+            ? new DateTimeOffset(started).ToUniversalTime()
+            : null;
         return (isIphone, timestamp, timestamp.HasValue ? "video" : null);
     }
-
-    // The Apple creation date is when recording started, which is what Google
-    // Photos shows; the movie header's is when the file was written, i.e. when a
-    // long video ended. The metadata reader returns the first in local time and
-    // the second as UTC with an unspecified kind.
-    public static DateTimeOffset? VideoCaptureTime(DateTime? appleCreationDate, DateTime? movieHeaderCreated) =>
-        appleCreationDate is { } started ? new DateTimeOffset(started).ToUniversalTime()
-        : movieHeaderCreated is { } written ? new DateTimeOffset(DateTime.SpecifyKind(written, DateTimeKind.Utc))
-        : null;
 
     /// <summary>
     /// The OneDrive filename encodes UTC time: 20260411_073333208_iOS.heic

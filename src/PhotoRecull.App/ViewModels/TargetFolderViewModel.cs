@@ -110,21 +110,44 @@ public sealed partial class TargetFolderViewModel : ObservableObject
             return null;
         if (Kind == TargetKind.SynologyPhotos)
         {
-            var years = Directory.EnumerateDirectories(folderPath)
-                .Select(Path.GetFileName)
-                .Where(name => name is { Length: 4 } && name.All(char.IsAsciiDigit))
-                .Select(name => int.Parse(name!, CultureInfo.InvariantCulture))
-                .Order()
-                .ToList();
+            // A folder picked one level up (MobileBackup rather than MobileBackup\iPhone)
+            // holds its year folders in a subfolder; the scan reads those too.
+            var years = YearsOfYearFolders(folderPath);
+            var foldersWithYears = new List<string>();
+            if (years.Count == 0)
+            {
+                foreach (var subfolder in Directory.EnumerateDirectories(folderPath))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (Path.GetFileName(subfolder) is ['@' or '#' or '.', ..])
+                        continue;
+                    var subfolderYears = YearsOfYearFolders(subfolder);
+                    years.AddRange(subfolderYears);
+                    if (subfolderYears.Count > 0)
+                        foldersWithYears.Add(Path.GetFileName(subfolder));
+                }
+            }
             if (years.Count > 0)
-                return years.Count == 1 ? $"photos from {years[0]}" : $"photos from {years[0]}–{years[^1]}";
+            {
+                var (first, last) = (years.Min(), years.Max());
+                return (first == last ? $"photos from {first}" : $"photos from {first}–{last}")
+                    + (foldersWithYears.Count > 0 ? $" in {string.Join(", ", foldersWithYears)}" : "");
+            }
         }
-        int count = 0;
+        int fileCount = 0;
         foreach (var _ in Directory.EnumerateFiles(folderPath))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            count++;
+            fileCount++;
         }
-        return $"{count:N0} files";
+        int folderCount = Directory.EnumerateDirectories(folderPath).Count();
+        return folderCount == 0 ? $"{fileCount:N0} files" : $"{fileCount:N0} files, {folderCount:N0} folders";
     }
+
+    private static List<int> YearsOfYearFolders(string folderPath) =>
+        Directory.EnumerateDirectories(folderPath)
+            .Select(Path.GetFileName)
+            .Where(name => name is { Length: 4 } && name.All(char.IsAsciiDigit))
+            .Select(name => int.Parse(name!, CultureInfo.InvariantCulture))
+            .ToList();
 }

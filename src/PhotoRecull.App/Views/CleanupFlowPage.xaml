@@ -714,13 +714,14 @@
         </Grid>
         </ContentControl>
 
-        <!-- Large preview -->
+        <!-- Large preview. Collapsed until there's a review: before the Review step the
+             binding has no source, and the panel would cover the step, with no way to close it. -->
         <Grid
             x:Name="PreviewOverlay"
             TabFocusNavigation="Cycle"
             Grid.RowSpan="2"
             Background="{ThemeResource SmokeFillColorDefaultBrush}"
-            Visibility="{x:Bind ViewModel.Review.IsPreviewOpen, Mode=OneWay}">
+            Visibility="{x:Bind ViewModel.Review.IsPreviewOpen, Mode=OneWay, FallbackValue=Collapsed}">
             <Border
                 Margin="40,24"
                 CornerRadius="8"

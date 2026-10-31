@@ -36,7 +36,7 @@ public class SynologyPhotosTargetTests : IDisposable
     }
 
     [Fact]
-    public void ListPhotoFiles_SkipsDateFoldersAtLeastADayOutsideTheRange()
+    public void ListPhotoFiles_SkipsDateFoldersMoreThanTwoDaysOutsideTheRange()
     {
         CreateFile(@"2026\01\IMG_0001.HEIC");
         CreateFile(@"2026\02\IMG_0002.HEIC");
@@ -46,9 +46,11 @@ public class SynologyPhotosTargetTests : IDisposable
         CreateFile(@"2026-02-15\IMG_0006.HEIC");
         CreateFile(@"2026-03\IMG_0007.HEIC");
         CreateFile(@"Shared album\IMG_0008.HEIC");
+        CreateFile(@"2026\02\11\IMG_0009.HEIC");
+        CreateFile(@"2026\02\10\IMG_0010.HEIC");
 
         Assert.Equal(
-            [@"2026-02-15\IMG_0006.HEIC", @"2026\02\14\IMG_0003.HEIC", @"2026\02\IMG_0002.HEIC", @"Shared album\IMG_0008.HEIC"],
+            [@"2026-02-15\IMG_0006.HEIC", @"2026\02\11\IMG_0009.HEIC", @"2026\02\14\IMG_0003.HEIC", @"2026\02\IMG_0002.HEIC", @"Shared album\IMG_0008.HEIC"],
             ListedRelativePaths(new DateOnly(2026, 2, 13), new DateOnly(2026, 2, 16)));
     }
 
