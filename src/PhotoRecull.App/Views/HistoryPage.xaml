@@ -55,7 +55,8 @@
                                     <Button Content="Open folder" Command="{x:Bind OpenFolderCommand}" Visibility="{x:Bind CanOpenFolder}" />
                                     <Button
                                         Click="OnRemoveClick"
-                                        ToolTipService.ToolTip="Remove from History. No files are touched."
+                                        IsEnabled="{x:Bind CanRemove}"
+                                        ToolTipService.ToolTip="{x:Bind RemoveToolTip}"
                                         AutomationProperties.Name="Remove from History">
                                         <FontIcon Glyph="&#xE74D;" FontSize="14" />
                                     </Button>
