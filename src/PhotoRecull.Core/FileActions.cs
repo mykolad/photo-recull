@@ -124,7 +124,10 @@ public static class FileActions
                 }
                 succeededCount++;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            // A path the file system rejects (ArgumentException, NotSupportedException)
+            // fails that photo, too, rather than ending the run after earlier files
+            // moved, with nothing recorded for them.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
                 failures.Add(new FileFailure(photo, DescribeFailure(ex)));
             }
