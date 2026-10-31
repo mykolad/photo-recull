@@ -131,7 +131,9 @@ public sealed partial class ReviewViewModel : ObservableObject
         foreach (var tile in tiles)
             tile.ShowTimesInUtc = ShowTimesInUtc;
 
-        var tileByPhoto = tiles.ToDictionary(t => t.Photo);
+        // By instance: targets with overlapping folders can each report the same
+        // file, as equal records, and each copy has a tile of its own.
+        var tileByPhoto = tiles.ToDictionary<ReviewTileViewModel, PhotoFile>(t => t.Photo, ReferenceEqualityComparer.Instance);
         var zone = ShowTimesInUtc ? TimeZoneInfo.Utc : TimeZoneInfo.Local;
 
         Days.Clear();

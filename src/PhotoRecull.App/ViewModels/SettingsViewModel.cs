@@ -2,6 +2,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
+using PhotoRecull.Core;
 using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
@@ -12,9 +13,19 @@ public sealed class SettingsViewModel
     {
         var savedTargets = AppServices.Database.LoadSettings().Targets;
         Targets = [.. new[] { TargetKind.OneDrive, TargetKind.SynologyPhotos }
-            .Select(kind => new TargetSettingsRowViewModel(kind, savedTargets.FirstOrDefault(t => t.Kind == kind), SaveTargets))];
+            .Select(kind => new TargetSettingsRowViewModel(
+                kind, savedTargets.FirstOrDefault(t => t.Kind == kind), SaveTargets, OtherTargetOverlapping))];
         RefreshWhichTargetsCanBeTurnedOff();
     }
+
+    // Two targets reading the same folder would list each photo twice, and could
+    // stage or delete one file on behalf of both.
+    private TargetSettings? OtherTargetOverlapping(TargetSettingsRowViewModel row, string folder) =>
+        Targets
+            .Where(other => other != row)
+            .Select(other => other.Saved)
+            .FirstOrDefault(saved => saved is not null
+                && (FileActions.IsSameOrInside(folder, saved.FolderPath) || FileActions.IsSameOrInside(saved.FolderPath, folder)));
 
     public List<TargetSettingsRowViewModel> Targets { get; }
 
@@ -55,10 +66,15 @@ public sealed class SettingsViewModel
 public sealed partial class TargetSettingsRowViewModel : ObservableObject
 {
     private readonly Action<TargetSettingsRowViewModel> _saveTargets;
+    private readonly Func<TargetSettingsRowViewModel, string, TargetSettings?> _otherTargetOverlapping;
+    private TargetSettings? _refusedForOverlapping;
 
-    public TargetSettingsRowViewModel(TargetKind kind, TargetSettings? saved, Action<TargetSettingsRowViewModel> saveTargets)
+    public TargetSettingsRowViewModel(
+        TargetKind kind, TargetSettings? saved, Action<TargetSettingsRowViewModel> saveTargets,
+        Func<TargetSettingsRowViewModel, string, TargetSettings?> otherTargetOverlapping)
     {
         _saveTargets = saveTargets;
+        _otherTargetOverlapping = otherTargetOverlapping;
         Saved = saved;
         Folder = new TargetFolderViewModel(kind, saved?.FolderPath ?? "");
         Folder.PropertyChanged += OnFolderChanged;
@@ -77,6 +93,8 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
     public partial bool CanBeTurnedOff { get; set; }
 
     public string StatusText => !IsUsed ? "Off. New cleanups can't use it."
+        : _refusedForOverlapping is { } other
+            ? $"Not saved: this folder overlaps {SyncTargets.DisplayName(other.Kind)}'s, so its photos would be scanned twice."
         : Saved is null ? "Saved once the folder is found."
         : Saved.FolderPath != Folder.Settings.FolderPath ? $"Still using {Saved.FolderPath} until the new folder is found."
         : "Saved. New cleanups can use it.";
@@ -94,11 +112,20 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
         if (e.PropertyName == nameof(TargetFolderViewModel.IsFolderValid) && Folder.IsFolderValid && IsUsed)
             SaveAs(Folder.Settings);
         else if (e.PropertyName == nameof(TargetFolderViewModel.FolderPath))
+        {
+            _refusedForOverlapping = null;
             OnPropertyChanged(nameof(StatusText));
+        }
     }
 
     private void SaveAs(TargetSettings? target)
     {
+        _refusedForOverlapping = target is null ? null : _otherTargetOverlapping(this, target.FolderPath);
+        if (_refusedForOverlapping is not null)
+        {
+            OnPropertyChanged(nameof(StatusText));
+            return;
+        }
         if (Saved == target)
             return;
         Saved = target;
