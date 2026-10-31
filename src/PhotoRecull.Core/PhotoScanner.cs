@@ -23,6 +23,11 @@ public record PhotoFile(
     // A Live Photo's motion part (IMG_1234.MOV next to IMG_1234.HEIC). Google
     // Photos shows the pair as one item, so it's kept or removed with its photo.
     public string? LivePhotoVideoPath { get; init; }
+
+    // A video's capture time, or EXIF without sub-seconds, is to the second; a
+    // OneDrive file name or EXIF with sub-seconds is to the millisecond, even when
+    // that happens to be .000.
+    public bool TimestampInWholeSeconds { get; init; }
 }
 
 /// <summary>
@@ -46,6 +51,8 @@ public static class PhotoScanner
         var extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
         return StillExtensions.Contains(extension) || VideoExtensions.Contains(extension);
     }
+
+    public static bool IsVideo(string path) => VideoExtensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
 
     public static List<PhotoFile> ScanFolder(
         string folderPath, IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -94,11 +101,12 @@ public static class PhotoScanner
             if (liveVideo is not null)
                 sizeBytes += SizeOrZeroIfGone(liveVideo);
             var fileName = System.IO.Path.GetFileName(file);
-            var (isIphone, timestamp, source) = ClassifyFile(file, fileName);
+            var (isIphone, timestamp, source, inWholeSeconds) = ClassifyFile(file, fileName);
             results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source)
             {
                 SizeBytes = sizeBytes,
                 LivePhotoVideoPath = liveVideo,
+                TimestampInWholeSeconds = inWholeSeconds,
             });
         }
 
@@ -155,7 +163,7 @@ public static class PhotoScanner
         }
     }
 
-    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source) ClassifyFile(
+    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source, bool InWholeSeconds) ClassifyFile(
         string path, string fileName)
     {
         // Fast path: filename matches the iOS upload pattern → definitely iPhone, parse timestamp from name
@@ -163,7 +171,7 @@ public static class PhotoScanner
         if (match.Success)
         {
             var ts = ParseFilenameTimestamp(match);
-            return (true, ts, "filename");
+            return (true, ts, "filename", false);
         }
 
         // Fallback: read EXIF (or a video's QuickTime metadata) to check Make/Model and get timestamp
@@ -177,19 +185,20 @@ public static class PhotoScanner
             var subIfd = dirs.OfType<ExifSubIfdDirectory>().FirstOrDefault();
 
             bool isIphone = IsIphone(ifd0?.GetString(ExifDirectoryBase.TagMake), ifd0?.GetString(ExifDirectoryBase.TagModel));
+            var subSecond = subIfd?.GetString(ExifDirectoryBase.TagSubsecondTimeOriginal);
             DateTimeOffset? timestamp = isIphone && subIfd is not null
                 ? ExifCaptureTime(
                     subIfd.GetString(ExifDirectoryBase.TagDateTimeOriginal),
-                    subIfd.GetString(ExifDirectoryBase.TagSubsecondTimeOriginal),
+                    subSecond,
                     subIfd.GetString(ExifDirectoryBase.TagTimeZoneOriginal))
                 : null;
             string? source = timestamp.HasValue ? "exif" : null;
 
-            return (isIphone, timestamp, source);
+            return (isIphone, timestamp, source, string.IsNullOrEmpty(subSecond));
         }
         catch
         {
-            return (false, null, null);
+            return (false, null, null, false);
         }
     }
 
@@ -198,7 +207,7 @@ public static class PhotoScanner
     // a fallback: it's when the file was written, so a long video's end, which
     // would match nothing and make a kept video look deleted. Without a start
     // time the video is skipped and left alone.
-    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source) ClassifyVideo(
+    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source, bool InWholeSeconds) ClassifyVideo(
         QuickTimeMetadataHeaderDirectory quickTime)
     {
         bool isIphone = IsIphone(
@@ -207,7 +216,7 @@ public static class PhotoScanner
         DateTimeOffset? timestamp = isIphone && quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var started)
             ? new DateTimeOffset(started).ToUniversalTime()
             : null;
-        return (isIphone, timestamp, timestamp.HasValue ? "video" : null);
+        return (isIphone, timestamp, timestamp.HasValue ? "video" : null, true);
     }
 
     /// <summary>

@@ -51,6 +51,16 @@ public class HtmlReportGeneratorTests : IDisposable
         Assert.Matches("""<div class="cover stays">\s*<img src="file:///C:/fake/b.jpg""", stack.Value);
         Assert.Matches("""<div class="cover remove">\s*<img src="file:///C:/fake/c.jpg""", stack.Value);
         Assert.Equal(3, Regex.Matches(stack.Value, """<div class="card """).Count);
+        Assert.Contains("""<span class="count split" title="1 stay, 2 to remove"><span>&#x2713; 1</span>""", stack.Value);
+    }
+
+    [Fact]
+    public void ABurstThatGoesEntirely_CountsItsFramesWithoutASplit()
+    {
+        var html = Render(new MatchResult([], [PhotoAt("b.jpg", 10, 0, 1), PhotoAt("a.jpg", 10, 0, 0)], []));
+
+        Assert.Contains("""<span class="count">&#x2750; 2</span>""", html);
+        Assert.DoesNotContain("count split", html);
     }
 
     [Fact]

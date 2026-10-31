@@ -130,6 +130,23 @@ public class AppStateDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Pick_SavedAgainForgetsThePhotosKeptInThePreviousReview()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));
+        var other = CleanupFor(new(2026, 9, 1), new(2026, 9, 30));
+        database.SavePickWithCleanup(cleanup, [DateTimeOffset.UnixEpoch]);
+        database.SavePickWithCleanup(other, [DateTimeOffset.UnixEpoch]);
+        database.SetPhotoKept(cleanup.Id, @"C:\Camera Roll\IMG_1.HEIC", isKept: true);
+        database.SetPhotoKept(other.Id, @"C:\Camera Roll\IMG_9.HEIC", isKept: true);
+
+        database.SavePickWithCleanup(cleanup, [DateTimeOffset.UnixEpoch.AddDays(1)]);
+
+        Assert.Empty(database.LoadKeptPhotoPaths(cleanup.Id));
+        Assert.Single(database.LoadKeptPhotoPaths(other.Id));
+    }
+
+    [Fact]
     public void Pick_MissingForACleanup_IsNull()
     {
         Assert.Null(new AppStateDatabase(DatabasePath).LoadPick(Guid.NewGuid()));
