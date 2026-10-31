@@ -1,4 +1,5 @@
 using PhotoRecull.Core;
+using PhotoRecull.Core.Library;
 
 namespace PhotoRecull.Tests;
 
@@ -59,6 +60,35 @@ public class FileActionsTests : IDisposable
     public void IsSameOrInside_ComparesWholeFolderNames(string folder, string parent, bool expected)
     {
         Assert.Equal(expected, FileActions.IsSameOrInside(folder, parent));
+    }
+
+    [Fact]
+    public void MoveToStageFolder_ReportsEachPhotoWhereItWent_BeforeTheNextOneMoves()
+    {
+        var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
+        var reported = new List<(RunFile File, bool NextStillInPlace)>();
+
+        FileActions.MoveToStageFolder(photos, _stageFolder, _targetFolder,
+            file => reported.Add((file, File.Exists(photos[1].Path))));
+
+        Assert.Equal(
+            [
+                (new RunFile(photos[0].Path, Path.Combine(_stageFolder, "a.heic"), null, null, true, null, "a.heic".Length), true),
+                (new RunFile(photos[1].Path, Path.Combine(_stageFolder, "b.heic"), null, null, true, null, "b.heic".Length), false),
+            ],
+            reported);
+    }
+
+    [Fact]
+    public void DeletePermanently_ReportsAFailedPhotoWithItsReason()
+    {
+        var missing = new PhotoFile(Path.Combine(_targetFolder, "gone.heic"), "gone.heic",
+            DateTimeOffset.UtcNow, IsIphone: true, TimestampSource: "filename");
+        var reported = new List<RunFile>();
+
+        FileActions.DeletePermanently([missing], reported.Add);
+
+        Assert.Equal([new RunFile(missing.Path, null, null, null, false, "Missing: moved or deleted since the scan", 0)], reported);
     }
 
     [Fact]
