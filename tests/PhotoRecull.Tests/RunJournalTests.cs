@@ -37,7 +37,7 @@ public class RunJournalTests : IDisposable
         var run = RunOf(CleanupAction.Staged, @"C:\_staged");
         long id = _database.StartRun(run);
         Assert.Equal(RunStatus.InProgress, Assert.Single(_database.LoadRunsNewestFirst()).Status);
-        Assert.True(Assert.Single(_database.LoadCleanups()).HasRuns);
+        Assert.True(Assert.Single(_database.LoadCleanups()).HasEverRun);
 
         _database.RecordRunFile(id, Moved("a.heic", 100));
         _database.RecordRunFile(id, Moved("b.heic", 200));
@@ -69,6 +69,22 @@ public class RunJournalTests : IDisposable
         var cleanup = Assert.Single(_database.LoadCleanups());
         Assert.Equal((CleanupState.ReadyToAct, 1, 1, 3_500L), (cleanup.State, cleanup.StagedCount, cleanup.RemovedCount, cleanup.FreedBytes));
         Assert.Equal(0, _database.FinishInterruptedRuns());
+    }
+
+    [Fact]
+    public void RemovingTheLastHistoryEntry_StillDoesntLetACleanupThatRanBeDiscarded()
+    {
+        // A Live Photo's video was staged, then its photo failed: no photo counts.
+        long id = _database.StartRun(RunOf(CleanupAction.Staged, @"C:\_staged"));
+        _database.RecordRunFile(id, new(@"C:\Camera Roll\a.heic", null, @"C:\Camera Roll\a.mov", @"C:\_staged\a.mov", false, "Locked", 300));
+        _database.CompleteRunsWithCleanup(_cleanup, [RunOf(CleanupAction.Staged, @"C:\_staged") with { Id = id, FailedCount = 1 }]);
+
+        _database.RemoveRun(id);
+
+        var cleanup = Assert.Single(_database.LoadCleanups());
+        Assert.True(cleanup.HasEverRun);
+        Assert.False(cleanup.CanBeDiscarded);
+        Assert.False(_database.DiscardCleanup(_cleanup.Id));
     }
 
     [Fact]

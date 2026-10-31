@@ -237,7 +237,7 @@ public class AppStateDatabaseTests : IDisposable
         database.RecordRunsWithCleanup(cleanup, [failedRun]);
 
         var loaded = Assert.Single(database.LoadCleanups());
-        Assert.True(loaded.HasRuns);
+        Assert.True(loaded.HasEverRun);
         Assert.False(loaded.CanBeDiscarded);
         Assert.False(database.DiscardCleanup(cleanup.Id));
         Assert.Equal([failedRun], WithoutIds(database.LoadRunsNewestFirst()));
@@ -257,7 +257,7 @@ public class AppStateDatabaseTests : IDisposable
         {
             StagedCount = staged,
             RemovedCount = removed,
-            HasRuns = hasRuns,
+            HasEverRun = hasRuns,
         };
 
         Assert.Equal(expected, cleanup.CanBeDiscarded);

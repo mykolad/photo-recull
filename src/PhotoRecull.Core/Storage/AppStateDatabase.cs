@@ -83,7 +83,7 @@ public sealed class AppStateDatabase
             SELECT id, from_day, to_day, state, picked_count, picked_at, last_activity_at, targets,
                    earliest_picked_day, latest_picked_day, to_remove_count, kept_by_user_count,
                    staged_count, removed_count, freed_bytes,
-                   EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = cleanups.id)
+                   has_ever_run
             FROM cleanups
             ORDER BY from_day, to_day
             """;
@@ -108,7 +108,7 @@ public sealed class AppStateDatabase
                 StagedCount = reader.GetInt32(12),
                 RemovedCount = reader.GetInt32(13),
                 FreedBytes = reader.GetInt64(14),
-                HasRuns = reader.GetBoolean(15),
+                HasEverRun = reader.GetBoolean(15),
             });
         }
         return cleanups;
@@ -214,7 +214,7 @@ public sealed class AppStateDatabase
             DELETE FROM cleanups
             WHERE id = $cleanupId
               AND state IN ('Picked', 'ReadyToAct') AND staged_count = 0 AND removed_count = 0
-              AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = $cleanupId)
+              AND has_ever_run = 0 AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = $cleanupId)
             """;
         command.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
         return command.ExecuteNonQuery() > 0;
@@ -228,6 +228,13 @@ public sealed class AppStateDatabase
         using var connection = Open();
         using var transaction = connection.BeginTransaction();
         UpsertCleanup(transaction, cleanup);
+        using (var markRun = connection.CreateCommand())
+        {
+            markRun.Transaction = transaction;
+            markRun.CommandText = "UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId";
+            markRun.Parameters.AddWithValue("$cleanupId", cleanup.Id.ToString());
+            markRun.ExecuteNonQuery();
+        }
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
         insert.CommandText = """
@@ -294,6 +301,7 @@ public sealed class AppStateDatabase
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
+            UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId;
             INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, destination,
                               succeeded_count, failed_count, freed_bytes, status)
             VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination, 0, 0, 0, 'InProgress');
@@ -566,6 +574,10 @@ public sealed class AppStateDatabase
             failure_reason    TEXT,
             bytes             INTEGER NOT NULL);
         CREATE INDEX run_files_by_run ON run_files (run_id);
+        """,
+        """
+        ALTER TABLE cleanups ADD COLUMN has_ever_run INTEGER NOT NULL DEFAULT 0;
+        UPDATE cleanups SET has_ever_run = 1 WHERE EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = cleanups.id);
         """,
     ];
 
