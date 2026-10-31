@@ -57,6 +57,11 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     public string FullPath => Photo.Path;
     public string TargetGlyphs => string.Join(" ", Copies.Select(c => ShellPage.TargetGlyph(c.Target.Kind)));
     public string TargetNames => NamesOf(Copies);
+
+    // Where each copy stands, for the target badge's tooltip: a photo can stay on
+    // one target and go from another.
+    public string CopyMarksText => string.Join(Environment.NewLine, Copies.Select(c =>
+        $"{SyncTargets.DisplayName(c.Target.Kind)}: {CopyMarkText(c)}"));
     public bool IsVideo => Thumbnails.IsVideo(Photo.Path);
     public bool CanBeKept => Kind == ReviewTileKind.Candidate;
 
@@ -90,7 +95,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     public long SizeBytes => Photo.SizeBytes;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(KeepButtonText), nameof(Mark), nameof(IsMarkedToRemove), nameof(MarkText), nameof(ThumbnailOpacity), nameof(CopiesText))]
+    [NotifyPropertyChangedFor(nameof(KeepButtonText), nameof(Mark), nameof(IsMarkedToRemove), nameof(MarkText), nameof(ThumbnailOpacity), nameof(CopiesText), nameof(CopyMarksText))]
     public partial bool IsKept { get; set; }
 
     // Read by the tile's Image binding when the tile is first laid out, which is

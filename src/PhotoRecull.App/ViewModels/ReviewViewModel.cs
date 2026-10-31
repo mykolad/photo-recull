@@ -241,7 +241,9 @@ public sealed partial class ReviewViewModel : ObservableObject
         if (!tile.CanBeKept || IsActionRunning)
             return;
         tile.IsKept = !tile.IsKept;
-        foreach (var copy in tile.CandidateCopies)
+        // Undo clears every copy, matched ones too: a copy kept earlier and matched
+        // now would otherwise bring the Keep back if a later scan leaves it unmatched.
+        foreach (var copy in tile.IsKept ? tile.CandidateCopies : tile.Copies)
             AppServices.Database.SetPhotoKept(_cleanup.Id, copy.Photo.Path, tile.IsKept);
         if (_stackOfTile.TryGetValue(tile, out var stack))
         {

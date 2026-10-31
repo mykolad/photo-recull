@@ -572,7 +572,7 @@
                                                                                     HorizontalAlignment="Left"
                                                                                     VerticalAlignment="Bottom"
                                                                                     Background="White"
-                                                                                    ToolTipService.ToolTip="{x:Bind Cover.TargetNames, Mode=OneWay}">
+                                                                                    ToolTipService.ToolTip="{x:Bind Cover.CopyMarksText, Mode=OneWay}">
                                                                                     <FontIcon Glyph="{x:Bind Cover.TargetGlyphs, Mode=OneWay}" FontSize="13" Foreground="Black" />
                                                                                 </Border>
                                                                                 <Border
