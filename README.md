@@ -51,6 +51,17 @@ dotnet run --project src/PhotoRecull.Cli -- --onedrive "<Camera Roll folder>" --
 #    or re-run with --delete (permanent).
 ```
 
+For Synology Photos, point at the mobile backup folder on the NAS instead (File Explorer
+must already be able to open it). Only that month's folders are read:
+
+```bash
+dotnet run --project src/PhotoRecull.Cli -- --target synology --path "\\nas\home\Photos\MobileBackup\iPhone" --from 2026-08 --to 2026-08
+```
+
+Add `--stage "\\nas\home\PhotoRecull staged"` to keep the staged photos on the NAS,
+outside the `Photos` folder that Synology Photos shows. See
+[docs/USAGE.md](docs/USAGE.md#synology-photos).
+
 Work **one month at a time** so the manual pick stays manageable, and prefer
 `--dry-run`/`--stage` over `--delete`.
 
