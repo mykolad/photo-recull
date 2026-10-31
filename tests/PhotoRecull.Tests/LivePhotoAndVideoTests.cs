@@ -97,6 +97,7 @@ public class LivePhotoAndVideoTests : IDisposable
 
         Assert.True(video.IsIphone);
         Assert.Equal("video", video.TimestampSource);
+        Assert.True(video.TimestampInWholeSeconds);
         Assert.Equal(new DateTimeOffset(2025, 12, 31, 23, 40, 50, TimeSpan.Zero), video.Timestamp);
     }
 

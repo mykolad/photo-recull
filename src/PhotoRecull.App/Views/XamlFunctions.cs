@@ -56,6 +56,9 @@ public static class XamlFunctions
 
     public static Thickness ToRemoveOutline(bool isMarkedToRemove) => new(isMarkedToRemove ? 2 : 0);
 
+    public static Brush StackBackCardBorder(bool isMarkedToRemove) =>
+        ThemeBrush(isMarkedToRemove ? "SystemFillColorCriticalBrush" : "CardBackgroundFillColorDefaultBrush");
+
     public static Visibility ShowsKeepButton(bool isBurst, bool canBeKept) =>
         !isBurst && canBeKept ? Visibility.Visible : Visibility.Collapsed;
 

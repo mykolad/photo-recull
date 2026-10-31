@@ -275,6 +275,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             EarliestPickedDay = earliest,
             LatestPickedDay = latest,
             ToRemoveCount = null,
+            KeptByUserCount = 0,
         };
 
         try
@@ -530,8 +531,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     public IReadOnlyList<(TargetSettings Target, int Count, long Bytes)> CandidatesPerTarget() =>
         Review?.CandidatesToActOn
-            .GroupBy(t => t.Target)
-            .Select(g => (g.Key, g.Count(), g.Sum(t => t.SizeBytes)))
+            .GroupBy(c => c.Target)
+            .Select(g => (g.Key, g.Count(), g.Sum(c => c.Photo.SizeBytes)))
             .ToList() ?? [];
 
     private CleanupAction _lastAction;

@@ -541,8 +541,8 @@
                                                                                 Margin="8,0,0,8"
                                                                                 CornerRadius="4"
                                                                                 Background="Black"
-                                                                                BorderBrush="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                                                                BorderThickness="1"
+                                                                                BorderBrush="{x:Bind views:XamlFunctions.StackBackCardBorder(FrameBehindCover.IsMarkedToRemove), Mode=OneWay}"
+                                                                                BorderThickness="{x:Bind views:XamlFunctions.ToRemoveOutline(FrameBehindCover.IsMarkedToRemove), Mode=OneWay}"
                                                                                 Visibility="{x:Bind IsBurst}">
                                                                                 <Image Source="{x:Bind FrameBehindCover.Thumbnail, Mode=OneWay}" Stretch="UniformToFill" Opacity="0.55" />
                                                                             </Grid>
@@ -577,14 +577,15 @@
                                                                                 </Border>
                                                                                 <Border
                                                                                     Margin="6"
-                                                                                    Width="22"
+                                                                                    MinWidth="22"
                                                                                     Height="22"
+                                                                                    Padding="4,0"
                                                                                     CornerRadius="4"
                                                                                     HorizontalAlignment="Left"
                                                                                     VerticalAlignment="Bottom"
                                                                                     Background="White"
-                                                                                    ToolTipService.ToolTip="{x:Bind Cover.TargetName, Mode=OneWay}">
-                                                                                    <FontIcon Glyph="{x:Bind Cover.TargetGlyph, Mode=OneWay}" FontSize="13" Foreground="Black" />
+                                                                                    ToolTipService.ToolTip="{x:Bind Cover.CopyMarksText, Mode=OneWay}">
+                                                                                    <FontIcon Glyph="{x:Bind Cover.TargetGlyphs, Mode=OneWay}" FontSize="13" Foreground="Black" />
                                                                                 </Border>
                                                                                 <Border
                                                                                     Margin="6"
@@ -603,10 +604,28 @@
                                                                                     HorizontalAlignment="Right"
                                                                                     VerticalAlignment="Bottom"
                                                                                     Background="#99000000"
-                                                                                    Visibility="{x:Bind IsBurst}">
+                                                                                    Visibility="{x:Bind ShowsFrameCount, Mode=OneWay}">
                                                                                     <StackPanel Orientation="Horizontal" Spacing="4">
                                                                                         <FontIcon Glyph="&#xE8C8;" FontSize="11" Foreground="White" />
                                                                                         <TextBlock Text="{x:Bind FrameCountText}" FontSize="11" Foreground="White" />
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                                <!-- A burst with frames that stay and frames that go shows both counts, so the cover that stays doesn't read as the whole burst. -->
+                                                                                <Border
+                                                                                    Margin="6"
+                                                                                    CornerRadius="4"
+                                                                                    HorizontalAlignment="Right"
+                                                                                    VerticalAlignment="Bottom"
+                                                                                    Visibility="{x:Bind IsMixedBurst, Mode=OneWay}">
+                                                                                    <StackPanel Orientation="Horizontal">
+                                                                                        <StackPanel Orientation="Horizontal" Spacing="3" Padding="6,2" Background="#99000000" ToolTipService.ToolTip="Stay">
+                                                                                            <FontIcon Glyph="&#xE73E;" FontSize="11" Foreground="White" />
+                                                                                            <TextBlock Text="{x:Bind StayingCountText, Mode=OneWay}" FontSize="11" Foreground="White" />
+                                                                                        </StackPanel>
+                                                                                        <StackPanel Orientation="Horizontal" Spacing="3" Padding="6,2" Background="{ThemeResource SystemFillColorCriticalBrush}" ToolTipService.ToolTip="To remove">
+                                                                                            <FontIcon Glyph="&#xE74D;" FontSize="11" Foreground="White" />
+                                                                                            <TextBlock Text="{x:Bind ToRemoveCountText, Mode=OneWay}" FontSize="11" Foreground="White" />
+                                                                                        </StackPanel>
                                                                                     </StackPanel>
                                                                                 </Border>
                                                                             </Grid>
@@ -819,8 +838,8 @@
                                 <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.BurstPositionText, Mode=OneWay}" />
                             </StackPanel>
                             <StackPanel>
-                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.TargetName, Mode=OneWay}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
-                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.FullPath, Mode=OneWay}" TextWrapping="Wrap" FontSize="12" />
+                                <TextBlock Text="Files" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.Review.PreviewTile.CopiesText, Mode=OneWay}" TextWrapping="Wrap" FontSize="12" />
                             </StackPanel>
                         </StackPanel>
                         <StackPanel Grid.Row="2" Spacing="8">
