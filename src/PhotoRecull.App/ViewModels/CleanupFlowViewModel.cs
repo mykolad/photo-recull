@@ -557,12 +557,14 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         List<(TargetSettings Target, PhotoFile Photo)> photos)
     {
         IsActing = true;
+        AppServices.IsRunInProgress = true;
         try
         {
             await ActAndShowResultAsync(action, stageFolders, photos);
         }
         finally
         {
+            AppServices.IsRunInProgress = false;
             IsActing = false;
         }
     }
@@ -572,22 +574,32 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         List<(TargetSettings Target, PhotoFile Photo)> photos)
     {
         var ranAt = DateTimeOffset.Now;
+        // Each target's run is saved before its first file and each photo as it's
+        // done, so a crash or power loss still leaves a record (finished at the
+        // next start) of what moved or was deleted.
         var perTarget = await Task.Run(() => photos
             .GroupBy(p => p.Target)
             .Select(g =>
             {
                 var targetPhotos = g.Select(p => p.Photo).ToList();
+                var started = new CleanupRun(_cleanup!.Id, ranAt, action, g.Key,
+                    action == CleanupAction.Staged ? stageFolders[g.Key] : null, 0, 0, 0);
+                long runId = AppServices.Database.StartRun(started);
+                void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file);
                 var result = action == CleanupAction.Staged
-                    ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key], g.Key.FolderPath)
-                    : DeleteFrom(g.Key, targetPhotos);
-                return (Target: g.Key, Result: result);
+                    ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key], g.Key.FolderPath, Record)
+                    : DeleteFrom(g.Key, targetPhotos, Record);
+                return (Target: g.Key, Result: result, Run: started with
+                {
+                    Id = runId,
+                    SucceededCount = result.SucceededCount,
+                    FailedCount = result.Failures.Count,
+                    FreedBytes = action == CleanupAction.Deleted ? result.SucceededBytes : 0,
+                });
             })
             .ToList());
 
-        var runs = perTarget.Select(r => new CleanupRun(_cleanup!.Id, ranAt, action, r.Target,
-            action == CleanupAction.Staged ? stageFolders[r.Target] : null,
-            r.Result.SucceededCount, r.Result.Failures.Count,
-            action == CleanupAction.Deleted ? r.Result.SucceededBytes : 0)).ToList();
+        var runs = perTarget.Select(r => r.Run).ToList();
         int succeeded = runs.Sum(r => r.SucceededCount);
 
         int failed = runs.Sum(r => r.FailedCount);
@@ -610,7 +622,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             };
         }
         _cleanup = _cleanup! with { HasRuns = true };
-        AppServices.Database.RecordRunsWithCleanup(_cleanup, runs);
+        AppServices.Database.CompleteRunsWithCleanup(_cleanup, runs);
 
         _lastAction = action;
         _lastStageFolders = stageFolders.ToDictionary();
@@ -618,13 +630,13 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         var dsmRecycleBins = action == CleanupAction.Deleted
             ? await DsmRecycleBinFoldersAsync(perTarget.Select(r => r.Target).ToList())
             : new Dictionary<TargetSettings, string?>();
-        ShowResult(action, perTarget, stageFolders, dsmRecycleBins);
+        ShowResult(action, perTarget.Select(r => (r.Target, r.Result)).ToList(), stageFolders, dsmRecycleBins);
     }
 
-    private static FileActionResult DeleteFrom(TargetSettings target, List<PhotoFile> photos) =>
+    private static FileActionResult DeleteFrom(TargetSettings target, List<PhotoFile> photos, Action<RunFile> onPhotoDone) =>
         DeletesGoToRecycleBin(target)
-            ? FileActions.MoveToRecycleBin(photos)
-            : FileActions.DeletePermanently(photos);
+            ? FileActions.MoveToRecycleBin(photos, onPhotoDone)
+            : FileActions.DeletePermanently(photos, onPhotoDone);
 
     public static bool DeletesGoToRecycleBin(TargetSettings target) => target.Kind == TargetKind.OneDrive;
 

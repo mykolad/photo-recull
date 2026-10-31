@@ -261,7 +261,7 @@ public sealed class AppStateDatabase
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT cleanup_id, ran_at, action, target_kind, target_folder, destination,
-                   succeeded_count, failed_count, freed_bytes
+                   succeeded_count, failed_count, freed_bytes, id, status
             FROM runs ORDER BY ran_at DESC, id DESC
             """;
         using var reader = command.ExecuteReader();
@@ -276,10 +276,138 @@ public sealed class AppStateDatabase
                 reader.IsDBNull(5) ? null : reader.GetString(5),
                 reader.GetInt32(6),
                 reader.GetInt32(7),
-                reader.GetInt64(8)));
+                reader.GetInt64(8))
+            {
+                Id = reader.GetInt64(9),
+                Status = Enum.Parse<RunStatus>(reader.GetString(10)),
+            });
         }
         return runs;
     }
+
+    // ------------------------------------------------------------------ the run log, written as a run goes
+
+    // Saved before the first file is touched. Counts start at zero; the photos'
+    // outcomes follow one by one, and CompleteRunsWithCleanup sums them up.
+    public long StartRun(CleanupRun run)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, destination,
+                              succeeded_count, failed_count, freed_bytes, status)
+            VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination, 0, 0, 0, 'InProgress');
+            SELECT last_insert_rowid();
+            """;
+        command.Parameters.AddWithValue("$cleanupId", run.CleanupId.ToString());
+        command.Parameters.AddWithValue("$ranAt", run.RanAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$action", run.Action.ToString());
+        command.Parameters.AddWithValue("$targetKind", run.Target.Kind.ToString());
+        command.Parameters.AddWithValue("$targetFolder", run.Target.FolderPath);
+        command.Parameters.AddWithValue("$destination", (object?)run.Destination ?? DBNull.Value);
+        return (long)command.ExecuteScalar()!;
+    }
+
+    // Each photo is saved as soon as it's done, so a crash loses at most the one
+    // being moved at that moment.
+    public void RecordRunFile(long runId, RunFile file) =>
+        Execute("""
+            INSERT INTO run_files (run_id, path, destination, video_path, video_destination, succeeded, failure_reason, bytes)
+            VALUES ($runId, $path, $destination, $videoPath, $videoDestination, $succeeded, $reason, $bytes)
+            """,
+            ("$runId", runId), ("$path", file.Path), ("$destination", (object?)file.Destination ?? DBNull.Value),
+            ("$videoPath", (object?)file.VideoPath ?? DBNull.Value), ("$videoDestination", (object?)file.VideoDestination ?? DBNull.Value),
+            ("$succeeded", file.Succeeded ? 1 : 0), ("$reason", (object?)file.FailureReason ?? DBNull.Value), ("$bytes", file.Bytes));
+
+    public List<RunFile> LoadRunFiles(long runId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT path, destination, video_path, video_destination, succeeded, failure_reason, bytes
+            FROM run_files WHERE run_id = $runId ORDER BY rowid
+            """;
+        command.Parameters.AddWithValue("$runId", runId);
+        using var reader = command.ExecuteReader();
+        var files = new List<RunFile>();
+        while (reader.Read())
+        {
+            files.Add(new RunFile(
+                reader.GetString(0),
+                reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.GetBoolean(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetInt64(6)));
+        }
+        return files;
+    }
+
+    // The runs' totals and the cleanup's new state (Staged or Done, counts) are
+    // saved together, as one step.
+    public void CompleteRunsWithCleanup(Cleanup cleanup, IReadOnlyCollection<CleanupRun> runs)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        UpsertCleanup(transaction, cleanup);
+        using var update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = """
+            UPDATE runs SET succeeded_count = $succeeded, failed_count = $failed, freed_bytes = $freed, status = 'Complete'
+            WHERE id = $id
+            """;
+        foreach (var run in runs)
+        {
+            update.Parameters.Clear();
+            update.Parameters.AddWithValue("$id", run.Id);
+            update.Parameters.AddWithValue("$succeeded", run.SucceededCount);
+            update.Parameters.AddWithValue("$failed", run.FailedCount);
+            update.Parameters.AddWithValue("$freed", run.FreedBytes);
+            update.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+
+    // At startup, a run still in progress was cut off by a crash or power loss
+    // (only one PhotoRecull runs per data folder). Its totals come from the photos
+    // it recorded, and its cleanup's counts take them in; the cleanup stays as it
+    // was (Ready to act), so the rest can be done when it's opened again.
+    // Returns how many runs were interrupted.
+    public int FinishInterruptedRuns()
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            UPDATE runs SET
+                succeeded_count = (SELECT COALESCE(SUM(succeeded), 0) FROM run_files WHERE run_id = runs.id),
+                failed_count    = (SELECT COUNT(*) - COALESCE(SUM(succeeded), 0) FROM run_files WHERE run_id = runs.id),
+                freed_bytes     = CASE action WHEN 'Deleted'
+                                  THEN (SELECT COALESCE(SUM(bytes), 0) FROM run_files WHERE run_id = runs.id) ELSE 0 END,
+                status = 'Interrupting'
+            WHERE status = 'InProgress';
+
+            UPDATE cleanups SET
+                staged_count  = staged_count  + (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting' AND action = 'Staged'),
+                removed_count = removed_count + (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting' AND action = 'Deleted'),
+                freed_bytes   = freed_bytes   + (SELECT COALESCE(SUM(freed_bytes), 0) FROM runs
+                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting')
+            WHERE id IN (SELECT cleanup_id FROM runs WHERE status = 'Interrupting');
+
+            UPDATE runs SET status = 'Interrupted' WHERE status = 'Interrupting';
+            SELECT changes();
+            """;
+        int interrupted = Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        transaction.Commit();
+        return interrupted;
+    }
+
+    // Forgets a run in History: only the record goes, never any file.
+    public void RemoveRun(long runId) => Execute("DELETE FROM runs WHERE id = $id", ("$id", runId));
 
     // ------------------------------------------------------------------ key/value used by the Google token store
 
@@ -424,6 +552,20 @@ public sealed class AppStateDatabase
         """,
         """
         CREATE INDEX runs_by_cleanup ON runs (cleanup_id);
+        """,
+        """
+        ALTER TABLE runs ADD COLUMN status TEXT NOT NULL DEFAULT 'Complete';
+
+        CREATE TABLE run_files (
+            run_id            INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+            path              TEXT NOT NULL,
+            destination       TEXT,
+            video_path        TEXT,
+            video_destination TEXT,
+            succeeded         INTEGER NOT NULL,
+            failure_reason    TEXT,
+            bytes             INTEGER NOT NULL);
+        CREATE INDEX run_files_by_run ON run_files (run_id);
         """,
     ];
 
