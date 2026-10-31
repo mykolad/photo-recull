@@ -148,12 +148,9 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                     // running the cleanup again won't offer it, even if this is cut off.
                     var stillOfVideo = targetPhotos.Where(p => p.OriginalStillPath is not null)
                         .ToDictionary(p => p.StagedPath, p => p.OriginalStillPath!, StringComparer.OrdinalIgnoreCase);
-                    void Record(RunFile file)
-                    {
-                        AppServices.Database.RecordRunFile(runId, file, keptFor: action == CleanupAction.MovedBack ? _cleanup.Id : null);
-                        if (action == CleanupAction.MovedBack && file.Succeeded && stillOfVideo.TryGetValue(file.Path, out var still))
-                            AppServices.Database.SetPhotoKept(_cleanup.Id, still, isKept: true);
-                    }
+                    void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file,
+                        keptFor: action == CleanupAction.MovedBack ? _cleanup.Id : null,
+                        alsoKept: stillOfVideo.GetValueOrDefault(file.Path));
                     var result = action == CleanupAction.MovedBack
                         ? FileActions.MoveBack(targetPhotos, Record)
                         : Delete(targetPhotos, toRecycleBin, Record);

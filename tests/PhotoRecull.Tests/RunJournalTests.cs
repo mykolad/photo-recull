@@ -92,12 +92,16 @@ public class RunJournalTests : IDisposable
         long id = _database.StartRun(RunOf(CleanupAction.MovedBack, @"C:\Camera Roll"));
         _database.RecordRunFile(id, new(@"C:\_staged\a.heic", @"C:\Camera Roll\a.heic", null, null, true, null, 100), keptFor: _cleanup.Id);
         _database.RecordRunFile(id, new(@"C:\_staged\b.heic", null, null, null, false, "Locked", 0), keptFor: _cleanup.Id);
+        // A Live Photo's video moved back on its own keeps its still too.
+        _database.RecordRunFile(id, new(@"C:\_staged\c.mov", @"C:\Camera Roll\c.mov", null, null, true, null, 50),
+            keptFor: _cleanup.Id, alsoKept: @"C:\Camera Roll\c.heic");
 
         _database.FinishInterruptedRuns();
 
-        Assert.Equal([@"C:\Camera Roll\a.heic"], _database.LoadKeptPhotoPaths(_cleanup.Id));
+        Assert.Equal([@"C:\Camera Roll\a.heic", @"C:\Camera Roll\c.heic", @"C:\Camera Roll\c.mov"],
+            _database.LoadKeptPhotoPaths(_cleanup.Id).Order());
         var cleanup = Assert.Single(_database.LoadCleanups());
-        Assert.Equal((1, (int?)3), (cleanup.KeptByUserCount, cleanup.ToRemoveCount));
+        Assert.Equal((2, (int?)3), (cleanup.KeptByUserCount, cleanup.ToRemoveCount));
     }
 
     [Fact]

@@ -326,8 +326,9 @@ public sealed class AppStateDatabase
 
     // Each photo is saved as soon as it's done, so a crash loses at most the one
     // being moved at that moment. keptFor marks a photo that went back (to where
-    // file.Destination says) as kept in that cleanup, in the same transaction.
-    public void RecordRunFile(long runId, RunFile file, Guid? keptFor = null)
+    // file.Destination says) as kept in that cleanup, in the same transaction, with
+    // alsoKept: the still a Live Photo's video belongs to, when only the video went back.
+    public void RecordRunFile(long runId, RunFile file, Guid? keptFor = null, string? alsoKept = null)
     {
         using var connection = Open();
         using var transaction = connection.BeginTransaction();
@@ -350,13 +351,16 @@ public sealed class AppStateDatabase
         }
         if (keptFor is { } cleanupId && file.Succeeded && file.Destination is { } keptPath)
         {
-            using var keep = connection.CreateCommand();
-            keep.Transaction = transaction;
-            keep.CommandText = "INSERT OR IGNORE INTO kept_photos (cleanup_id, path_key, file_path) VALUES ($cleanupId, $key, $path)";
-            keep.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
-            keep.Parameters.AddWithValue("$key", keptPath.ToUpperInvariant());
-            keep.Parameters.AddWithValue("$path", keptPath);
-            keep.ExecuteNonQuery();
+            foreach (var path in alsoKept is null ? [keptPath] : new[] { keptPath, alsoKept })
+            {
+                using var keep = connection.CreateCommand();
+                keep.Transaction = transaction;
+                keep.CommandText = "INSERT OR IGNORE INTO kept_photos (cleanup_id, path_key, file_path) VALUES ($cleanupId, $key, $path)";
+                keep.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
+                keep.Parameters.AddWithValue("$key", path.ToUpperInvariant());
+                keep.Parameters.AddWithValue("$path", path);
+                keep.ExecuteNonQuery();
+            }
         }
         transaction.Commit();
     }
