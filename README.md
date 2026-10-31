@@ -69,6 +69,7 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 
 - **[docs/SETUP.md](docs/SETUP.md)** — Google Cloud / OAuth setup
 - **[docs/USAGE.md](docs/USAGE.md)** — full command-line reference and workflows
+- **[docs/STORE.md](docs/STORE.md)** — packaging and publishing the Windows app to the Microsoft Store
 - **[Website](https://mykolad.github.io/photo-recull/)**, with the
   [privacy policy](https://mykolad.github.io/photo-recull/privacy) and
   [terms of service](https://mykolad.github.io/photo-recull/terms)

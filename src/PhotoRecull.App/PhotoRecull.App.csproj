@@ -10,7 +10,7 @@
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
-    <!-- Unpackaged for now so `dotnet run` works; MSIX packaging for the Store comes later. -->
+    <!-- Unpackaged, so `dotnet run` works; Store builds package it (below). -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <Nullable>enable</Nullable>
@@ -35,6 +35,28 @@
 
   <ItemGroup>
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    Microsoft Store package: build with -p:PhotoRecullPackage=true (see docs/STORE.md).
+    The Store signs what's uploaded, so the package isn't signed here.
+  -->
+  <PropertyGroup Condition="'$(PhotoRecullPackage)' == 'true'">
+    <WindowsPackageType>MSIX</WindowsPackageType>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <!-- A plain .msix, which Partner Center accepts; the .msixupload wrapper needs Visual Studio's MSBuild. -->
+    <UapAppxPackageBuildMode>SideloadOnly</UapAppxPackageBuildMode>
+    <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
+    <AppxBundle>Never</AppxBundle>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxPackageDir>$(MSBuildThisFileDirectory)..\..\artifacts\store\</AppxPackageDir>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(PhotoRecullPackage)' == 'true'">
+    <AppxManifest Include="Package.appxmanifest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(PhotoRecullPackage)' != 'true'">
+    <None Remove="Package.appxmanifest" />
   </ItemGroup>
 
   <ItemGroup>

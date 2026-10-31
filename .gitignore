@@ -17,6 +17,9 @@ token_store_picker/
 ## Staging folders (--stage)
 _staged*/
 
+## Store packages (-p:PhotoRecullPackage=true)
+/artifacts/
+
 ## VS / Rider
 .vs/
 .idea/
