@@ -82,7 +82,8 @@ public sealed class AppStateDatabase
         command.CommandText = """
             SELECT id, from_day, to_day, state, picked_count, picked_at, last_activity_at, targets,
                    earliest_picked_day, latest_picked_day, to_remove_count, kept_by_user_count,
-                   staged_count, removed_count, freed_bytes
+                   staged_count, removed_count, freed_bytes,
+                   EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = cleanups.id)
             FROM cleanups
             ORDER BY from_day, to_day
             """;
@@ -107,6 +108,7 @@ public sealed class AppStateDatabase
                 StagedCount = reader.GetInt32(12),
                 RemovedCount = reader.GetInt32(13),
                 FreedBytes = reader.GetInt64(14),
+                HasRuns = reader.GetBoolean(15),
             });
         }
         return cleanups;
@@ -204,6 +206,24 @@ public sealed class AppStateDatabase
                 ? "INSERT OR IGNORE INTO kept_photos (cleanup_id, path_key, file_path) VALUES ($cleanupId, $key, $path)"
                 : "DELETE FROM kept_photos WHERE cleanup_id = $cleanupId AND path_key = $key",
             ("$cleanupId", cleanupId.ToString()), ("$key", filePath.ToUpperInvariant()), ("$path", filePath));
+
+    // Forgets a cleanup with its pick and the photos kept in it; files are never
+    // touched. Checked again here, against what's saved, so a screen opened before
+    // a stage or delete can't discard a cleanup that has run one since: its runs
+    // stay in History. Returns whether it was discarded.
+    public bool DiscardCleanup(Guid cleanupId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM cleanups
+            WHERE id = $cleanupId
+              AND state IN ('Picked', 'ReadyToAct') AND staged_count = 0 AND removed_count = 0
+              AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = $cleanupId)
+            """;
+        command.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
+        return command.ExecuteNonQuery() > 0;
+    }
 
     // ------------------------------------------------------------------ stage and delete runs
 
@@ -406,6 +426,9 @@ public sealed class AppStateDatabase
             failed_count    INTEGER NOT NULL,
             freed_bytes     INTEGER NOT NULL);
         CREATE INDEX runs_by_time ON runs (ran_at);
+        """,
+        """
+        CREATE INDEX runs_by_cleanup ON runs (cleanup_id);
         """,
     ];
 

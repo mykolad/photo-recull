@@ -77,6 +77,8 @@ public static class XamlFunctions
 
     public static bool Not(bool value) => !value;
 
+    public static string DiscardLabel(string rangeLabel) => $"Discard {rangeLabel}";
+
     public static Microsoft.UI.Xaml.Controls.InfoBarSeverity ResultSeverity(bool hasFailures) =>
         hasFailures ? Microsoft.UI.Xaml.Controls.InfoBarSeverity.Warning : Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success;
 

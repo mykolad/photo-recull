@@ -51,7 +51,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public string SignInBrowserName { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPickStep), nameof(IsRangeStep), nameof(IsScanStep), nameof(IsReviewStep), nameof(IsResultStep))]
+    [NotifyPropertyChangedFor(nameof(IsPickStep), nameof(IsRangeStep), nameof(IsScanStep), nameof(IsReviewStep), nameof(IsResultStep), nameof(CanDiscard))]
     public partial CleanupFlowStep Step { get; set; }
 
     public bool IsPickStep => Step == CleanupFlowStep.Pick;
@@ -114,6 +114,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public partial string? PickError { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDiscard))]
     public partial bool IsPicking { get; set; }
 
     [ObservableProperty]
@@ -417,7 +418,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public ObservableCollection<TargetScanRowViewModel> ScanRows { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ScanTitle))]
+    [NotifyPropertyChangedFor(nameof(ScanTitle), nameof(CanDiscard))]
     public partial bool IsScanComplete { get; set; }
 
     [ObservableProperty]
@@ -609,7 +610,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                 LastActivityAt = ranAt,
             };
         }
-        AppServices.Database.RecordRunsWithCleanup(_cleanup!, runs);
+        _cleanup = _cleanup! with { HasRuns = true };
+        AppServices.Database.RecordRunsWithCleanup(_cleanup, runs);
 
         _lastAction = action;
         _lastStageFolders = stageFolders.ToDictionary();
@@ -671,6 +673,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         if (Review is not null)
             Review.IsActionRunning = value;
         ShellPage.Current?.SetNavigationLocked(value);
+        OnPropertyChanged(nameof(CanDiscard));
     }
 
     public ObservableCollection<ResultTargetRow> ResultTargets { get; } = [];
@@ -760,6 +763,19 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         BackToLibraryRequested?.Invoke(this, EventArgs.Empty);
     }
 
+    // Not while a pick or a scan is running: either would save the cleanup again
+    // when it finishes. Not once files were moved or deleted (see CanBeDiscarded).
+    public bool CanDiscard => _cleanup is { CanBeDiscarded: true } && !IsActing
+        && (Step is CleanupFlowStep.Range or CleanupFlowStep.Review
+            || (Step == CleanupFlowStep.Pick && !IsPicking)
+            || (Step == CleanupFlowStep.Scan && IsScanComplete));
+
+    public bool Discard()
+    {
+        CancelRunningWork();
+        return AppServices.Database.DiscardCleanup(_cleanup!.Id);
+    }
+
     public void CancelRunningWork()
     {
         _pickCancellation?.Cancel();
@@ -772,6 +788,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(RangeDaysLine));
+        OnPropertyChanged(nameof(CanDiscard));
         TitleChanged?.Invoke(this, EventArgs.Empty);
     }
 
