@@ -51,7 +51,7 @@ public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupR
     }.OfType<string>());
 
     public string WhereText => Run.Action == CleanupAction.Staged ? $"Moved to {Run.Destination}"
-        : CleanupFlowViewModel.DeletesGoToRecycleBin(Run.Target) ? "Moved to the Recycle Bin"
+        : Run.WentToRecycleBin ?? CleanupFlowViewModel.DeletesGoToRecycleBin(Run.Target) ? "Moved to the Recycle Bin"
         : "Deleted on the NAS (to #recycle if DSM's Recycle Bin was on)";
 
     public bool IsInterrupted => Run.Status == RunStatus.Interrupted;

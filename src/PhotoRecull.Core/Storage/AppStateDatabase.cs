@@ -268,7 +268,7 @@ public sealed class AppStateDatabase
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT cleanup_id, ran_at, action, target_kind, target_folder, destination,
-                   succeeded_count, failed_count, freed_bytes, id, status
+                   succeeded_count, failed_count, freed_bytes, id, status, photos_recorded, went_to_recycle_bin
             FROM runs ORDER BY ran_at DESC, id DESC
             """;
         using var reader = command.ExecuteReader();
@@ -287,6 +287,8 @@ public sealed class AppStateDatabase
             {
                 Id = reader.GetInt64(9),
                 Status = Enum.Parse<RunStatus>(reader.GetString(10)),
+                PhotosRecorded = reader.GetBoolean(11),
+                WentToRecycleBin = reader.IsDBNull(12) ? null : reader.GetBoolean(12),
             });
         }
         return runs;
@@ -303,8 +305,8 @@ public sealed class AppStateDatabase
         command.CommandText = """
             UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId;
             INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, destination,
-                              succeeded_count, failed_count, freed_bytes, status)
-            VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination, 0, 0, 0, 'InProgress');
+                              succeeded_count, failed_count, freed_bytes, status, photos_recorded, went_to_recycle_bin)
+            VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination, 0, 0, 0, 'InProgress', 1, $recycled);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("$cleanupId", run.CleanupId.ToString());
@@ -312,6 +314,7 @@ public sealed class AppStateDatabase
         command.Parameters.AddWithValue("$action", run.Action.ToString());
         command.Parameters.AddWithValue("$targetKind", run.Target.Kind.ToString());
         command.Parameters.AddWithValue("$targetFolder", run.Target.FolderPath);
+        command.Parameters.AddWithValue("$recycled", run.WentToRecycleBin is { } recycled ? (object)(recycled ? 1 : 0) : DBNull.Value);
         command.Parameters.AddWithValue("$destination", (object?)run.Destination ?? DBNull.Value);
         return (long)command.ExecuteScalar()!;
     }
@@ -403,7 +406,10 @@ public sealed class AppStateDatabase
                 removed_count = removed_count + (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
                                                  WHERE cleanup_id = cleanups.id AND status = 'Interrupting' AND action = 'Deleted'),
                 freed_bytes   = freed_bytes   + (SELECT COALESCE(SUM(freed_bytes), 0) FROM runs
-                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting')
+                                                 WHERE cleanup_id = cleanups.id AND status = 'Interrupting'),
+                to_remove_count = CASE WHEN to_remove_count IS NULL THEN NULL ELSE MAX(0, to_remove_count
+                                  - (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                     WHERE cleanup_id = cleanups.id AND status = 'Interrupting')) END
             WHERE id IN (SELECT cleanup_id FROM runs WHERE status = 'Interrupting');
 
             UPDATE runs SET status = 'Interrupted' WHERE status = 'Interrupting';
@@ -563,6 +569,10 @@ public sealed class AppStateDatabase
         """,
         """
         ALTER TABLE runs ADD COLUMN status TEXT NOT NULL DEFAULT 'Complete';
+        -- Runs saved before photos were recorded one by one have none to read.
+        ALTER TABLE runs ADD COLUMN photos_recorded INTEGER NOT NULL DEFAULT 0;
+        -- What a delete did; null for runs saved before it was recorded.
+        ALTER TABLE runs ADD COLUMN went_to_recycle_bin INTEGER;
 
         CREATE TABLE run_files (
             run_id            INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
