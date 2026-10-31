@@ -18,7 +18,7 @@
                
                 Text="No photos have been staged or deleted yet."
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Visibility="{x:Bind ViewModel.HasNoRuns, Mode=OneWay}" />
+                Visibility="{x:Bind ViewModel.HasNoRuns}" />
 
             <ItemsRepeater ItemsSource="{x:Bind ViewModel.Runs}">
                 <ItemsRepeater.Layout>
