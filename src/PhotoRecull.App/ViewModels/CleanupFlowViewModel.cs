@@ -608,7 +608,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                 LastActivityAt = ranAt,
             };
         }
-        AppServices.Database.RecordRunsWithCleanup(_cleanup!, runs);
+        _cleanup = _cleanup! with { HasRuns = true };
+        AppServices.Database.RecordRunsWithCleanup(_cleanup, runs);
 
         _lastAction = action;
         _lastStageFolders = stageFolders.ToDictionary();

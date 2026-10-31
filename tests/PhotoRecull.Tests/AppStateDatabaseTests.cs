@@ -224,16 +224,38 @@ public class AppStateDatabaseTests : IDisposable
         Assert.Equal([run], database.LoadRunsNewestFirst());
     }
 
-    [Theory]
-    [InlineData(CleanupState.Picked, 0, 0, true)]
-    [InlineData(CleanupState.ReadyToAct, 0, 0, true)]
-    [InlineData(CleanupState.ReadyToAct, 3, 0, false)]
-    [InlineData(CleanupState.ReadyToAct, 0, 3, false)]
-    [InlineData(CleanupState.Staged, 3, 0, false)]
-    [InlineData(CleanupState.Done, 0, 3, false)]
-    public void CanBeDiscarded_OnlyBeforeAnythingWasMovedOrDeleted(CleanupState state, int staged, int removed, bool expected)
+    [Fact]
+    public void DiscardCleanup_WhoseRunCompletedNoPhoto_StillKeepsIt_SinceALivePhotosVideoMayHaveMoved()
     {
-        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), state) with { StagedCount = staged, RemovedCount = removed };
+        var database = new AppStateDatabase(DatabasePath);
+        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.ReadyToAct);
+        var failedRun = new CleanupRun(cleanup.Id, DateTimeOffset.UnixEpoch, CleanupAction.Deleted, oneDrive, null, 0, 1, 4_000_000);
+        database.RecordRunsWithCleanup(cleanup, [failedRun]);
+
+        var loaded = Assert.Single(database.LoadCleanups());
+        Assert.True(loaded.HasRuns);
+        Assert.False(loaded.CanBeDiscarded);
+        Assert.False(database.DiscardCleanup(cleanup.Id));
+        Assert.Equal([failedRun], database.LoadRunsNewestFirst());
+    }
+
+    [Theory]
+    [InlineData(CleanupState.Picked, 0, 0, false, true)]
+    [InlineData(CleanupState.ReadyToAct, 0, 0, false, true)]
+    [InlineData(CleanupState.ReadyToAct, 0, 0, true, false)]
+    [InlineData(CleanupState.ReadyToAct, 3, 0, true, false)]
+    [InlineData(CleanupState.ReadyToAct, 0, 3, true, false)]
+    [InlineData(CleanupState.Staged, 3, 0, true, false)]
+    [InlineData(CleanupState.Done, 0, 3, true, false)]
+    public void CanBeDiscarded_OnlyBeforeAnyStageOrDelete(CleanupState state, int staged, int removed, bool hasRuns, bool expected)
+    {
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), state) with
+        {
+            StagedCount = staged,
+            RemovedCount = removed,
+            HasRuns = hasRuns,
+        };
 
         Assert.Equal(expected, cleanup.CanBeDiscarded);
     }

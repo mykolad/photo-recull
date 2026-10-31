@@ -82,7 +82,8 @@ public sealed class AppStateDatabase
         command.CommandText = """
             SELECT id, from_day, to_day, state, picked_count, picked_at, last_activity_at, targets,
                    earliest_picked_day, latest_picked_day, to_remove_count, kept_by_user_count,
-                   staged_count, removed_count, freed_bytes
+                   staged_count, removed_count, freed_bytes,
+                   EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = cleanups.id)
             FROM cleanups
             ORDER BY from_day, to_day
             """;
@@ -107,6 +108,7 @@ public sealed class AppStateDatabase
                 StagedCount = reader.GetInt32(12),
                 RemovedCount = reader.GetInt32(13),
                 FreedBytes = reader.GetInt64(14),
+                HasRuns = reader.GetBoolean(15),
             });
         }
         return cleanups;
@@ -202,8 +204,8 @@ public sealed class AppStateDatabase
 
     // Forgets a cleanup with its pick and the photos kept in it; files are never
     // touched. Checked again here, against what's saved, so a screen opened before
-    // a stage or delete can't discard a cleanup that has since moved files: runs
-    // that moved or deleted any stay in History. Returns whether it was discarded.
+    // a stage or delete can't discard a cleanup that has run one since: its runs
+    // stay in History. Returns whether it was discarded.
     public bool DiscardCleanup(Guid cleanupId)
     {
         using var connection = Open();
@@ -212,7 +214,7 @@ public sealed class AppStateDatabase
             DELETE FROM cleanups
             WHERE id = $cleanupId
               AND state IN ('Picked', 'ReadyToAct') AND staged_count = 0 AND removed_count = 0
-              AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = $cleanupId AND runs.succeeded_count > 0)
+              AND NOT EXISTS (SELECT 1 FROM runs WHERE runs.cleanup_id = $cleanupId)
             """;
         command.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
         return command.ExecuteNonQuery() > 0;

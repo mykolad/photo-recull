@@ -236,7 +236,7 @@ internal static class DiscardDialog
         dialog.Content = new TextBlock
         {
             Text = "PhotoRecull forgets this cleanup: its pick from Google Photos and the photos you marked Keep. " +
-                "No files are moved or deleted. Its days show as not cleaned up again, so you can start a new cleanup for them.",
+                "No files are moved or deleted. Its days no longer count as cleaned up, and you can start a new cleanup for them.",
             TextWrapping = TextWrapping.Wrap,
             Width = 480,
         };
