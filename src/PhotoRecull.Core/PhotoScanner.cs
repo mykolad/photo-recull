@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
+using MetadataExtractor.Formats.Exif.Makernotes;
 using MetadataExtractor.Formats.QuickTime;
 
 namespace PhotoRecull.Core;
@@ -67,7 +68,7 @@ public static class PhotoScanner
     public static List<PhotoFile> ReadPhotos(
         IReadOnlyList<string> photoFiles, IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default)
     {
-        var liveVideoByStill = LivePhotoVideoByStill(photoFiles);
+        var liveVideoByStill = LivePhotoVideoByStill(photoFiles, cancellationToken);
         var liveVideos = liveVideoByStill.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var filesToRead = photoFiles.Where(f => !liveVideos.Contains(f)).ToList();
 
@@ -104,16 +105,43 @@ public static class PhotoScanner
         return results;
     }
 
-    // iPhone gives a Live Photo's still and video the same name; any other
-    // same-named pair (two stills, or several videos) is left as separate files.
-    private static Dictionary<string, string> LivePhotoVideoByStill(IReadOnlyList<string> photoFiles) =>
-        photoFiles
+    // iPhone gives a Live Photo's still and video the same name, and stamps both
+    // with the same content identifier. A name alone isn't enough: a video
+    // recorded separately can share a still's name, and must be kept or removed
+    // on its own.
+    private static Dictionary<string, string> LivePhotoVideoByStill(
+        IReadOnlyList<string> photoFiles, CancellationToken cancellationToken)
+    {
+        var liveVideoByStill = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var sameNamedPairs = photoFiles
             .GroupBy(f => System.IO.Path.ChangeExtension(f, null), StringComparer.OrdinalIgnoreCase)
             .Select(g => (
                 Stills: g.Where(f => StillExtensions.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant())).ToList(),
-                Videos: g.Where(f => VideoExtensions.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant())).ToList()))
-            .Where(pair => pair.Stills.Count == 1 && pair.Videos.Count == 1)
-            .ToDictionary(pair => pair.Stills[0], pair => pair.Videos[0], StringComparer.OrdinalIgnoreCase);
+                Videos: g.Where(f => System.IO.Path.GetExtension(f).Equals(".mov", StringComparison.OrdinalIgnoreCase)).ToList()))
+            .Where(pair => pair.Stills.Count == 1 && pair.Videos.Count == 1);
+        foreach (var (stills, videos) in sameNamedPairs)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (LivePhotoContentIdentifier(stills[0]) is { } identifier && identifier == LivePhotoContentIdentifier(videos[0]))
+                liveVideoByStill[stills[0]] = videos[0];
+        }
+        return liveVideoByStill;
+    }
+
+    private static string? LivePhotoContentIdentifier(string path)
+    {
+        try
+        {
+            var dirs = ImageMetadataReader.ReadMetadata(path);
+            var identifier = dirs.OfType<AppleMakernoteDirectory>().FirstOrDefault()?.GetString(AppleMakernoteDirectory.TagContentIdentifier)
+                ?? dirs.OfType<QuickTimeMetadataHeaderDirectory>().FirstOrDefault()?.GetString(QuickTimeMetadataHeaderDirectory.TagContentIdentifier);
+            return string.IsNullOrEmpty(identifier) ? null : identifier;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static long SizeOrZeroIfGone(string path)
     {

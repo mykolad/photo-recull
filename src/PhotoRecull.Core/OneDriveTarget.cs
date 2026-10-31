@@ -12,7 +12,7 @@ public sealed class OneDriveTarget(string cameraRollFolderPath) : ISyncTarget
         PhotoScanner.ScanFolder(FolderPath, progress, cancellationToken);
 
     // Next to the Camera Roll rather than in it, so a later scan doesn't find them.
-    public string DefaultStageFolder(DateOnly firstDay, DateOnly lastDay) =>
+    public string? DefaultStageFolder(DateOnly firstDay, DateOnly lastDay) =>
         Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(FolderPath)) ?? FolderPath,
             $"_staged_{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}");
 }

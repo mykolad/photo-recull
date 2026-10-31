@@ -22,15 +22,17 @@ public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
         return PhotoScanner.ReadPhotos(photoFiles, progress, cancellationToken);
     }
 
-    // Outside the Photos folder that Synology Photos indexes: staged photos left
-    // inside it would show up in Synology Photos again.
-    public string DefaultStageFolder(DateOnly firstDay, DateOnly lastDay)
+    // Outside the Photos folder of the personal space (\\nas\home\Photos), which
+    // Synology Photos shows: staged photos left inside it would show up there
+    // again. Shared Space (\\nas\photo) or a drive mapped to the Photos folder
+    // itself has no folder outside it to tell, so the user chooses one.
+    public string? DefaultStageFolder(DateOnly firstDay, DateOnly lastDay)
     {
-        var folder = Path.TrimEndingDirectorySeparator(FolderPath);
-        var photosFolder = FolderAndItsParents(folder)
+        var photosFolder = FolderAndItsParents(Path.TrimEndingDirectorySeparator(FolderPath))
             .FirstOrDefault(f => Path.GetFileName(f).Equals("Photos", StringComparison.OrdinalIgnoreCase));
-        var outsideIndexedFolder = Path.GetDirectoryName(photosFolder ?? folder) ?? folder;
-        return Path.Combine(outsideIndexedFolder, "PhotoRecull staged", $"{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}");
+        return photosFolder is not null && Path.GetDirectoryName(photosFolder) is { } outsidePhotos
+            ? Path.Combine(outsidePhotos, "PhotoRecull staged", $"{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}")
+            : null;
     }
 
     // Deleting over the network skips the Windows Recycle Bin; DSM catches the

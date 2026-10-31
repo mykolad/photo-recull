@@ -68,7 +68,7 @@ internal static class DebugScreenshot
                 if (step == "preview" && stacks.FirstOrDefault() is { } stack)
                     stack.Cover.OpenPreviewCommand.Execute(null);
                 if (step == "stage")
-                    await flow.StageAsync(flow.CandidatesPerTarget().ToDictionary(t => t.Target, t => flow.DefaultStageFolderFor(t.Target)));
+                    await flow.StageAsync(flow.CandidatesPerTarget().ToDictionary(t => t.Target, t => flow.DefaultStageFolderFor(t.Target)!));
                 break;
         }
     }

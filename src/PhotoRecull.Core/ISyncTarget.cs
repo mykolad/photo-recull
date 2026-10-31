@@ -16,5 +16,7 @@ public interface ISyncTarget
         DateOnly? firstDay, DateOnly? lastDay,
         IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default);
 
-    string DefaultStageFolder(DateOnly firstDay, DateOnly lastDay);
+    // Null when no folder outside the photos the target shows can be told; the
+    // user then chooses one.
+    string? DefaultStageFolder(DateOnly firstDay, DateOnly lastDay);
 }

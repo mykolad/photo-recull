@@ -107,11 +107,18 @@ public class SynologyPhotosTargetTests : IDisposable
     [Theory]
     [InlineData(@"\\nas\home\Photos\MobileBackup\iPhone", @"\\nas\home\PhotoRecull staged\2026-01-01_2026-01-31")]
     [InlineData(@"Z:\Photos\MobileBackup\iPhone\", @"Z:\PhotoRecull staged\2026-01-01_2026-01-31")]
-    [InlineData(@"D:\Backups\iPhone", @"D:\Backups\PhotoRecull staged\2026-01-01_2026-01-31")]
     public void DefaultStageFolder_IsOutsideThePhotosFolderThatSynologyPhotosShows(string backupFolder, string expected)
     {
         var target = new SynologyPhotosTarget(backupFolder);
 
         Assert.Equal(expected, target.DefaultStageFolder(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
+    }
+
+    [Theory]
+    [InlineData(@"\\nas\photo\MobileBackup\iPhone")]
+    [InlineData(@"Y:\MobileBackup\iPhone")]
+    public void DefaultStageFolder_IsLeftToTheUser_WhenNoFolderOutsideSynologyPhotosCanBeTold(string backupFolder)
+    {
+        Assert.Null(new SynologyPhotosTarget(backupFolder).DefaultStageFolder(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
     }
 }

@@ -12,8 +12,10 @@ public static class FileActions
 {
     // A stage folder that can't be created (the path names a file, a drive that
     // isn't there, no permission) fails every photo for that target instead of
-    // throwing, so the result can still be shown.
-    public static FileActionResult MoveToStageFolder(IEnumerable<PhotoFile> photos, string stageFolder)
+    // throwing, so the result can still be shown. Photos keep their folders below
+    // the target's (2026\07\IMG_0001.HEIC), so two photos named alike in different
+    // months don't collide, and each can be moved back where it came from.
+    public static FileActionResult MoveToStageFolder(IEnumerable<PhotoFile> photos, string stageFolder, string targetFolder)
     {
         try
         {
@@ -24,8 +26,31 @@ public static class FileActions
             var reason = $"Can't use the stage folder: {ex.Message}";
             return new FileActionResult(0, photos.Select(p => new FileFailure(p, reason)).ToList());
         }
-        return ApplyToEachCollectingFailures(photos,
-            p => ApplyToPhotoAndItsVideo(p, path => File.Move(path, Path.Combine(stageFolder, Path.GetFileName(path)), overwrite: false)));
+        return ApplyToEachCollectingFailures(photos, p => MoveIntoStageFolder(p, stageFolder, targetFolder));
+    }
+
+    // Both destinations of a Live Photo are checked before either part moves, so
+    // a name already taken never leaves the video staged without its photo.
+    private static void MoveIntoStageFolder(PhotoFile photo, string stageFolder, string targetFolder)
+    {
+        var moves = FilesOf(photo)
+            .Select(path => (From: path, To: Path.Combine(stageFolder, FolderBelow(targetFolder, path), Path.GetFileName(path))))
+            .ToList();
+        if (moves.Any(move => File.Exists(move.To)))
+            throw new IOException("A file with this name is already in the stage folder", FileExists);
+        foreach (var (from, to) in moves)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+            File.Move(from, to, overwrite: false);
+        }
+    }
+
+    private static string FolderBelow(string targetFolder, string path)
+    {
+        var relative = Path.GetRelativePath(targetFolder, Path.GetDirectoryName(path)!);
+        return relative == "." || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative)
+            ? ""
+            : relative;
     }
 
     public static FileActionResult DeletePermanently(IEnumerable<PhotoFile> photos) =>
@@ -77,9 +102,15 @@ public static class FileActions
     // video already gone and acts on the photo alone.
     private static void ApplyToPhotoAndItsVideo(PhotoFile photo, Action<string> action)
     {
+        foreach (var path in FilesOf(photo))
+            action(path);
+    }
+
+    private static IEnumerable<string> FilesOf(PhotoFile photo)
+    {
         if (photo.LivePhotoVideoPath is { } video && File.Exists(video))
-            action(video);
-        action(photo.Path);
+            yield return video;
+        yield return photo.Path;
     }
 
     private static long CurrentSizeOfPhotoAndItsVideo(PhotoFile photo) =>

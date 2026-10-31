@@ -18,11 +18,24 @@ public sealed class SettingsViewModel
 
     public List<TargetSettingsRowViewModel> Targets { get; }
 
-    private void SaveTargets()
+    private bool _isClosed;
+
+    // A folder check still running when the page is left would otherwise save
+    // later, over changes made since on a newer Settings page.
+    public void StopSaving() => _isClosed = true;
+
+    private void SaveTargets(TargetSettingsRowViewModel changed)
     {
-        var settings = AppServices.Database.LoadSettings() with
+        if (_isClosed)
+            return;
+        var current = AppServices.Database.LoadSettings();
+        var settings = current with
         {
-            Targets = Targets.Select(row => row.Saved).OfType<TargetSettings>().ToList(),
+            Targets = current.Targets
+                .Where(t => t.Kind != changed.Folder.Kind)
+                .Concat(changed.Saved is { } saved ? [saved] : [])
+                .OrderBy(t => t.Kind)
+                .ToList(),
         };
         AppServices.Database.SaveSettings(settings);
         RefreshWhichTargetsCanBeTurnedOff();
@@ -41,9 +54,9 @@ public sealed class SettingsViewModel
 // found, so a half-typed or unreachable path never replaces a working one.
 public sealed partial class TargetSettingsRowViewModel : ObservableObject
 {
-    private readonly Action _saveTargets;
+    private readonly Action<TargetSettingsRowViewModel> _saveTargets;
 
-    public TargetSettingsRowViewModel(TargetKind kind, TargetSettings? saved, Action saveTargets)
+    public TargetSettingsRowViewModel(TargetKind kind, TargetSettings? saved, Action<TargetSettingsRowViewModel> saveTargets)
     {
         _saveTargets = saveTargets;
         Saved = saved;
@@ -90,6 +103,6 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
             return;
         Saved = target;
         OnPropertyChanged(nameof(StatusText));
-        _saveTargets();
+        _saveTargets(this);
     }
 }

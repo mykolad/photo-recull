@@ -54,6 +54,7 @@ internal sealed class StageDialog
 {
     private readonly ContentDialog _dialog;
     private readonly Dictionary<TargetSettings, TextBox> _folderBoxes = [];
+    private readonly Dictionary<TargetSettings, TextBlock> _folderProblems = [];
 
     public StageDialog(XamlRoot xamlRoot, CleanupFlowViewModel flow)
     {
@@ -72,8 +73,19 @@ internal sealed class StageDialog
         });
         foreach (var (target, count, bytes) in perTarget)
         {
-            var folder = new TextBox { Text = flow.DefaultStageFolderFor(target), Header = "Stage folder" };
+            var folder = new TextBox
+            {
+                Text = flow.DefaultStageFolderFor(target) ?? "",
+                Header = "Stage folder",
+                PlaceholderText = $"A folder outside {SyncTargets.DisplayName(target.Kind)}, so staged photos don't show up there again",
+            };
             folder.TextChanged += (_, _) => UpdatePrimaryButton();
+            _folderProblems[target] = new TextBlock
+            {
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = XamlFunctions.ThemeBrush("SystemFillColorCriticalBrush"),
+                TextWrapping = TextWrapping.Wrap,
+            };
             var browse = new Button { Content = "Browse…", VerticalAlignment = VerticalAlignment.Bottom };
             browse.Click += async (_, _) =>
             {
@@ -92,6 +104,7 @@ internal sealed class StageDialog
             var block = new StackPanel { Spacing = 8 };
             block.Children.Add(ConfirmDialogContent.TargetRow(target, count, bytes, trailing: null));
             block.Children.Add(folderRow);
+            block.Children.Add(_folderProblems[target]);
             content.Children.Add(block);
         }
         _dialog.Content = content;
@@ -103,8 +116,28 @@ internal sealed class StageDialog
 
     public async Task<bool> ConfirmAsync() => await _dialog.ShowAsync() == ContentDialogResult.Primary;
 
-    private void UpdatePrimaryButton() =>
-        _dialog.IsPrimaryButtonEnabled = _folderBoxes.Values.All(box => Path.IsPathFullyQualified(box.Text.Trim()));
+    private void UpdatePrimaryButton()
+    {
+        bool allUsable = true;
+        foreach (var (target, box) in _folderBoxes)
+        {
+            var folder = box.Text.Trim();
+            var problem = !Path.IsPathFullyQualified(folder) ? null
+                : IsSameOrInside(folder, target.FolderPath) ? "This is inside the target's folder, so the next scan would find these photos again."
+                : null;
+            _folderProblems[target].Text = problem ?? "";
+            _folderProblems[target].Visibility = problem is null ? Visibility.Collapsed : Visibility.Visible;
+            allUsable &= Path.IsPathFullyQualified(folder) && problem is null;
+        }
+        _dialog.IsPrimaryButtonEnabled = allUsable;
+    }
+
+    private static bool IsSameOrInside(string folder, string parent)
+    {
+        var folderPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
+        var parentPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent)) + Path.DirectorySeparatorChar;
+        return folderPath.StartsWith(parentPath, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 internal enum DeleteChoice

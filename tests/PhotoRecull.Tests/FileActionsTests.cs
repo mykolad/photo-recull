@@ -23,7 +23,7 @@ public class FileActionsTests : IDisposable
     {
         var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
 
-        var result = FileActions.MoveToStageFolder(photos, _stageFolder);
+        var result = FileActions.MoveToStageFolder(photos, _stageFolder, _targetFolder);
 
         Assert.Equal(2, result.SucceededCount);
         Assert.Empty(result.Failures);
@@ -39,7 +39,7 @@ public class FileActionsTests : IDisposable
         File.WriteAllText(Path.Combine(_stageFolder, "a.heic"), "already staged");
         var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
 
-        var result = FileActions.MoveToStageFolder(photos, _stageFolder);
+        var result = FileActions.MoveToStageFolder(photos, _stageFolder, _targetFolder);
 
         Assert.Equal(1, result.SucceededCount);
         var failure = Assert.Single(result.Failures);
@@ -93,7 +93,7 @@ public class FileActionsTests : IDisposable
         var missing = new PhotoFile(Path.Combine(_targetFolder, "gone.heic"), "gone.heic",
             DateTimeOffset.UtcNow, IsIphone: true, TimestampSource: "filename");
 
-        var stageResult = FileActions.MoveToStageFolder([missing], _stageFolder);
+        var stageResult = FileActions.MoveToStageFolder([missing], _stageFolder, _targetFolder);
         var recycleResult = FileActions.MoveToRecycleBin([missing]);
 
         Assert.Equal("Missing: moved or deleted since the scan", Assert.Single(stageResult.Failures).Reason);
@@ -107,7 +107,7 @@ public class FileActionsTests : IDisposable
         File.WriteAllText(notAFolder, "a file where the stage folder should go");
         var photos = new[] { CreatePhoto("a.heic"), CreatePhoto("b.heic") };
 
-        var result = FileActions.MoveToStageFolder(photos, notAFolder);
+        var result = FileActions.MoveToStageFolder(photos, notAFolder, _targetFolder);
 
         Assert.Equal(0, result.SucceededCount);
         Assert.Equal(2, result.Failures.Count);
@@ -159,7 +159,7 @@ public class FileActionsTests : IDisposable
         Directory.CreateDirectory(_stageFolder);
         File.WriteAllText(Path.Combine(_stageFolder, "a.heic"), "already staged");
 
-        var result = FileActions.MoveToStageFolder([CreatePhoto("a.heic")], _stageFolder);
+        var result = FileActions.MoveToStageFolder([CreatePhoto("a.heic")], _stageFolder, _targetFolder);
 
         Assert.Equal("A file with this name is already in the stage folder", Assert.Single(result.Failures).Reason);
     }

@@ -524,7 +524,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     public void CancelConfirm() => Step = CleanupFlowStep.Review;
 
-    public string DefaultStageFolderFor(TargetSettings target) =>
+    public string? DefaultStageFolderFor(TargetSettings target) =>
         SyncTargets.Create(target).DefaultStageFolder(_cleanup!.From, _cleanup.To);
 
     public IReadOnlyList<(TargetSettings Target, int Count, long Bytes)> CandidatesPerTarget() =>
@@ -561,7 +561,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             {
                 var targetPhotos = g.Select(p => p.Photo).ToList();
                 var result = action == CleanupAction.Staged
-                    ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key])
+                    ? FileActions.MoveToStageFolder(targetPhotos, stageFolders[g.Key], g.Key.FolderPath)
                     : DeleteFrom(g.Key, targetPhotos);
                 return (Target: g.Key, Result: result);
             })

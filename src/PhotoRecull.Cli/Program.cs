@@ -349,7 +349,7 @@ if (wantStage)
         if (!ConfirmYes()) { Console.WriteLine("Aborted."); return 0; }
     }
 
-    var staged = FileActions.MoveToStageFolder(result.Unmatched, stageDir);
+    var staged = FileActions.MoveToStageFolder(result.Unmatched, stageDir, target.FolderPath);
     foreach (var failure in staged.Failures)
         Console.Error.WriteLine($"  FAILED to move {failure.Photo.FileName}: {failure.Reason}");
     var failed = staged.Failures.Count;
