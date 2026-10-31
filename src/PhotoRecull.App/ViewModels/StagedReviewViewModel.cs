@@ -44,7 +44,13 @@ public sealed partial class StagedReviewViewModel : ObservableObject
     public partial bool ResultHasFailures { get; set; }
 
     // Deleting from a stage folder on a network drive skips the Windows Recycle Bin.
-    public bool DeletesArePermanent => Photos.Any(p => !FileActions.HasRecycleBin(p.Photo.StagedPath));
+    public bool DeletesArePermanent => Photos.Any(p => !CanGoToRecycleBin(p.Photo));
+
+    // Both parts of a Live Photo: a retry can stage its video and its photo on
+    // different drives.
+    private static bool CanGoToRecycleBin(StagedPhoto photo) =>
+        FileActions.HasRecycleBin(photo.StagedPath)
+        && (photo.StagedVideoPath is not { } video || FileActions.HasRecycleBin(video));
 
     public event EventHandler? AllHandled;
 
@@ -108,21 +114,17 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                 .Select(g =>
                 {
                     var targetPhotos = g.ToList();
-                    bool toRecycleBin = action == CleanupAction.Deleted && targetPhotos.All(p => FileActions.HasRecycleBin(p.StagedPath));
+                    bool toRecycleBin = action == CleanupAction.Deleted && targetPhotos.All(CanGoToRecycleBin);
                     var started = new CleanupRun(_cleanup.Id, ranAt, action, g.Key,
                         action == CleanupAction.MovedBack ? g.Key.FolderPath : null, 0, 0, 0)
                     {
                         WentToRecycleBin = action == CleanupAction.Deleted ? toRecycleBin : null,
                     };
                     long runId = AppServices.Database.StartRun(started);
-                    // A photo moved back is kept as soon as it's back, so running the
-                    // cleanup again won't offer it, even if this is cut off.
-                    void Record(RunFile file)
-                    {
-                        AppServices.Database.RecordRunFile(runId, file);
-                        if (action == CleanupAction.MovedBack && file.Succeeded)
-                            AppServices.Database.SetPhotoKept(_cleanup.Id, file.Destination!, isKept: true);
-                    }
+                    // A photo moved back is kept in the same step as it's recorded, so
+                    // running the cleanup again won't offer it, even if this is cut off.
+                    void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file,
+                        keptFor: action == CleanupAction.MovedBack ? _cleanup.Id : null);
                     var result = action == CleanupAction.MovedBack
                         ? FileActions.MoveBack(targetPhotos, Record)
                         : Delete(targetPhotos, toRecycleBin, Record);

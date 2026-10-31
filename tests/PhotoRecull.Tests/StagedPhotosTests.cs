@@ -115,6 +115,33 @@ public class StagedPhotosTests : IDisposable
     }
 
     [Fact]
+    public void StillStaged_ListsBothCopies_OfAPhotoStagedAgainAfterItCameBack()
+    {
+        var first = FileAt(Path.Combine(_root, "_staged_earlier", "IMG_1.HEIC"));
+        var second = FileAt(InStage("IMG_1.HEIC"));
+
+        var photos = StagedPhotos.StillStaged(
+        [
+            (RecordedStageRun(0) with { Destination = Path.Combine(_root, "_staged_earlier") },
+                [new RunFile(InTarget("IMG_1.HEIC"), first, null, null, true, null, 10)]),
+            (RecordedStageRun(1), [new RunFile(InTarget("IMG_1.HEIC"), second, null, null, true, null, 10)]),
+        ]).Photos;
+
+        Assert.Equal([first, second], photos.Select(p => p.StagedPath));
+    }
+
+    [Fact]
+    public void StillStaged_ForARunFromBeforePhotosWereRecorded_SkipsSynologysOwnFolders()
+    {
+        var photo = FileAt(InStage("IMG_1.HEIC"));
+        FileAt(Path.Combine(Stage, @"2026\10\@eaDir\IMG_1.HEIC\SYNOPHOTO_THUMB_XL.jpg"));
+        FileAt(Path.Combine(Stage, @"#recycle\IMG_0.HEIC"));
+        var legacyRun = RecordedStageRun() with { PhotosRecorded = false };
+
+        Assert.Equal([photo], StagedPhotos.StillStaged([(legacyRun, [])]).Photos.Select(p => p.StagedPath));
+    }
+
+    [Fact]
     public void StillStaged_ForARunInterruptedBeforeItsFirstPhoto_DoesntReadItsStageFolder()
     {
         FileAt(InStage("OTHER_CLEANUP.HEIC"));

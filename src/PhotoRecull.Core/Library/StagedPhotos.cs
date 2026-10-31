@@ -39,64 +39,114 @@ public static class StagedPhotos
             .Select(r => (r, database.LoadRunFiles(r.Id))));
 
     // The photos a cleanup's stage runs moved that are still in a stage folder: not
-    // yet deleted, moved back, or moved away by hand.
+    // yet deleted, moved back, or moved away by hand. A file only counts as gone
+    // when the file system says it isn't there; one that can't be checked (no
+    // access, a NAS that's off) puts its stage folder among the unreachable ones.
     public static StagedInventory StillStaged(IEnumerable<(CleanupRun Run, List<RunFile> Files)> stageRuns)
     {
         var runs = stageRuns.ToList();
-        var unreachable = runs
-            .Select(r => r.Run.Destination)
-            .OfType<string>()
-            .Where(folder => !Directory.Exists(folder) && !IsReachable(folder))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var unreachable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var photos = FromRecordedPhotos(runs.Where(r => r.Run.PhotosRecorded).ToList(), unreachable);
 
-        var photos = FromRecordedPhotos(runs.Where(r => r.Run.PhotosRecorded).ToList());
         // Runs saved before photos were recorded one by one: their stage folder is
         // all there is to go by, the original places rebuilt from its folders.
         foreach (var (run, _) in runs.Where(r => !r.Run.PhotosRecorded && r.Run.Status == RunStatus.Complete))
-            if (run.Destination is { } stageFolder && Directory.Exists(stageFolder))
-                photos.AddRange(FromStageFolder(run.Target, stageFolder));
+        {
+            if (run.Destination is not { } stageFolder)
+                continue;
+            switch (Check(stageFolder))
+            {
+                case PathCheck.Present:
+                    try
+                    {
+                        photos.AddRange(FromStageFolder(run.Target, stageFolder));
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        unreachable.Add(stageFolder);
+                    }
+                    break;
+                case PathCheck.Unknown:
+                    unreachable.Add(stageFolder);
+                    break;
+            }
+        }
 
         return new StagedInventory(
             photos.DistinctBy(p => p.StagedPath, StringComparer.OrdinalIgnoreCase).ToList(),
-            unreachable);
+            unreachable.ToList());
     }
 
-    // A photo's outcomes are put together across runs, newest last: a retry of a
-    // Live Photo whose video was staged first records only the photo's move.
-    private static List<StagedPhoto> FromRecordedPhotos(List<(CleanupRun Run, List<RunFile> Files)> runs)
+    // A photo's outcomes are put together across runs, oldest first: a retry of a
+    // Live Photo whose video was staged first records only the photo's move. A photo
+    // that came back and was staged again can be in two places; each one still
+    // there is listed, the newest with the newest video, any other video on its own.
+    private static List<StagedPhoto> FromRecordedPhotos(
+        List<(CleanupRun Run, List<RunFile> Files)> runs, HashSet<string> unreachable)
     {
-        var byOriginal = new Dictionary<string, (TargetSettings Target, string? Staged, string? VideoPath, string? StagedVideo)>(
-            StringComparer.OrdinalIgnoreCase);
+        var byOriginal = new Dictionary<string, RecordedPhoto>(StringComparer.OrdinalIgnoreCase);
         foreach (var (run, files) in runs.OrderBy(r => r.Run.RanAt).ThenBy(r => r.Run.Id))
         {
             foreach (var file in files)
             {
-                var known = byOriginal.GetValueOrDefault(file.Path, (run.Target, null, null, null));
-                byOriginal[file.Path] = (run.Target, file.Destination ?? known.Staged,
-                    file.VideoPath ?? known.VideoPath, file.VideoDestination ?? known.StagedVideo);
+                if (!byOriginal.TryGetValue(file.Path, out var photo))
+                    byOriginal[file.Path] = photo = new RecordedPhoto(run.Target);
+                photo.VideoPath ??= file.VideoPath;
+                if (file.Destination is { } staged)
+                    photo.Stills.Add((staged, run.Destination));
+                if (file.VideoDestination is { } stagedVideo)
+                    photo.Videos.Add((stagedVideo, run.Destination));
             }
         }
 
-        var photos = new List<StagedPhoto>();
-        foreach (var (original, (target, staged, videoPath, stagedVideo)) in byOriginal)
+        bool IsStillThere((string Path, string? StageFolder) staged)
         {
-            bool stillStaged = staged is not null && File.Exists(staged);
-            bool videoStaged = stagedVideo is not null && videoPath is not null && File.Exists(stagedVideo);
-            if (stillStaged)
-                photos.Add(new StagedPhoto(target, staged!, original, videoStaged ? stagedVideo : null, videoStaged ? videoPath : null));
-            // The photo failed to stage, or was moved away by hand: its video is
-            // still there, and goes back or is deleted on its own.
-            else if (videoStaged)
-                photos.Add(new StagedPhoto(target, stagedVideo!, videoPath!, null, null));
+            var check = Check(staged.Path);
+            if (check == PathCheck.Unknown)
+                unreachable.Add(staged.StageFolder ?? Path.GetDirectoryName(staged.Path)!);
+            return check == PathCheck.Present;
+        }
+
+        var photos = new List<StagedPhoto>();
+        foreach (var (original, photo) in byOriginal)
+        {
+            var stills = photo.Stills.DistinctBy(s => s.Path, StringComparer.OrdinalIgnoreCase)
+                .Where(IsStillThere).Select(s => s.Path).ToList();
+            var videos = photo.VideoPath is null ? []
+                : photo.Videos.DistinctBy(v => v.Path, StringComparer.OrdinalIgnoreCase)
+                    .Where(IsStillThere).Select(v => v.Path).ToList();
+            var newestVideo = videos.LastOrDefault();
+            for (int i = 0; i < stills.Count; i++)
+            {
+                bool withVideo = i == stills.Count - 1 && newestVideo is not null;
+                photos.Add(new StagedPhoto(photo.Target, stills[i], original,
+                    withVideo ? newestVideo : null, withVideo ? photo.VideoPath : null));
+            }
+            // A video with no still left to go with (the photo failed to stage, or
+            // was moved away by hand) goes back or is deleted on its own.
+            foreach (var video in stills.Count > 0 ? videos.SkipLast(1) : videos)
+                photos.Add(new StagedPhoto(photo.Target, video, photo.VideoPath!, null, null));
         }
         return photos;
     }
 
-    private static IEnumerable<StagedPhoto> FromStageFolder(TargetSettings target, string stageFolder)
+    private sealed class RecordedPhoto(TargetSettings target)
+    {
+        public TargetSettings Target { get; } = target;
+        public string? VideoPath { get; set; }
+        public List<(string Path, string? StageFolder)> Stills { get; } = [];
+        public List<(string Path, string? StageFolder)> Videos { get; } = [];
+    }
+
+    // Synology's own folders (@eaDir thumbnails, #recycle, #snapshot) and hidden
+    // ones hold no photos a run staged.
+    private static List<StagedPhoto> FromStageFolder(TargetSettings target, string stageFolder)
     {
         var files = Directory.EnumerateFiles(stageFolder, "*", SearchOption.AllDirectories)
             .Where(PhotoScanner.IsPhotoOrVideo)
+            .Where(f => !Path.GetRelativePath(stageFolder, Path.GetDirectoryName(f)!)
+                .Split(Path.DirectorySeparatorChar)
+                .Any(folder => folder is ['@' or '#' or '$', ..] || (folder is ['.', _, ..] && folder != "..")))
             .ToList();
         var videoOfStill = PhotoScanner.LivePhotoVideoByStill(files);
         var pairedVideos = videoOfStill.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -105,20 +155,33 @@ public static class StagedPhotos
             .Where(f => !pairedVideos.Contains(f))
             .Select(f => videoOfStill.TryGetValue(f, out var video)
                 ? new StagedPhoto(target, f, OriginalOf(f), video, OriginalOf(video))
-                : new StagedPhoto(target, f, OriginalOf(f), null, null));
+                : new StagedPhoto(target, f, OriginalOf(f), null, null))
+            .ToList();
     }
 
-    // A missing stage folder on a drive or share that answers was removed (by hand,
-    // once emptied); one on a drive or share that doesn't can't be checked.
-    private static bool IsReachable(string folder)
+    private enum PathCheck
+    {
+        Present,
+        Missing,
+        Unknown,
+    }
+
+    // File.Exists and Directory.Exists answer false for a path that can't be read
+    // as well as for one that's gone; only "not found" means gone.
+    private static PathCheck Check(string path)
     {
         try
         {
-            return Path.GetPathRoot(Path.GetFullPath(folder)) is { Length: > 0 } root && Directory.Exists(root);
+            File.GetAttributes(path);
+            return PathCheck.Present;
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
-            return false;
+            return PathCheck.Missing;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return PathCheck.Unknown;
         }
     }
 }

@@ -86,6 +86,21 @@ public class RunJournalTests : IDisposable
     }
 
     [Fact]
+    public void AMoveBackCutOff_KeepsWhatWentBack_AndDoesntCountItAsRemoved()
+    {
+        _database.SaveCleanup(_cleanup with { ToRemoveCount = 3 });
+        long id = _database.StartRun(RunOf(CleanupAction.MovedBack, @"C:\Camera Roll"));
+        _database.RecordRunFile(id, new(@"C:\_staged\a.heic", @"C:\Camera Roll\a.heic", null, null, true, null, 100), keptFor: _cleanup.Id);
+        _database.RecordRunFile(id, new(@"C:\_staged\b.heic", null, null, null, false, "Locked", 0), keptFor: _cleanup.Id);
+
+        _database.FinishInterruptedRuns();
+
+        Assert.Equal([@"C:\Camera Roll\a.heic"], _database.LoadKeptPhotoPaths(_cleanup.Id));
+        var cleanup = Assert.Single(_database.LoadCleanups());
+        Assert.Equal((1, (int?)3), (cleanup.KeptByUserCount, cleanup.ToRemoveCount));
+    }
+
+    [Fact]
     public void RemovingTheLastHistoryEntry_StillDoesntLetACleanupThatRanBeDiscarded()
     {
         // A Live Photo's video was staged, then its photo failed: no photo counts.
