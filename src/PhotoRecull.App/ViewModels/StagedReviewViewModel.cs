@@ -117,7 +117,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                 KeptByUserCount = _cleanup.KeptByUserCount + (action == CleanupAction.MovedBack ? succeeded : 0),
                 FreedBytes = _cleanup.FreedBytes + runs.Sum(r => r.FreedBytes),
                 LastActivityAt = ranAt,
-                HasRuns = true,
+                HasEverRun = true,
             };
             AppServices.Database.CompleteRunsWithCleanup(_cleanup, runs);
 
