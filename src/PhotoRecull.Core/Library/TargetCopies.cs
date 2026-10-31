@@ -60,7 +60,5 @@ public static class TargetCopies
     }
 
     private static TimeSpan ToleranceBetween(PhotoFile first, PhotoFile second) =>
-        HasMilliseconds(first) && HasMilliseconds(second) ? PreciseTolerance : WholeSecondTolerance;
-
-    private static bool HasMilliseconds(PhotoFile photo) => photo.Timestamp!.Value.Millisecond != 0;
+        first.TimestampInWholeSeconds || second.TimestampInWholeSeconds ? WholeSecondTolerance : PreciseTolerance;
 }

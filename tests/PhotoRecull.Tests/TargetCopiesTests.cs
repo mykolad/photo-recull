@@ -9,8 +9,11 @@ public class TargetCopiesTests
 
     private static readonly DateTimeOffset Noon = new(2026, 10, 29, 12, 0, 0, 208, TimeSpan.Zero);
 
-    private static Copy CopyOn(string target, string fileName, DateTimeOffset taken) =>
-        new(target, new PhotoFile($@"C:\{target}\{fileName}", fileName, taken, IsIphone: true, TimestampSource: "exif"));
+    private static Copy CopyOn(string target, string fileName, DateTimeOffset taken, bool inWholeSeconds = false) =>
+        new(target, new PhotoFile($@"C:\{target}\{fileName}", fileName, taken, IsIphone: true, TimestampSource: "exif")
+        {
+            TimestampInWholeSeconds = inWholeSeconds,
+        });
 
     private static List<List<string>> Grouped(params Copy[] copies) =>
         TargetCopies.Group(copies, c => c.Photo, c => c.Target)
@@ -61,7 +64,17 @@ public class TargetCopiesTests
 
         Assert.Equal(
             [["OneDrive/20261029_120000640_iOS.mov", "Synology/IMG_4721.MOV"]],
-            Grouped(CopyOn("OneDrive", "20261029_120000640_iOS.mov", wholeSecond.AddMilliseconds(640)), CopyOn("Synology", "IMG_4721.MOV", wholeSecond)));
+            Grouped(CopyOn("OneDrive", "20261029_120000640_iOS.mov", wholeSecond.AddMilliseconds(640)), CopyOn("Synology", "IMG_4721.MOV", wholeSecond, inWholeSeconds: true)));
+    }
+
+    [Fact]
+    public void AFrameTakenOnTheExactSecond_IsStillTimedToTheMillisecond_SoItIsNotTakenForTheNextFrame()
+    {
+        var onTheSecond = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(
+            [["OneDrive/20261029_120000000_iOS.heic"], ["Synology/IMG_1.HEIC"]],
+            Grouped(CopyOn("OneDrive", "20261029_120000000_iOS.heic", onTheSecond), CopyOn("Synology", "IMG_1.HEIC", onTheSecond.AddMilliseconds(100))));
     }
 
     [Fact]
