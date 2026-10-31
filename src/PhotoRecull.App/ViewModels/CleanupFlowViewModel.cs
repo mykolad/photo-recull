@@ -607,6 +607,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         int succeeded = runs.Sum(r => r.SucceededCount);
 
         int failed = runs.Sum(r => r.FailedCount);
+        // Photos staged earlier and still waiting keep it Staged after the rest are
+        // deleted. Checked in the background: a stage folder can be on a NAS.
+        bool earlierPhotosStillStaged = action == CleanupAction.Deleted && failed == 0
+            && await Task.Run(() => !StagedPhotos.Load(AppServices.Database, _cleanup!.Id).IsVerifiedEmpty);
         // A Live Photo whose video went before its photo failed frees space
         // without completing a photo; that space still counts.
         if (succeeded > 0 || runs.Sum(r => r.FreedBytes) > 0)
@@ -616,7 +620,9 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
             _cleanup = _cleanup! with
             {
                 State = failed > 0 ? CleanupState.ReadyToAct
-                    : action == CleanupAction.Staged ? CleanupState.Staged : CleanupState.Done,
+                    : action == CleanupAction.Staged || earlierPhotosStillStaged
+                        ? CleanupState.Staged
+                        : CleanupState.Done,
                 ToRemoveCount = failed > 0 ? failed : _cleanup.ToRemoveCount,
                 StagedCount = action == CleanupAction.Staged ? _cleanup.StagedCount + succeeded : _cleanup.StagedCount,
                 RemovedCount = action == CleanupAction.Deleted ? _cleanup.RemovedCount + succeeded : _cleanup.RemovedCount,
@@ -716,7 +722,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         ResultTitle = $"{verb} {FileCount(succeeded)}.";
         ResultMessage = failed > 0
             ? $"{FileCount(failed)} failed. {Title} stays Ready to act in Library, so you can retry them now or later."
-            : $"{Title} is now marked {(action == CleanupAction.Staged ? "Staged" : "Done")} in Library.";
+            : $"{Title} is now marked {(_cleanup!.State == CleanupState.Staged ? "Staged" : "Done")} in Library.";
         ResultHasFailures = failed > 0;
 
         ResultTargets.Clear();

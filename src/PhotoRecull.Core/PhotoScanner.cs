@@ -117,8 +117,8 @@ public static class PhotoScanner
     // with the same content identifier. A name alone isn't enough: a video
     // recorded separately can share a still's name, and must be kept or removed
     // on its own.
-    private static Dictionary<string, string> LivePhotoVideoByStill(
-        IReadOnlyList<string> photoFiles, CancellationToken cancellationToken)
+    public static Dictionary<string, string> LivePhotoVideoByStill(
+        IReadOnlyList<string> photoFiles, CancellationToken cancellationToken = default)
     {
         var liveVideoByStill = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sameNamedPairs = photoFiles

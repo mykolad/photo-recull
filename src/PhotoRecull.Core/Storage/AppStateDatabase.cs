@@ -325,15 +325,45 @@ public sealed class AppStateDatabase
     }
 
     // Each photo is saved as soon as it's done, so a crash loses at most the one
-    // being moved at that moment.
-    public void RecordRunFile(long runId, RunFile file) =>
-        Execute("""
-            INSERT INTO run_files (run_id, path, destination, video_path, video_destination, succeeded, failure_reason, bytes)
-            VALUES ($runId, $path, $destination, $videoPath, $videoDestination, $succeeded, $reason, $bytes)
-            """,
-            ("$runId", runId), ("$path", file.Path), ("$destination", (object?)file.Destination ?? DBNull.Value),
-            ("$videoPath", (object?)file.VideoPath ?? DBNull.Value), ("$videoDestination", (object?)file.VideoDestination ?? DBNull.Value),
-            ("$succeeded", file.Succeeded ? 1 : 0), ("$reason", (object?)file.FailureReason ?? DBNull.Value), ("$bytes", file.Bytes));
+    // being moved at that moment. keptFor marks a photo that went back (to where
+    // file.Destination says) as kept in that cleanup, in the same transaction, with
+    // alsoKept: the still a Live Photo's video belongs to, when only the video went back.
+    public void RecordRunFile(long runId, RunFile file, Guid? keptFor = null, string? alsoKept = null)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        using (var insert = connection.CreateCommand())
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO run_files (run_id, path, destination, video_path, video_destination, succeeded, failure_reason, bytes)
+                VALUES ($runId, $path, $destination, $videoPath, $videoDestination, $succeeded, $reason, $bytes)
+                """;
+            insert.Parameters.AddWithValue("$runId", runId);
+            insert.Parameters.AddWithValue("$path", file.Path);
+            insert.Parameters.AddWithValue("$destination", (object?)file.Destination ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$videoPath", (object?)file.VideoPath ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$videoDestination", (object?)file.VideoDestination ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$succeeded", file.Succeeded ? 1 : 0);
+            insert.Parameters.AddWithValue("$reason", (object?)file.FailureReason ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$bytes", file.Bytes);
+            insert.ExecuteNonQuery();
+        }
+        if (keptFor is { } cleanupId && file.Succeeded && file.Destination is { } keptPath)
+        {
+            foreach (var path in alsoKept is null ? [keptPath] : new[] { keptPath, alsoKept })
+            {
+                using var keep = connection.CreateCommand();
+                keep.Transaction = transaction;
+                keep.CommandText = "INSERT OR IGNORE INTO kept_photos (cleanup_id, path_key, file_path) VALUES ($cleanupId, $key, $path)";
+                keep.Parameters.AddWithValue("$cleanupId", cleanupId.ToString());
+                keep.Parameters.AddWithValue("$key", path.ToUpperInvariant());
+                keep.Parameters.AddWithValue("$path", path);
+                keep.ExecuteNonQuery();
+            }
+        }
+        transaction.Commit();
+    }
 
     public List<RunFile> LoadRunFiles(long runId)
     {
@@ -414,7 +444,11 @@ public sealed class AppStateDatabase
                                                  WHERE cleanup_id = cleanups.id AND status = 'Interrupting'),
                 to_remove_count = CASE WHEN to_remove_count IS NULL THEN NULL ELSE MAX(0, to_remove_count
                                   - (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
-                                     WHERE cleanup_id = cleanups.id AND status = 'Interrupting')) END
+                                     WHERE cleanup_id = cleanups.id AND status = 'Interrupting'
+                                       AND action IN ('Staged', 'Deleted'))) END,
+                -- Photos moved back were kept as each one went back.
+                kept_by_user_count = kept_by_user_count + (SELECT COALESCE(SUM(succeeded_count), 0) FROM runs
+                                     WHERE cleanup_id = cleanups.id AND status = 'Interrupting' AND action = 'MovedBack')
             WHERE id IN (SELECT cleanup_id FROM runs WHERE status = 'Interrupting');
 
             UPDATE runs SET status = 'Interrupted' WHERE status = 'Interrupting';

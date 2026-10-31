@@ -28,7 +28,9 @@ public sealed partial class ShellPage : Page
         if (e.Parameter is string toastMessage)
             ShowToast(toastMessage);
 #if DEBUG
-        if (DebugScreenshot.RequestedCleanupStep() is { } debugRequest)
+        if (DebugScreenshot.RequestedCleanupStep() is { Step: "staged" or "staged-moveback" } stagedRequest)
+            OpenStagedReview(stagedRequest.CleanupId);
+        else if (DebugScreenshot.RequestedCleanupStep() is { } debugRequest)
             OpenCleanupFlow(new CleanupFlowRequest(debugRequest.CleanupId,
                 AppServices.Database.LoadSettings().Targets));
         else if (DebugScreenshot.RequestedPage() == "settings")
@@ -134,6 +136,12 @@ public sealed partial class ShellPage : Page
         {
             _isNewCleanupDialogOpen = false;
         }
+    }
+
+    public void OpenStagedReview(Guid cleanupId)
+    {
+        Navigation.SelectedItem = LibraryItem;
+        ContentFrame.Navigate(typeof(StagedReviewPage), cleanupId);
     }
 
     public void OpenCleanupFlow(CleanupFlowRequest request)

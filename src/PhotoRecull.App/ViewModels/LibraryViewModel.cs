@@ -126,13 +126,13 @@ public sealed partial class LibraryViewModel : ObservableObject
         return stillConfigured.Count > 0 ? stillConfigured : configured;
     }
 
-    // Reviewing staged files is part of the Review step, the next pull request;
-    // every other state reopens the cleanup at its saved pick.
+    // A Staged cleanup opens its staged photos; every other state reopens the
+    // cleanup at its saved pick.
     private void Open(Cleanup cleanup)
     {
         if (cleanup.State == CleanupState.Staged)
         {
-            ShellPage.Current?.ShowToast("Reviewing staged photos opens here in the next update.");
+            ShellPage.Current?.OpenStagedReview(cleanup.Id);
             return;
         }
         ShellPage.Current?.OpenCleanupFlow(new CleanupFlowRequest(cleanup.Id, TargetsToReopen(cleanup)));
