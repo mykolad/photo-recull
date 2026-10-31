@@ -68,6 +68,33 @@ public class TargetCopiesTests
     }
 
     [Fact]
+    public void AWholeSecondTime_OnlyMatchesACaptureWithinItsOwnSecond()
+    {
+        var second = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+
+        var groups = Grouped(
+            CopyOn("OneDrive", "late.heic", second.AddMilliseconds(990)),
+            CopyOn("OneDrive", "next.heic", second.AddMilliseconds(1200)),
+            CopyOn("Synology", "IMG_1.HEIC", second, inWholeSeconds: true),
+            CopyOn("Synology", "IMG_2.HEIC", second.AddSeconds(1), inWholeSeconds: true));
+
+        Assert.Equal([["OneDrive/late.heic", "Synology/IMG_1.HEIC"], ["OneDrive/next.heic", "Synology/IMG_2.HEIC"]], groups);
+    }
+
+    [Fact]
+    public void AWholeSecondCopy_WithTwoCapturesInItsSecond_IsLeftOnItsOwn()
+    {
+        var second = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+
+        var groups = Grouped(
+            CopyOn("OneDrive", "a.heic", second.AddMilliseconds(100)),
+            CopyOn("OneDrive", "b.heic", second.AddMilliseconds(600)),
+            CopyOn("Synology", "IMG_1.HEIC", second, inWholeSeconds: true));
+
+        Assert.Equal([["OneDrive/a.heic"], ["OneDrive/b.heic"], ["Synology/IMG_1.HEIC"]], groups);
+    }
+
+    [Fact]
     public void AFrameTakenOnTheExactSecond_IsStillTimedToTheMillisecond_SoItIsNotTakenForTheNextFrame()
     {
         var onTheSecond = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);

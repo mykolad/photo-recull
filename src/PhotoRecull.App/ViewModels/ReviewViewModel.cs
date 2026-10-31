@@ -198,9 +198,11 @@ public sealed partial class ReviewViewModel : ObservableObject
         get
         {
             int photos = _candidates.Count(t => !t.IsKept);
-            var files = CandidatesToActOn;
-            var fileCount = files.Count == photos ? "" : $" · {files.Count:N0} files";
-            return $"{photos:N0} photo{(photos == 1 ? "" : "s")} to stage or delete{fileCount} · {FileSizeText.Format(files.Sum(c => c.Photo.SizeBytes))}";
+            var copies = CandidatesToActOn;
+            // A Live Photo's video is a file of its own, staged or deleted with its photo.
+            int files = copies.Sum(c => c.Photo.LivePhotoVideoPath is null ? 1 : 2);
+            var fileCount = files == photos ? "" : $" · {files:N0} files";
+            return $"{photos:N0} photo{(photos == 1 ? "" : "s")} to stage or delete{fileCount} · {FileSizeText.Format(copies.Sum(c => c.Photo.SizeBytes))}";
         }
     }
 
