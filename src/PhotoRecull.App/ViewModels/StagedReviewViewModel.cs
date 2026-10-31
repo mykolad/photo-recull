@@ -26,7 +26,12 @@ public sealed partial class StagedReviewViewModel : ObservableObject
         IsLoading = true;
         try
         {
-            SettleIfNothingIsLeft(Show(await Task.Run(() => StagedPhotos.Load(AppServices.Database, _cleanup.Id))));
+            var inventory = await Task.Run(() => StagedPhotos.Load(AppServices.Database, _cleanup.Id));
+            // Left meanwhile: the cleanup may have changed on a newer page since.
+            if (_isClosed)
+                return;
+            _cleanup = AppServices.Database.LoadCleanups().First(c => c.Id == _cleanup.Id);
+            SettleIfNothingIsLeft(Show(inventory));
         }
         finally
         {
@@ -36,6 +41,10 @@ public sealed partial class StagedReviewViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
+
+    private bool _isClosed;
+
+    public void Close() => _isClosed = true;
 
     public string Title => DateRangeLabel.Format(_cleanup.From, _cleanup.To);
 
@@ -137,8 +146,14 @@ public sealed partial class StagedReviewViewModel : ObservableObject
                     long runId = AppServices.Database.StartRun(started);
                     // A photo moved back is kept in the same step as it's recorded, so
                     // running the cleanup again won't offer it, even if this is cut off.
-                    void Record(RunFile file) => AppServices.Database.RecordRunFile(runId, file,
-                        keptFor: action == CleanupAction.MovedBack ? _cleanup.Id : null);
+                    var stillOfVideo = targetPhotos.Where(p => p.OriginalStillPath is not null)
+                        .ToDictionary(p => p.StagedPath, p => p.OriginalStillPath!, StringComparer.OrdinalIgnoreCase);
+                    void Record(RunFile file)
+                    {
+                        AppServices.Database.RecordRunFile(runId, file, keptFor: action == CleanupAction.MovedBack ? _cleanup.Id : null);
+                        if (action == CleanupAction.MovedBack && file.Succeeded && stillOfVideo.TryGetValue(file.Path, out var still))
+                            AppServices.Database.SetPhotoKept(_cleanup.Id, still, isKept: true);
+                    }
                     var result = action == CleanupAction.MovedBack
                         ? FileActions.MoveBack(targetPhotos, Record)
                         : Delete(targetPhotos, toRecycleBin, Record);

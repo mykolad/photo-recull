@@ -9,7 +9,16 @@ public sealed record StagedPhoto(
 {
     public string FileName => Path.GetFileName(StagedPath);
 
-    public long SizeBytes => SizeOrZero(StagedPath) + (StagedVideoPath is { } video ? SizeOrZero(video) : 0);
+    // Read once, with the inventory, in the background: a stage folder can be on a NAS.
+    public long SizeBytes { get; init; }
+
+    // For a Live Photo's video staged on its own: the photo it belongs to, which
+    // moving the video back keeps too, so running the cleanup again won't offer
+    // the pair (the scanner joins them again).
+    public string? OriginalStillPath { get; init; }
+
+    public StagedPhoto WithSizeRead() =>
+        this with { SizeBytes = SizeOrZero(StagedPath) + (StagedVideoPath is { } video ? SizeOrZero(video) : 0) };
 
     private static long SizeOrZero(string path)
     {
@@ -73,7 +82,13 @@ public static class StagedPhotos
         }
 
         return new StagedInventory(
-            photos.DistinctBy(p => p.StagedPath, StringComparer.OrdinalIgnoreCase).ToList(),
+            photos
+                // The same file found both ways (an old run's folder, a newer run's
+                // record) keeps whichever knows its Live Photo video.
+                .GroupBy(p => p.StagedPath, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.FirstOrDefault(p => p.StagedVideoPath is not null) ?? g.First())
+                .Select(p => p.WithSizeRead())
+                .ToList(),
             unreachable.ToList());
     }
 
@@ -125,7 +140,7 @@ public static class StagedPhotos
             // A video with no still left to go with (the photo failed to stage, or
             // was moved away by hand) goes back or is deleted on its own.
             foreach (var video in stills.Count > 0 ? videos.SkipLast(1) : videos)
-                photos.Add(new StagedPhoto(photo.Target, video, photo.VideoPath!, null, null));
+                photos.Add(new StagedPhoto(photo.Target, video, photo.VideoPath!, null, null) { OriginalStillPath = original });
         }
         return photos;
     }
@@ -142,12 +157,17 @@ public static class StagedPhotos
     // ones hold no photos a run staged.
     private static List<StagedPhoto> FromStageFolder(TargetSettings target, string stageFolder)
     {
-        var files = Directory.EnumerateFiles(stageFolder, "*", SearchOption.AllDirectories)
-            .Where(PhotoScanner.IsPhotoOrVideo)
-            .Where(f => !Path.GetRelativePath(stageFolder, Path.GetDirectoryName(f)!)
-                .Split(Path.DirectorySeparatorChar)
-                .Any(folder => folder is ['@' or '#' or '$', ..] || (folder is ['.', _, ..] && folder != "..")))
-            .ToList();
+        // Skipped folders aren't even opened: one that denies access mustn't hide the
+        // readable photos around it.
+        var files = new List<string>();
+        var folders = new Stack<string>([stageFolder]);
+        while (folders.TryPop(out var folder))
+        {
+            files.AddRange(Directory.EnumerateFiles(folder).Where(PhotoScanner.IsPhotoOrVideo));
+            foreach (var subfolder in Directory.EnumerateDirectories(folder))
+                if (Path.GetFileName(subfolder) is not (['@' or '#' or '$' or '.', ..]))
+                    folders.Push(subfolder);
+        }
         var videoOfStill = PhotoScanner.LivePhotoVideoByStill(files);
         var pairedVideos = videoOfStill.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
         string OriginalOf(string staged) => Path.Combine(target.FolderPath, Path.GetRelativePath(stageFolder, staged));

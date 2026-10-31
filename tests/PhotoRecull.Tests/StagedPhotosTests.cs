@@ -47,6 +47,7 @@ public class StagedPhotosTests : IDisposable
         var staged = Assert.Single(inventory.Photos);
         Assert.Equal((stillThere, InTarget("IMG_1.HEIC")), (staged.StagedPath, staged.OriginalPath));
         Assert.Equal((itsVideo, InTarget("IMG_1.MOV")), (staged.StagedVideoPath, staged.OriginalVideoPath));
+        Assert.Equal(new FileInfo(stillThere).Length + new FileInfo(itsVideo).Length, staged.SizeBytes);
         Assert.Empty(inventory.UnreachableFolders);
     }
 
@@ -73,6 +74,7 @@ public class StagedPhotosTests : IDisposable
         var photo = Assert.Single(StagedPhotos.StillStaged([(RecordedStageRun(), [file])]).Photos);
 
         Assert.Equal((video, InTarget("IMG_1.MOV"), (string?)null), (photo.StagedPath, photo.OriginalPath, photo.StagedVideoPath));
+        Assert.Equal(InTarget("IMG_1.HEIC"), photo.OriginalStillPath);
     }
 
     [Fact]

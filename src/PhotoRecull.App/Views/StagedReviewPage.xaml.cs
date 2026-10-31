@@ -32,6 +32,8 @@ public sealed partial class StagedReviewPage : Page
 #endif
     }
 
+    protected override void OnNavigatedFrom(NavigationEventArgs e) => ViewModel.Close();
+
     private void OnBackToLibraryClick(object sender, RoutedEventArgs e) => ShellPage.Current?.ShowLibrary();
 
     // WinUI allows one open ContentDialog; a quick second click would otherwise throw.
