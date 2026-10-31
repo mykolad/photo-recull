@@ -17,6 +17,8 @@ public static class FileActions
     // months don't collide, and each can be moved back where it came from.
     public static FileActionResult MoveToStageFolder(IEnumerable<PhotoFile> photos, string stageFolder, string targetFolder)
     {
+        if (IsSameOrInside(stageFolder, targetFolder))
+            return new FileActionResult(0, photos.Select(p => new FileFailure(p, StageFolderInsideTarget)).ToList());
         try
         {
             Directory.CreateDirectory(stageFolder);
@@ -41,6 +43,31 @@ public static class FileActions
                 if (FilesOf(photo).Any(path => File.Exists(StagedPath(path))))
                     throw new IOException("A file with this name is already in the stage folder", FileExists);
             });
+    }
+
+    public const string StageFolderInsideTarget =
+        "The stage folder is inside the target's folder, so the next scan would find these photos again";
+
+    // A stage folder inside a target is read by its next scan (Synology's is
+    // recursive), and photos waiting there for review come up for removal again.
+    public static bool IsSameOrInside(string folder, string parent)
+    {
+        try
+        {
+            return WithEndingSeparator(folder).StartsWith(WithEndingSeparator(parent), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    // A drive root (Z:\) already ends in one; other folders get one, so Camera
+    // Roll isn't taken to contain "Camera Roll staged".
+    private static string WithEndingSeparator(string folder)
+    {
+        var fullPath = Path.GetFullPath(folder);
+        return Path.EndsInDirectorySeparator(fullPath) ? fullPath : fullPath + Path.DirectorySeparatorChar;
     }
 
     private static string FolderBelow(string targetFolder, string path)

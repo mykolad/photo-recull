@@ -6,9 +6,12 @@ public class LivePhotoAndVideoTests : IDisposable
 {
     private static readonly string SamplePhoto = Path.Combine(AppContext.BaseDirectory, "TestData", "IMG_5587.HEIC");
 
-    private readonly string _folder = Directory.CreateTempSubdirectory("photorecull-live-").FullName;
+    private readonly string _root = Directory.CreateTempSubdirectory("photorecull-live-").FullName;
+    private readonly string _folder;
 
-    public void Dispose() => Directory.Delete(_folder, recursive: true);
+    public LivePhotoAndVideoTests() => _folder = Directory.CreateDirectory(Path.Combine(_root, "photos")).FullName;
+
+    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private string PathOf(string fileName) => Path.Combine(_folder, fileName);
 
@@ -138,7 +141,7 @@ public class LivePhotoAndVideoTests : IDisposable
     {
         WriteLivePhoto("IMG_1776");
         var photo = Assert.Single(PhotoScanner.ScanFolder(_folder));
-        var stageFolder = PathOf("_staged");
+        var stageFolder = Path.Combine(_root, "_staged");
 
         var result = FileActions.MoveToStageFolder([photo], stageFolder, _folder);
 
@@ -152,7 +155,7 @@ public class LivePhotoAndVideoTests : IDisposable
     {
         var (still, video) = WriteLivePhoto("IMG_1776");
         var photo = Assert.Single(PhotoScanner.ScanFolder(_folder));
-        var stageFolder = Directory.CreateDirectory(PathOf("_staged")).FullName;
+        var stageFolder = Directory.CreateDirectory(Path.Combine(_root, "_staged")).FullName;
         File.WriteAllText(Path.Combine(stageFolder, "IMG_1776.JPG"), "staged before");
 
         var result = FileActions.MoveToStageFolder([photo], stageFolder, _folder);
@@ -174,7 +177,7 @@ public class LivePhotoAndVideoTests : IDisposable
             File.WriteAllText(path, relative);
             return new PhotoFile(path, "IMG_0001.HEIC", DateTimeOffset.UtcNow, IsIphone: true, TimestampSource: "exif");
         }).ToList();
-        var stageFolder = PathOf("_staged");
+        var stageFolder = Path.Combine(_root, "_staged");
 
         var result = FileActions.MoveToStageFolder(photos, stageFolder, backup);
 

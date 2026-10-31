@@ -342,6 +342,12 @@ if (dryRun)
 if (wantStage)
 {
     var stageDir = Path.GetFullPath(stageFolder ?? $"_staged_{DefaultLabel(fromDate, toDate)}");
+    if (FileActions.IsSameOrInside(stageDir, target.FolderPath))
+    {
+        Console.Error.WriteLine($"ERROR: {FileActions.StageFolderInsideTarget}: {stageDir}");
+        Console.Error.WriteLine("Pass --stage with a folder outside the target's folder.");
+        return 1;
+    }
     Console.WriteLine($"\nAbout to MOVE {result.Unmatched.Count} file(s) to: {stageDir}");
     if (!assumeYes)
     {

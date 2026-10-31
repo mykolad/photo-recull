@@ -31,7 +31,7 @@ public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
         var photosFolder = FolderAndItsParents(Path.TrimEndingDirectorySeparator(FolderPath))
             .FirstOrDefault(f => Path.GetFileName(f).Equals("Photos", StringComparison.OrdinalIgnoreCase));
         return photosFolder is not null && Path.GetDirectoryName(photosFolder) is { } outsidePhotos
-            ? Path.Combine(outsidePhotos, "PhotoRecull staged", $"{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}")
+            ? Path.Combine(outsidePhotos, StageFolderName, $"{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}")
             : null;
     }
 
@@ -66,7 +66,7 @@ public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var name = Path.GetFileName(subfolder);
-                if (IsSynologyOrSystemFolder(name))
+                if (IsSkippedFolder(name))
                     continue;
                 var dates = DateFolder.FromName(name, folder.Dates) ?? folder.Dates;
                 if (dates is null || dates.Overlaps(firstDayWithMargin, lastDayWithMargin))
@@ -78,8 +78,14 @@ public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
     }
 
     // @eaDir holds Synology's thumbnails, #recycle and #snapshot its Recycle Bin
-    // and snapshots.
-    private static bool IsSynologyOrSystemFolder(string name) => name.Length > 0 && name[0] is '@' or '#' or '.' or '$';
+    // and snapshots. PhotoRecull's own stage folders hold photos waiting for
+    // review, which mustn't come up for removal again if one ended up in here.
+    private static bool IsSkippedFolder(string name) =>
+        name is ['@' or '#' or '.' or '$', ..]
+        || name.Equals(StageFolderName, StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("_staged_", StringComparison.OrdinalIgnoreCase);
+
+    private const string StageFolderName = "PhotoRecull staged";
 
     private static IEnumerable<string> FolderAndItsParents(string folder)
     {

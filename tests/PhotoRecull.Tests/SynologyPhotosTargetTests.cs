@@ -22,7 +22,7 @@ public class SynologyPhotosTargetTests : IDisposable
             .ToList();
 
     [Fact]
-    public void ListPhotoFiles_GoesThroughEveryYearAndMonthFolder_SkippingSynologysOwnFolders()
+    public void ListPhotoFiles_GoesThroughEveryYearAndMonthFolder_SkippingSynologysAndPhotoRecullsOwnFolders()
     {
         CreateFile(@"2025\12\IMG_0001.HEIC");
         CreateFile(@"2026\01\IMG_0002.JPEG");
@@ -30,6 +30,8 @@ public class SynologyPhotosTargetTests : IDisposable
         CreateFile(@"2026\01\Thumbs.db");
         CreateFile(@"2026\01\@eaDir\IMG_0002.JPEG\SYNOPHOTO_THUMB_XL.jpg");
         CreateFile(@"#recycle\IMG_0004.HEIC");
+        CreateFile(@"PhotoRecull staged\2026-01-01_2026-01-31\2026\01\IMG_0005.HEIC");
+        CreateFile(@"_staged_2026-01\IMG_0006.HEIC");
 
         Assert.Equal([@"2025\12\IMG_0001.HEIC", @"2026\01\IMG_0002.JPEG", @"2026\01\IMG_0003.mov"],
             ListedRelativePaths(firstDay: null, lastDay: null));

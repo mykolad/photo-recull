@@ -123,20 +123,13 @@ internal sealed class StageDialog
         {
             var folder = box.Text.Trim();
             var problem = !Path.IsPathFullyQualified(folder) ? null
-                : IsSameOrInside(folder, target.FolderPath) ? "This is inside the target's folder, so the next scan would find these photos again."
+                : FileActions.IsSameOrInside(folder, target.FolderPath) ? $"{FileActions.StageFolderInsideTarget}."
                 : null;
             _folderProblems[target].Text = problem ?? "";
             _folderProblems[target].Visibility = problem is null ? Visibility.Collapsed : Visibility.Visible;
             allUsable &= Path.IsPathFullyQualified(folder) && problem is null;
         }
         _dialog.IsPrimaryButtonEnabled = allUsable;
-    }
-
-    private static bool IsSameOrInside(string folder, string parent)
-    {
-        var folderPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
-        var parentPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent)) + Path.DirectorySeparatorChar;
-        return folderPath.StartsWith(parentPath, StringComparison.OrdinalIgnoreCase);
     }
 }
 
