@@ -47,6 +47,8 @@ public static class PhotoScanner
         return StillExtensions.Contains(extension) || VideoExtensions.Contains(extension);
     }
 
+    public static bool IsVideo(string path) => VideoExtensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
+
     public static List<PhotoFile> ScanFolder(
         string folderPath, IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default)
     {

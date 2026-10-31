@@ -25,12 +25,23 @@ public sealed partial class ReviewStackViewModel(
 
     public ReviewTileViewModel Cover => ReviewTimeline.Cover(Shown, frame => frame.Mark);
 
-    // Peeks out from behind the cover, so a burst reads as a stack.
-    public ReviewTileViewModel FrameBehindCover => Shown.FirstOrDefault(f => f != Cover) ?? Cover;
+    // Peeks out from behind the cover, so a burst reads as a stack. When some
+    // frames stay and some go, the one behind is a frame that goes, dimmed and
+    // outlined, so the cover that stays doesn't speak for the whole burst.
+    public ReviewTileViewModel FrameBehindCover =>
+        Shown.FirstOrDefault(f => f != Cover && f.IsMarkedToRemove) ?? Shown.FirstOrDefault(f => f != Cover) ?? Cover;
 
     public bool ShowsVideoBadge => !IsBurst && Cover.IsVideo;
 
     public string FrameCountText => Frames.Count.ToString("N0");
+
+    private int StayingCount => Frames.Count(f => f.Mark != ReviewMark.ToRemove);
+    private int ToRemoveCount => Frames.Count(f => f.Mark == ReviewMark.ToRemove);
+
+    public bool IsMixedBurst => IsBurst && StayingCount > 0 && ToRemoveCount > 0;
+    public bool ShowsFrameCount => IsBurst && !IsMixedBurst;
+    public string StayingCountText => StayingCount.ToString("N0");
+    public string ToRemoveCountText => ToRemoveCount.ToString("N0");
 
     public string Title => IsBurst ? $"Burst · {Frames.Count} frames within {spanSeconds} s" : Cover.FileName;
 
@@ -56,6 +67,10 @@ public sealed partial class ReviewStackViewModel(
         OnPropertyChanged(nameof(Cover));
         OnPropertyChanged(nameof(FrameBehindCover));
         OnPropertyChanged(nameof(ShowsVideoBadge));
+        OnPropertyChanged(nameof(IsMixedBurst));
+        OnPropertyChanged(nameof(ShowsFrameCount));
+        OnPropertyChanged(nameof(StayingCountText));
+        OnPropertyChanged(nameof(ToRemoveCountText));
         OnPropertyChanged(nameof(Caption));
         OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(Header));

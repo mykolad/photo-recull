@@ -23,6 +23,9 @@ public enum ReviewTileKind
     Skipped,
 }
 
+// One file: a photo's copy on one target, matched (or not) on its own.
+public sealed record ReviewCopy(PhotoFile Photo, TargetSettings Target, ReviewTileKind Kind);
+
 public sealed partial class ReviewTileViewModel : ObservableObject
 {
     public const int TileThumbnailPixels = 320;
@@ -34,27 +37,45 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     private bool _thumbnailRequested;
 
     public ReviewTileViewModel(
-        PhotoFile photo, TargetSettings target, ReviewTileKind kind, bool isKept,
+        IReadOnlyList<ReviewCopy> copies, bool isKept,
         Action<ReviewTileViewModel> toggleKeep, Action<ReviewTileViewModel> openPreview, Func<bool> isActionRunning)
     {
-        Photo = photo;
-        Target = target;
-        Kind = kind;
+        Copies = copies;
         IsKept = isKept;
         _toggleKeep = toggleKeep;
         _openPreview = openPreview;
         _isActionRunning = isActionRunning;
     }
 
-    public PhotoFile Photo { get; }
-    public TargetSettings Target { get; }
-    public ReviewTileKind Kind { get; }
+    // One per target the photo is backed up to; the first stands for the photo
+    // in the timeline and the preview.
+    public IReadOnlyList<ReviewCopy> Copies { get; }
+    public PhotoFile Photo => Copies[0].Photo;
+    public IEnumerable<ReviewCopy> CandidateCopies => Copies.Where(c => c.Kind == ReviewTileKind.Candidate);
+    public ReviewTileKind Kind => CandidateCopies.Any() ? ReviewTileKind.Candidate : Copies[0].Kind;
     public string FileName => Photo.FileName;
     public string FullPath => Photo.Path;
-    public string TargetGlyph => ShellPage.TargetGlyph(Target.Kind);
-    public string TargetName => SyncTargets.DisplayName(Target.Kind);
+    public string TargetGlyphs => string.Join(" ", Copies.Select(c => ShellPage.TargetGlyph(c.Target.Kind)));
+    public string TargetNames => NamesOf(Copies);
     public bool IsVideo => Thumbnails.IsVideo(Photo.Path);
     public bool CanBeKept => Kind == ReviewTileKind.Candidate;
+
+    // Each target is matched on its own, so a copy can stay on one target and go
+    // from another (say, when one file's capture time is off).
+    private bool StaysSomewhere => Copies.Any(c => c.Kind == ReviewTileKind.Match);
+
+    private static string NamesOf(IEnumerable<ReviewCopy> copies) =>
+        string.Join(" and ", copies.Select(c => SyncTargets.DisplayName(c.Target.Kind)));
+
+    public string CopiesText => string.Join(Environment.NewLine + Environment.NewLine, Copies.Select(c =>
+        $"{SyncTargets.DisplayName(c.Target.Kind)} · {CopyMarkText(c)}{Environment.NewLine}{c.Photo.Path}"));
+
+    private string CopyMarkText(ReviewCopy copy) => copy.Kind switch
+    {
+        ReviewTileKind.Skipped => "Skipped",
+        ReviewTileKind.Match => "Stays",
+        _ => IsKept ? "Kept by you" : "To remove",
+    };
     public string TimeSourceLabel => Photo.TimestampSource switch
     {
         "filename" => "File name",
@@ -69,7 +90,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     public long SizeBytes => Photo.SizeBytes;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(KeepButtonText), nameof(Mark), nameof(IsMarkedToRemove), nameof(MarkText), nameof(ThumbnailOpacity))]
+    [NotifyPropertyChangedFor(nameof(KeepButtonText), nameof(Mark), nameof(IsMarkedToRemove), nameof(MarkText), nameof(ThumbnailOpacity), nameof(CopiesText))]
     public partial bool IsKept { get; set; }
 
     // Read by the tile's Image binding when the tile is first laid out, which is
@@ -100,6 +121,8 @@ public sealed partial class ReviewTileViewModel : ObservableObject
 
     public string MarkText => Kind == ReviewTileKind.Skipped ? "Skipped" : Mark switch
     {
+        ReviewMark.ToRemove when StaysSomewhere =>
+            $"To remove from {NamesOf(CandidateCopies)} · stays on {NamesOf(Copies.Where(c => c.Kind == ReviewTileKind.Match))}",
         ReviewMark.ToRemove => "To remove",
         ReviewMark.KeptByYou => "Kept by you",
         _ => "Stays",
