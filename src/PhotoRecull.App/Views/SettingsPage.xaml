@@ -11,6 +11,37 @@
             <TextBlock Text="Settings" Style="{StaticResource PageTitleTextBlockStyle}" />
 
             <StackPanel Spacing="4">
+                <TextBlock Text="Source" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock
+                    Text="Where you pick the photos you kept."
+                    Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <Grid Padding="20,16" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE91B;" FontSize="24" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="Google Photos" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock
+                            Text="{x:Bind ViewModel.GooglePhotos.StatusText, Mode=OneWay}"
+                            Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button
+                        Grid.Column="2"
+                        Content="Sign out"
+                        Command="{x:Bind ViewModel.GooglePhotos.SignOutCommand}"
+                        Visibility="{x:Bind ViewModel.GooglePhotos.IsSignedIn, Mode=OneWay}" />
+                </Grid>
+            </Border>
+
+            <StackPanel Spacing="4" Margin="0,16,0,0">
                 <TextBlock Text="Targets" Style="{StaticResource BodyStrongTextBlockStyle}" />
                 <TextBlock
                     Text="Where else your iPhone photos are backed up. A new cleanup can scan every target that's on."

@@ -25,7 +25,7 @@ internal sealed class GoogleAccount(AppStateDatabase database)
         using var _ = await pickerClient.AuthorizeAsync(cancellationToken: cancellationToken);
     }
 
-    public void SignOut() => database.ClearGoogleToken();
+    public Task SignOutAsync() => GooglePhotosPickerClient.SignOutAsync(_tokenStore);
 
     private static async Task<ClientSecrets> LoadDeveloperOAuthClientAsync(string? developerCredentialsPath)
     {

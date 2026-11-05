@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
 using PhotoRecull.Core;
@@ -28,6 +29,8 @@ public sealed class SettingsViewModel
                 && (FileActions.IsSameOrInside(folder, saved.FolderPath) || FileActions.IsSameOrInside(saved.FolderPath, folder)));
 
     public List<TargetSettingsRowViewModel> Targets { get; }
+
+    public GooglePhotosSettingsViewModel GooglePhotos { get; } = new();
 
     private bool _isClosed;
 
@@ -61,6 +64,28 @@ public sealed class SettingsViewModel
     }
 }
 
+// The source: signing out lets the next pick use another Google account. Cleanups
+// stay as they are: a pick keeps only capture times, tied to no account.
+public sealed partial class GooglePhotosSettingsViewModel : ObservableObject
+{
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyCanExecuteChangedFor(nameof(SignOutCommand))]
+    public partial bool IsSignedIn { get; set; } = AppServices.Google.IsSignedIn;
+
+    public string StatusText => IsSignedIn
+        ? "Signed in. Sign out to pick photos from another Google account."
+        : "Not signed in. You'll sign in the next time you pick photos.";
+
+    [RelayCommand(CanExecute = nameof(IsSignedIn))]
+    private async Task SignOutAsync()
+    {
+        await AppServices.Google.SignOutAsync();
+        IsSignedIn = AppServices.Google.IsSignedIn;
+        ShellPage.Current?.RefreshConnectedServices();
+    }
+}
+
 // One target in Settings: on or off, and its folder. A folder is saved once it's
 // found, so a half-typed or unreachable path never replaces a working one.
 public sealed partial class TargetSettingsRowViewModel : ObservableObject
@@ -90,6 +115,7 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
     public partial bool IsUsed { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
     public partial bool CanBeTurnedOff { get; set; }
 
     public string StatusText => !IsUsed ? "Off. New cleanups can't use it."
@@ -97,6 +123,7 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
             ? $"Not saved: this folder overlaps {SyncTargets.DisplayName(other.Kind)}'s, so its photos would be scanned twice."
         : Saved is null ? "Saved once the folder is found."
         : Saved.FolderPath != Folder.Settings.FolderPath ? $"Still using {Saved.FolderPath} until the new folder is found."
+        : !CanBeTurnedOff ? "Saved. It's the only target on, and a cleanup needs one: turn on another to turn this one off."
         : "Saved. New cleanups can use it.";
 
     partial void OnIsUsedChanged(bool value)

@@ -26,6 +26,8 @@ public class GooglePhotosPickerClient
     private const string PickerScope   = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
     private const string SessionsUrl   = "https://photospicker.googleapis.com/v1/sessions";
     private const string MediaItemsUrl = "https://photospicker.googleapis.com/v1/mediaItems";
+    private const string RevokeUrl     = "https://oauth2.googleapis.com/revoke";
+    private const string TokenUser     = "user";
     private const int PageSize = 100;
 
     private readonly ClientSecrets _oauthClient;
@@ -75,12 +77,37 @@ public class GooglePhotosPickerClient
         return client;
     }
 
+    /// <summary>
+    /// Forgets the signed-in account, so the next sign-in can choose another.
+    /// The app's access is also revoked at Google, so that sign-in asks for
+    /// consent again; if Google can't be reached, the token is still forgotten
+    /// here and the access lapses when the refresh token expires or is removed
+    /// from the account's third-party connections.
+    /// </summary>
+    public static async Task SignOutAsync(IDataStore tokenStore, CancellationToken cancellationToken = default)
+    {
+        var token = await tokenStore.GetAsync<TokenResponse>(TokenUser);
+        if ((token?.RefreshToken ?? token?.AccessToken) is { } grant)
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                using var _ = await http.PostAsync(RevokeUrl,
+                    new FormUrlEncodedContent([new("token", grant)]), cancellationToken);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+            }
+        }
+        await tokenStore.ClearAsync();
+    }
+
     private async Task<UserCredential> AuthorizeAndRefreshAsync(CancellationToken cancellationToken)
     {
         var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
             _oauthClient,
             [PickerScope],
-            "user",
+            TokenUser,
             cancellationToken,
             _tokenStore,
             new BrowserCodeReceiver(_browser));
