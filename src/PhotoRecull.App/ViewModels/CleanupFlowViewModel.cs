@@ -212,6 +212,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                     ReauthenticatingMessage = $"Sign-in expired. Re-authenticating in {SignInBrowserName}…"),
                 cancellationToken: cancellation.Token);
             ReauthenticatingMessage = null;
+            // The first pick after signing out signs in again.
+            ShellPage.Current?.RefreshConnectedServices();
 
             var progress = new Progress<PickerProgress>(p =>
             {

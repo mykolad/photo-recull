@@ -82,11 +82,14 @@ public class GooglePhotosPickerClient
     /// The app's access is also revoked at Google, so that sign-in asks for
     /// consent again; if Google can't be reached, the token is still forgotten
     /// here and the access lapses when the refresh token expires or is removed
-    /// from the account's third-party connections.
+    /// from the account's third-party connections. The token is forgotten
+    /// before Google is asked: a pick started meanwhile signs in afresh, and
+    /// its new token isn't the one cleared.
     /// </summary>
     public static async Task SignOutAsync(IDataStore tokenStore, CancellationToken cancellationToken = default)
     {
         var token = await tokenStore.GetAsync<TokenResponse>(TokenUser);
+        await tokenStore.ClearAsync();
         if ((token?.RefreshToken ?? token?.AccessToken) is { } grant)
         {
             try
@@ -99,7 +102,6 @@ public class GooglePhotosPickerClient
             {
             }
         }
-        await tokenStore.ClearAsync();
     }
 
     private async Task<UserCredential> AuthorizeAndRefreshAsync(CancellationToken cancellationToken)
