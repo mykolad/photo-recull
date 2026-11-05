@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
 using PhotoRecull.Core;
@@ -29,11 +30,19 @@ public sealed class SettingsViewModel
 
     public List<TargetSettingsRowViewModel> Targets { get; }
 
+    public GooglePhotosSettingsViewModel GooglePhotos { get; } = new();
+
     private bool _isClosed;
 
     // A folder check still running when the page is left would otherwise save
     // later, over changes made since on a newer Settings page.
-    public void StopSaving() => _isClosed = true;
+    // A sign-in still waiting for the browser is cancelled too: finishing later, it
+    // would update this page's view model, not the one shown next time.
+    public void StopSaving()
+    {
+        _isClosed = true;
+        GooglePhotos.SignInCancelCommand.Execute(null);
+    }
 
     private void SaveTargets(TargetSettingsRowViewModel changed)
     {
@@ -58,6 +67,105 @@ public sealed class SettingsViewModel
     {
         foreach (var row in Targets)
             row.CanBeTurnedOff = !row.IsUsed || Targets.Any(other => other != row && other.Saved is not null);
+    }
+}
+
+// The source: signing out lets the next pick use another Google account. Cleanups
+// stay as they are: a pick keeps only capture times, tied to no account. The
+// browser chosen here is used to sign in and to open the Photos Picker.
+public sealed partial class GooglePhotosSettingsViewModel : ObservableObject
+{
+    public GooglePhotosSettingsViewModel()
+    {
+        var signInBrowser = AppServices.Database.LoadSettings().SignInBrowser;
+        SelectedSignInBrowserIndex = SignInBrowserChoice.IndexFor(signInBrowser);
+        if (SignInBrowserChoices[SelectedSignInBrowserIndex].IsCustomPath)
+            CustomBrowserPath = signInBrowser!;
+        _isLoaded = true;
+    }
+
+    // Loading the saved choice sets the index before the custom path; saving then
+    // would replace a custom path with the default.
+    private readonly bool _isLoaded;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText), nameof(CanSignIn))]
+    [NotifyCanExecuteChangedFor(nameof(SignOutCommand))]
+    public partial bool IsSignedIn { get; set; } = AppServices.Google.IsSignedIn;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText), nameof(CanSignIn))]
+    public partial bool IsWaitingForBrowser { get; set; }
+
+    public bool CanSignIn => !IsSignedIn && !IsWaitingForBrowser;
+
+    public string StatusText =>
+        IsSignedIn ? "Signed in. Sign out to pick photos from another Google account."
+        : IsWaitingForBrowser ? $"Finish signing in to Google in {SignInBrowserChoice.DisplayNameFor(SignInBrowser)}."
+        : "Not signed in. Sign in here, or you'll be asked the next time you pick photos.";
+
+    [ObservableProperty]
+    public partial string? SignInError { get; set; }
+
+    public IReadOnlyList<SignInBrowserChoice> SignInBrowserChoices => SignInBrowserChoice.All;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCustomBrowserPathVisible))]
+    public partial int SelectedSignInBrowserIndex { get; set; }
+
+    [ObservableProperty]
+    public partial string CustomBrowserPath { get; set; } = "";
+
+    public bool IsCustomBrowserPathVisible => SignInBrowserChoices[Math.Max(0, SelectedSignInBrowserIndex)].IsCustomPath;
+
+    private string? SignInBrowser => SignInBrowserChoice.SettingFor(SelectedSignInBrowserIndex, CustomBrowserPath);
+
+    partial void OnSelectedSignInBrowserIndexChanged(int value) => SaveSignInBrowser();
+
+    partial void OnCustomBrowserPathChanged(string value) => SaveSignInBrowser();
+
+    private void SaveSignInBrowser()
+    {
+        if (!_isLoaded)
+            return;
+        var settings = AppServices.Database.LoadSettings();
+        if (settings.SignInBrowser != SignInBrowser)
+            AppServices.Database.SaveSettings(settings with { SignInBrowser = SignInBrowser });
+    }
+
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task SignInAsync(CancellationToken cancellationToken)
+    {
+        SignInError = null;
+        IsWaitingForBrowser = true;
+        try
+        {
+            await AppServices.Google.SignInAsync(
+                SignInBrowser, AppServices.Database.LoadSettings().DeveloperCredentialsPath, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            SignInError = $"Couldn't sign in to Google: {ex.Message}";
+        }
+        finally
+        {
+            IsWaitingForBrowser = false;
+            IsSignedIn = AppServices.Google.IsSignedIn;
+            ShellPage.Current?.RefreshConnectedServices();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsSignedIn))]
+    private async Task SignOutAsync()
+    {
+        await AppServices.Google.SignOutAsync(onSignedOut: () =>
+        {
+            IsSignedIn = AppServices.Google.IsSignedIn;
+            ShellPage.Current?.RefreshConnectedServices();
+        });
     }
 }
 
@@ -90,6 +198,7 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
     public partial bool IsUsed { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
     public partial bool CanBeTurnedOff { get; set; }
 
     public string StatusText => !IsUsed ? "Off. New cleanups can't use it."
@@ -97,6 +206,7 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
             ? $"Not saved: this folder overlaps {SyncTargets.DisplayName(other.Kind)}'s, so its photos would be scanned twice."
         : Saved is null ? "Saved once the folder is found."
         : Saved.FolderPath != Folder.Settings.FolderPath ? $"Still using {Saved.FolderPath} until the new folder is found."
+        : !CanBeTurnedOff ? "Saved. A cleanup needs a target, and this is the only one saved: turn on another and choose its folder to turn this one off."
         : "Saved. New cleanups can use it.";
 
     partial void OnIsUsedChanged(bool value)
