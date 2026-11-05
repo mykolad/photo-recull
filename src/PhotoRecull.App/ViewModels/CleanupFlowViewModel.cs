@@ -235,6 +235,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
         }
+        catch (SignInTimeoutException ex)
+        {
+            PickError = ex.Message;
+        }
         catch (TimeoutException)
         {
             PickError = "Picker timed out. You did not click Done in time. Nothing was saved.";

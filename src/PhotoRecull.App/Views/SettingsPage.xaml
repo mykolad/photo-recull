@@ -70,6 +70,7 @@
                                 <ComboBox
                                     Grid.Column="1"
                                     MinWidth="220"
+                                    AutomationProperties.Name="Sign-in browser"
                                     ItemsSource="{x:Bind ViewModel.GooglePhotos.SignInBrowserChoices}"
                                     DisplayMemberPath="Label"
                                     SelectedIndex="{x:Bind ViewModel.GooglePhotos.SelectedSignInBrowserIndex, Mode=TwoWay}" />

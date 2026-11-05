@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Requests;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Util.Store;
 
@@ -134,9 +135,36 @@ public class GooglePhotosPickerClient
     /// <see cref="BrowserLauncher"/>, so --browser applies to sign-in too
     /// (the stock receiver always uses the system default browser).
     /// </summary>
-    private sealed class BrowserCodeReceiver(string? browser) : LocalServerCodeReceiver
+    private sealed class BrowserCodeReceiver(string? browser) : ICodeReceiver
     {
-        protected override bool OpenBrowser(string url) => BrowserLauncher.Open(url, browser);
+        // The app can't tell when the sign-in page is closed: it only waits for
+        // Google to redirect back. So the wait has a limit.
+        private static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(5);
+
+        private readonly LocalServerCodeReceiver _receiver = new BrowserOpeningReceiver(browser);
+
+        public string RedirectUri => _receiver.RedirectUri;
+
+        public async Task<AuthorizationCodeResponseUrl> ReceiveCodeAsync(
+            AuthorizationCodeRequestUrl url, CancellationToken taskCancellationToken)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(taskCancellationToken);
+            timeout.CancelAfter(SignInTimeout);
+            try
+            {
+                return await _receiver.ReceiveCodeAsync(url, timeout.Token);
+            }
+            catch (OperationCanceledException) when (!taskCancellationToken.IsCancellationRequested)
+            {
+                throw new SignInTimeoutException(
+                    $"Sign-in wasn't finished in the browser within {SignInTimeout.TotalMinutes:0} minutes. Was its page closed? Try again.");
+            }
+        }
+
+        private sealed class BrowserOpeningReceiver(string? browser) : LocalServerCodeReceiver
+        {
+            protected override bool OpenBrowser(string url) => BrowserLauncher.Open(url, browser);
+        }
     }
 
     /// <summary>
@@ -274,6 +302,9 @@ public class GooglePhotosPickerClient
             : null;
     }
 }
+
+// Google sign-in waited too long for the browser: not the picker's own timeout.
+public sealed class SignInTimeoutException(string message) : TimeoutException(message);
 
 public abstract record PickerProgress
 {

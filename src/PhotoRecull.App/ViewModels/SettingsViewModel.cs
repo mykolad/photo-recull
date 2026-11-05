@@ -36,7 +36,13 @@ public sealed class SettingsViewModel
 
     // A folder check still running when the page is left would otherwise save
     // later, over changes made since on a newer Settings page.
-    public void StopSaving() => _isClosed = true;
+    // A sign-in still waiting for the browser is cancelled too: finishing later, it
+    // would update this page's view model, not the one shown next time.
+    public void StopSaving()
+    {
+        _isClosed = true;
+        GooglePhotos.SignInCancelCommand.Execute(null);
+    }
 
     private void SaveTargets(TargetSettingsRowViewModel changed)
     {
