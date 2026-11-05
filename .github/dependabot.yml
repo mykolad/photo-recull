@@ -1,16 +1,30 @@
+# Package updates as PRs, once a week, related packages together. Security updates come as soon as an advisory is
+# out, whatever the schedule.
 version: 2
 updates:
+  # Directory.Packages.props holds every package version.
   - package-ecosystem: nuget
-    directories:
-      - /src/*
-      - /tests/*
+    directory: /
     schedule:
       interval: weekly
       day: monday
-    # Minor and patch updates come as one PR; a major update gets its own, as it
-    # may need code changes.
+    # A release gets a week before it's taken: a broken or malicious one is usually pulled by then.
+    # Security updates don't wait.
+    cooldown:
+      default-days: 7
+    # A package is grouped by the first group it matches. Any other major update gets a PR of its own, as it may need
+    # code changes.
     groups:
-      nuget-minor-and-patch:
+      windows-app-sdk:
+        patterns:
+          - Microsoft.WindowsAppSDK
+          - Microsoft.Windows.SDK.BuildTools
+      tests:
+        patterns:
+          - coverlet.*
+          - Microsoft.NET.Test.Sdk
+          - xunit*
+      minor-and-patch:
         update-types:
           - minor
           - patch
@@ -20,6 +34,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
