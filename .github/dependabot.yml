@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - /src/*
+      - /tests/*
+    schedule:
+      interval: weekly
+      day: monday
+    # Minor and patch updates come as one PR; a major update gets its own, as it
+    # may need code changes.
+    groups:
+      nuget-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      github-actions:
+        patterns:
+          - "*"
