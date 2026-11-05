@@ -1,3 +1,4 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoRecull.App.Views;
 using PhotoRecull.Core;
@@ -40,7 +41,7 @@ public sealed partial class TargetScanRowViewModel(TargetSettings target) : Obse
     public void ShowProgress(ScanProgress progress)
     {
         Percent = progress.FilesTotal == 0 ? 0 : 100.0 * progress.FilesChecked / progress.FilesTotal;
-        PhotoFilesFoundText = progress.FilesChecked.ToString("N0");
+        PhotoFilesFoundText = progress.FilesChecked.ToString("N0", CultureInfo.CurrentCulture);
         CurrentActivityText = $"Reading …\\{Path.GetFileName(progress.CurrentFile)}";
     }
 
@@ -48,9 +49,9 @@ public sealed partial class TargetScanRowViewModel(TargetSettings target) : Obse
     {
         Percent = 100;
         IsDone = true;
-        PhotoFilesFoundText = result.PhotoFilesFound.ToString("N0");
-        IphonePhotosInRangeText = result.IphonePhotosInRange.ToString("N0");
-        SkippedText = result.Match.Skipped.Count.ToString("N0");
+        PhotoFilesFoundText = result.PhotoFilesFound.ToString("N0", CultureInfo.CurrentCulture);
+        IphonePhotosInRangeText = result.IphonePhotosInRange.ToString("N0", CultureInfo.CurrentCulture);
+        SkippedText = result.Match.Skipped.Count.ToString("N0", CultureInfo.CurrentCulture);
         CurrentActivityText = "Matched by capture time, one-to-one within ±2 s";
     }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Shapes;
@@ -76,7 +77,7 @@ public sealed class RangeComparisonBars : UserControl
             {
                 var tick = new Rectangle { Width = 1, Height = 16, Fill = tickBrush };
                 Canvas.SetLeft(tick, x);
-                var label = new TextBlock { Text = month.ToString("MMM"), FontSize = 11, Foreground = tickText };
+                var label = new TextBlock { Text = month.ToString("MMM", CultureInfo.CurrentCulture), FontSize = 11, Foreground = tickText };
                 Canvas.SetLeft(label, x + 4);
                 _monthTicks.Children.Add(tick);
                 _monthTicks.Children.Add(label);

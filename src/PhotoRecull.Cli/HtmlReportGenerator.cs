@@ -41,7 +41,7 @@ public static class HtmlReportGenerator
             _                    => "entire library"
         };
 
-        sb.AppendLine($$"""
+        sb.AppendLine(CultureInfo.InvariantCulture, $$"""
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -213,8 +213,8 @@ public static class HtmlReportGenerator
         {
             int dayToRemove = day.Photos.Count(toRemove.Contains);
             var dayLabel = day.Day?.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture) ?? "No capture time";
-            sb.AppendLine($"""  <section class="day{MarkClasses(day.Photos.Count - dayToRemove, dayToRemove)}">""");
-            sb.AppendLine($"""    <h2>{dayLabel} <span>· {ReviewTimeline.DayCaption(day.Photos.Count - dayToRemove, dayToRemove)}</span></h2>""");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"""  <section class="day{MarkClasses(day.Photos.Count - dayToRemove, dayToRemove)}">""");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"""    <h2>{dayLabel} <span>· {ReviewTimeline.DayCaption(day.Photos.Count - dayToRemove, dayToRemove)}</span></h2>""");
             sb.AppendLine("""    <div class="grid">""");
             foreach (var stack in day.Stacks)
             {
@@ -232,12 +232,12 @@ public static class HtmlReportGenerator
         if (result.Skipped.Count > 0)
         {
             sb.AppendLine("""  <section class="skip">""");
-            sb.AppendLine($"""    <details><summary><h2 style="display:inline">&#x2296; Skipped — not iPhone ({result.Skipped.Count})</h2></summary>""");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"""    <details><summary><h2 style="display:inline">&#x2296; Skipped — not iPhone ({result.Skipped.Count})</h2></summary>""");
             sb.AppendLine("""    <ul class="skipped-list" style="margin-top:12px">""");
             foreach (var p in result.Skipped.OrderBy(x => x.FileName))
             {
                 var reason = !p.IsIphone ? "not iPhone" : "no timestamp";
-                sb.AppendLine($"""      <li>{HtmlEncode(p.FileName)}<span>{reason}</span></li>""");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"""      <li>{HtmlEncode(p.FileName)}<span>{reason}</span></li>""");
             }
             sb.AppendLine("    </ul>");
             sb.AppendLine("    </details>");

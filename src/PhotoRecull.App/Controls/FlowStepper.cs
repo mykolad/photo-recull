@@ -1,9 +1,9 @@
+using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using PhotoRecull.App.Views;
 
@@ -66,7 +66,7 @@ public sealed class FlowStepper : UserControl
                     ? new FontIcon { Glyph = "", FontSize = 11, Foreground = onAccent }
                     : new TextBlock
                     {
-                        Text = (i + 1).ToString(),
+                        Text = (i + 1).ToString(CultureInfo.CurrentCulture),
                         FontSize = 11,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center,

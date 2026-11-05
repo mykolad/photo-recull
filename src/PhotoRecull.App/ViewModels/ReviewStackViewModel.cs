@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.Core.Library;
@@ -33,15 +34,15 @@ public sealed partial class ReviewStackViewModel(
 
     public bool ShowsVideoBadge => !IsBurst && Cover.IsVideo;
 
-    public string FrameCountText => Frames.Count.ToString("N0");
+    public string FrameCountText => Frames.Count.ToString("N0", CultureInfo.CurrentCulture);
 
     private int StayingCount => Frames.Count(f => f.Mark != ReviewMark.ToRemove);
     private int ToRemoveCount => Frames.Count(f => f.Mark == ReviewMark.ToRemove);
 
     public bool IsMixedBurst => IsBurst && StayingCount > 0 && ToRemoveCount > 0;
     public bool ShowsFrameCount => IsBurst && !IsMixedBurst;
-    public string StayingCountText => StayingCount.ToString("N0");
-    public string ToRemoveCountText => ToRemoveCount.ToString("N0");
+    public string StayingCountText => StayingCount.ToString("N0", CultureInfo.CurrentCulture);
+    public string ToRemoveCountText => ToRemoveCount.ToString("N0", CultureInfo.CurrentCulture);
 
     public string Title => IsBurst ? $"Burst · {Frames.Count} frames within {spanSeconds} s" : Cover.FileName;
 

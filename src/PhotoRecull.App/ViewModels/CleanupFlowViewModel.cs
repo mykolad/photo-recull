@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Data.Sqlite;
@@ -825,7 +826,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     private static List<Cleanup> AllCleanups() => AppServices.Database.LoadCleanups();
 
-    private static string FormatDay(DateOnly day) => day.ToString("d MMM yyyy");
+    private static string FormatDay(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.CurrentCulture);
 
     private static string PhotoCount(int count) => count == 1 ? "1 photo" : $"{count:N0} photos";
 

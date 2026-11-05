@@ -13,7 +13,7 @@ public class DateRangeLabelTests
     [InlineData("2026-07-06", "2026-07-06", "6 Jul 2026")]
     public void Format_MatchesTheDesign(string from, string to, string expected)
     {
-        Assert.Equal(expected, DateRangeLabel.Format(DateOnly.Parse(from), DateOnly.Parse(to), English));
+        Assert.Equal(expected, DateRangeLabel.Format(DateOnly.Parse(from, CultureInfo.InvariantCulture), DateOnly.Parse(to, CultureInfo.InvariantCulture), English));
     }
 
     [Fact]
