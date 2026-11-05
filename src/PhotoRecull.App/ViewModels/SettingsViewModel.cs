@@ -200,7 +200,7 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
             ? $"Not saved: this folder overlaps {SyncTargets.DisplayName(other.Kind)}'s, so its photos would be scanned twice."
         : Saved is null ? "Saved once the folder is found."
         : Saved.FolderPath != Folder.Settings.FolderPath ? $"Still using {Saved.FolderPath} until the new folder is found."
-        : !CanBeTurnedOff ? "Saved. It's the only target on, and a cleanup needs one: turn on another to turn this one off."
+        : !CanBeTurnedOff ? "Saved. A cleanup needs a target, and this is the only one saved: turn on another and choose its folder to turn this one off."
         : "Saved. New cleanups can use it.";
 
     partial void OnIsUsedChanged(bool value)
