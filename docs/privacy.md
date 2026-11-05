@@ -49,8 +49,10 @@ adheres to the
 including the Limited Use requirements.
 
 **Revoking access.** You can remove PhotoRecull's access at any time in your
-[Google Account](https://myaccount.google.com/connections). Deleting the
-`token_store_picker` folder signs it out on your computer.
+[Google Account](https://myaccount.google.com/connections). In the Windows app,
+**Settings → Sign out** deletes the sign-in token from your computer and asks Google to
+revoke the app's access. For the command-line app, deleting the `token_store_picker` folder
+signs it out on your computer.
 
 ## Files on your computer
 

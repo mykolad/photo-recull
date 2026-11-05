@@ -190,7 +190,7 @@ public class FileActionsTests : IDisposable
         Assert.Empty(result.Failures);
         Assert.False(File.Exists(photo.Path));
         // Explorer may hide extensions in the Recycle Bin's display names.
-        Assert.Contains(RecycleBinDisplayNames(), name => name.StartsWith(Path.GetFileNameWithoutExtension(photo.FileName)));
+        Assert.Contains(RecycleBinDisplayNames(), name => name.StartsWith(Path.GetFileNameWithoutExtension(photo.FileName), StringComparison.Ordinal));
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]

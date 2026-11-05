@@ -2,9 +2,9 @@ using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using FocusManager = Microsoft.UI.Xaml.Input.FocusManager;
 using Microsoft.UI.Xaml.Navigation;
 using PhotoRecull.App.ViewModels;
+using FocusManager = Microsoft.UI.Xaml.Input.FocusManager;
 using VirtualKey = Windows.System.VirtualKey;
 
 namespace PhotoRecull.App.Views;

@@ -35,7 +35,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Packages.props', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Restore
@@ -43,6 +43,12 @@ jobs:
 
       - name: Build
         run: dotnet build PhotoRecull.slnx -c Release --no-restore
+
+      # The build doesn't report every style rule in .editorconfig (a needless `this.`, import order); this does.
+      # Unused private members are left to the build: this step doesn't see the code XAML generates, so it would call
+      # every event handler a page's XAML names unused.
+      - name: Code style
+        run: dotnet format style PhotoRecull.slnx --verify-no-changes --no-restore --exclude-diagnostics IDE0051 IDE0052
 
       - name: Test
         run: dotnet test PhotoRecull.slnx -c Release --no-build --logger trx --results-directory TestResults

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Requests;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Util.Store;
 
@@ -26,6 +27,8 @@ public class GooglePhotosPickerClient
     private const string PickerScope   = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
     private const string SessionsUrl   = "https://photospicker.googleapis.com/v1/sessions";
     private const string MediaItemsUrl = "https://photospicker.googleapis.com/v1/mediaItems";
+    private const string RevokeUrl     = "https://oauth2.googleapis.com/revoke";
+    private const string TokenUser     = "user";
     private const int PageSize = 100;
 
     private readonly ClientSecrets _oauthClient;
@@ -75,12 +78,45 @@ public class GooglePhotosPickerClient
         return client;
     }
 
+    /// <summary>
+    /// Signing out, first step: forgets the signed-in account, so the next
+    /// sign-in can choose another. Returns the grant to pass to
+    /// <see cref="RevokeAsync"/>, or null if no one was signed in. Forgetting
+    /// comes first: a pick started meanwhile signs in afresh, and its new token
+    /// isn't the one cleared.
+    /// </summary>
+    public static async Task<string?> ForgetSignInAsync(IDataStore tokenStore)
+    {
+        var token = await tokenStore.GetAsync<TokenResponse>(TokenUser);
+        await tokenStore.ClearAsync();
+        return token?.RefreshToken ?? token?.AccessToken;
+    }
+
+    /// <summary>
+    /// Signing out, second step: revokes the app's access at Google, so the
+    /// next sign-in asks for consent again. If Google can't be reached, the
+    /// access lapses when the refresh token expires or is removed from the
+    /// account's third-party connections.
+    /// </summary>
+    public static async Task RevokeAsync(string grant, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var _ = await http.PostAsync(RevokeUrl,
+                new FormUrlEncodedContent([new("token", grant)]), cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+        }
+    }
+
     private async Task<UserCredential> AuthorizeAndRefreshAsync(CancellationToken cancellationToken)
     {
         var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
             _oauthClient,
             [PickerScope],
-            "user",
+            TokenUser,
             cancellationToken,
             _tokenStore,
             new BrowserCodeReceiver(_browser));
@@ -99,9 +135,36 @@ public class GooglePhotosPickerClient
     /// <see cref="BrowserLauncher"/>, so --browser applies to sign-in too
     /// (the stock receiver always uses the system default browser).
     /// </summary>
-    private sealed class BrowserCodeReceiver(string? browser) : LocalServerCodeReceiver
+    private sealed class BrowserCodeReceiver(string? browser) : ICodeReceiver
     {
-        protected override bool OpenBrowser(string url) => BrowserLauncher.Open(url, browser);
+        // The app can't tell when the sign-in page is closed: it only waits for
+        // Google to redirect back. So the wait has a limit.
+        private static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(5);
+
+        private readonly LocalServerCodeReceiver _receiver = new BrowserOpeningReceiver(browser);
+
+        public string RedirectUri => _receiver.RedirectUri;
+
+        public async Task<AuthorizationCodeResponseUrl> ReceiveCodeAsync(
+            AuthorizationCodeRequestUrl url, CancellationToken taskCancellationToken)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(taskCancellationToken);
+            timeout.CancelAfter(SignInTimeout);
+            try
+            {
+                return await _receiver.ReceiveCodeAsync(url, timeout.Token);
+            }
+            catch (OperationCanceledException) when (!taskCancellationToken.IsCancellationRequested)
+            {
+                throw new SignInTimeoutException(
+                    $"Sign-in wasn't finished in the browser within {SignInTimeout.TotalMinutes:0} minutes. Was its page closed? Try again.");
+            }
+        }
+
+        private sealed class BrowserOpeningReceiver(string? browser) : LocalServerCodeReceiver
+        {
+            protected override bool OpenBrowser(string url) => BrowserLauncher.Open(url, browser);
+        }
     }
 
     /// <summary>
@@ -239,6 +302,9 @@ public class GooglePhotosPickerClient
             : null;
     }
 }
+
+// Google sign-in waited too long for the browser: not the picker's own timeout.
+public sealed class SignInTimeoutException(string message) : TimeoutException(message);
 
 public abstract record PickerProgress
 {

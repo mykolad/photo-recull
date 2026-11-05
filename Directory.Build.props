@@ -1,0 +1,26 @@
+<Project>
+
+  <!-- Every project. The target framework stays in each one: the Windows app targets a Windows version. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- Every warning fails the build, so none piles up unread. A NuGet security advisory is a warning too (NU1901-NU1904),
+       for a package referenced directly or one that only comes in through another: it blocks the build until a fixed
+       version is taken (one line in Directory.Packages.props). -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+  </PropertyGroup>
+
+  <!-- The code style in .editorconfig and .NET's recommended analyzers fail the build, not just the editor. The XML
+       documentation file is built only so the build can report unused usings (IDE0005). -->
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

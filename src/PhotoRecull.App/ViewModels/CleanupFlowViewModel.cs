@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Data.Sqlite;
@@ -212,6 +213,8 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
                     ReauthenticatingMessage = $"Sign-in expired. Re-authenticating in {SignInBrowserName}…"),
                 cancellationToken: cancellation.Token);
             ReauthenticatingMessage = null;
+            // The first pick after signing out signs in again.
+            ShellPage.Current?.RefreshConnectedServices();
 
             var progress = new Progress<PickerProgress>(p =>
             {
@@ -232,6 +235,10 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
+        }
+        catch (SignInTimeoutException ex)
+        {
+            PickError = ex.Message;
         }
         catch (TimeoutException)
         {
@@ -819,7 +826,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
 
     private static List<Cleanup> AllCleanups() => AppServices.Database.LoadCleanups();
 
-    private static string FormatDay(DateOnly day) => day.ToString("d MMM yyyy");
+    private static string FormatDay(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.CurrentCulture);
 
     private static string PhotoCount(int count) => count == 1 ? "1 photo" : $"{count:N0} photos";
 
