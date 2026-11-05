@@ -22,6 +22,16 @@ public sealed record SignInBrowserChoice(string Label, string? BrowserLauncherVa
         _ => 4,
     };
 
+    // What's saved as AppSettings.SignInBrowser: a custom path left empty means the
+    // system default.
+    public static string? SettingFor(int index, string customPath)
+    {
+        var choice = All[Math.Clamp(index, 0, All.Count - 1)];
+        return choice.IsCustomPath
+            ? (string.IsNullOrWhiteSpace(customPath) ? null : customPath.Trim())
+            : choice.BrowserLauncherValue;
+    }
+
     public string DisplayNameInSentence => BrowserLauncherValue is null && !IsCustomPath
         ? DefaultBrowser.FriendlyNameOrNull() ?? "your browser"
         : IsCustomPath ? "your browser" : Label;

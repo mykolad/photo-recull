@@ -19,26 +19,75 @@
             </StackPanel>
 
             <Border Style="{StaticResource CardBorderStyle}">
-                <Grid Padding="20,16" ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="32" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <FontIcon Glyph="&#xE91B;" FontSize="24" />
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="Google Photos" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock
-                            Text="{x:Bind ViewModel.GooglePhotos.StatusText, Mode=OneWay}"
-                            Style="{StaticResource SecondaryCaptionTextBlockStyle}"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
-                    <Button
-                        Grid.Column="2"
-                        Content="Sign out"
-                        Command="{x:Bind ViewModel.GooglePhotos.SignOutCommand}"
-                        Visibility="{x:Bind ViewModel.GooglePhotos.IsSignedIn, Mode=OneWay}" />
-                </Grid>
+                <StackPanel>
+                    <Grid Padding="20,16" ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE91B;" FontSize="24" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Google Photos" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock
+                                Text="{x:Bind ViewModel.GooglePhotos.StatusText, Mode=OneWay}"
+                                Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button
+                                Content="Sign out"
+                                Command="{x:Bind ViewModel.GooglePhotos.SignOutCommand}"
+                                Visibility="{x:Bind ViewModel.GooglePhotos.IsSignedIn, Mode=OneWay}" />
+                            <Button
+                                Style="{StaticResource AccentButtonStyle}"
+                                Content="Sign in"
+                                Command="{x:Bind ViewModel.GooglePhotos.SignInCommand}"
+                                Visibility="{x:Bind ViewModel.GooglePhotos.CanSignIn, Mode=OneWay}" />
+                            <Button
+                                Content="Cancel"
+                                Command="{x:Bind ViewModel.GooglePhotos.SignInCancelCommand}"
+                                Visibility="{x:Bind ViewModel.GooglePhotos.IsWaitingForBrowser, Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
+                    <Border Style="{StaticResource SettingRowDividerStyle}">
+                        <StackPanel Spacing="8">
+                            <Grid ColumnSpacing="16" RowSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Sign-in browser" />
+                                    <TextBlock
+                                        Text="Where Google sign-in and the Photos Picker open."
+                                        Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                </StackPanel>
+                                <ComboBox
+                                    Grid.Column="1"
+                                    MinWidth="220"
+                                    ItemsSource="{x:Bind ViewModel.GooglePhotos.SignInBrowserChoices}"
+                                    DisplayMemberPath="Label"
+                                    SelectedIndex="{x:Bind ViewModel.GooglePhotos.SelectedSignInBrowserIndex, Mode=TwoWay}" />
+                                <TextBox
+                                    Grid.Row="1"
+                                    Grid.ColumnSpan="2"
+                                    PlaceholderText="C:\Program Files\Browser\browser.exe"
+                                    Text="{x:Bind ViewModel.GooglePhotos.CustomBrowserPath, Mode=TwoWay}"
+                                    Visibility="{x:Bind ViewModel.GooglePhotos.IsCustomBrowserPathVisible, Mode=OneWay}" />
+                            </Grid>
+                            <InfoBar
+                                Severity="Error"
+                                IsOpen="{x:Bind views:XamlFunctions.IsNotEmpty(ViewModel.GooglePhotos.SignInError), Mode=OneWay}"
+                                IsClosable="False"
+                                Message="{x:Bind ViewModel.GooglePhotos.SignInError, Mode=OneWay}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Border>
 
             <StackPanel Spacing="4" Margin="0,16,0,0">

@@ -68,9 +68,7 @@ public sealed partial class SetupViewModel : ObservableObject
 
     private SignInBrowserChoice SelectedSignInBrowser => SignInBrowserChoices[Math.Max(0, SelectedSignInBrowserIndex)];
 
-    private string? SignInBrowser => SelectedSignInBrowser.IsCustomPath
-        ? (string.IsNullOrWhiteSpace(CustomBrowserPath) ? null : CustomBrowserPath.Trim())
-        : SelectedSignInBrowser.BrowserLauncherValue;
+    private string? SignInBrowser => SignInBrowserChoice.SettingFor(SelectedSignInBrowserIndex, CustomBrowserPath);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConnected), nameof(IsWaitingForBrowser), nameof(SignInStatusText),

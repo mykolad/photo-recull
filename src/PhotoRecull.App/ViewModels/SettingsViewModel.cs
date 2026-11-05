@@ -65,17 +65,92 @@ public sealed class SettingsViewModel
 }
 
 // The source: signing out lets the next pick use another Google account. Cleanups
-// stay as they are: a pick keeps only capture times, tied to no account.
+// stay as they are: a pick keeps only capture times, tied to no account. The
+// browser chosen here is used to sign in and to open the Photos Picker.
 public sealed partial class GooglePhotosSettingsViewModel : ObservableObject
 {
+    public GooglePhotosSettingsViewModel()
+    {
+        var signInBrowser = AppServices.Database.LoadSettings().SignInBrowser;
+        SelectedSignInBrowserIndex = SignInBrowserChoice.IndexFor(signInBrowser);
+        if (SignInBrowserChoices[SelectedSignInBrowserIndex].IsCustomPath)
+            CustomBrowserPath = signInBrowser!;
+        _isLoaded = true;
+    }
+
+    // Loading the saved choice sets the index before the custom path; saving then
+    // would replace a custom path with the default.
+    private readonly bool _isLoaded;
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
+    [NotifyPropertyChangedFor(nameof(StatusText), nameof(CanSignIn))]
     [NotifyCanExecuteChangedFor(nameof(SignOutCommand))]
     public partial bool IsSignedIn { get; set; } = AppServices.Google.IsSignedIn;
 
-    public string StatusText => IsSignedIn
-        ? "Signed in. Sign out to pick photos from another Google account."
-        : "Not signed in. You'll sign in the next time you pick photos.";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText), nameof(CanSignIn))]
+    public partial bool IsWaitingForBrowser { get; set; }
+
+    public bool CanSignIn => !IsSignedIn && !IsWaitingForBrowser;
+
+    public string StatusText =>
+        IsSignedIn ? "Signed in. Sign out to pick photos from another Google account."
+        : IsWaitingForBrowser ? $"Finish signing in to Google in {SignInBrowserChoice.DisplayNameFor(SignInBrowser)}."
+        : "Not signed in. Sign in here, or you'll be asked the next time you pick photos.";
+
+    [ObservableProperty]
+    public partial string? SignInError { get; set; }
+
+    public IReadOnlyList<SignInBrowserChoice> SignInBrowserChoices => SignInBrowserChoice.All;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCustomBrowserPathVisible))]
+    public partial int SelectedSignInBrowserIndex { get; set; }
+
+    [ObservableProperty]
+    public partial string CustomBrowserPath { get; set; } = "";
+
+    public bool IsCustomBrowserPathVisible => SignInBrowserChoices[Math.Max(0, SelectedSignInBrowserIndex)].IsCustomPath;
+
+    private string? SignInBrowser => SignInBrowserChoice.SettingFor(SelectedSignInBrowserIndex, CustomBrowserPath);
+
+    partial void OnSelectedSignInBrowserIndexChanged(int value) => SaveSignInBrowser();
+
+    partial void OnCustomBrowserPathChanged(string value) => SaveSignInBrowser();
+
+    private void SaveSignInBrowser()
+    {
+        if (!_isLoaded)
+            return;
+        var settings = AppServices.Database.LoadSettings();
+        if (settings.SignInBrowser != SignInBrowser)
+            AppServices.Database.SaveSettings(settings with { SignInBrowser = SignInBrowser });
+    }
+
+    [RelayCommand(IncludeCancelCommand = true)]
+    private async Task SignInAsync(CancellationToken cancellationToken)
+    {
+        SignInError = null;
+        IsWaitingForBrowser = true;
+        try
+        {
+            await AppServices.Google.SignInAsync(
+                SignInBrowser, AppServices.Database.LoadSettings().DeveloperCredentialsPath, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            SignInError = $"Couldn't sign in to Google: {ex.Message}";
+        }
+        finally
+        {
+            IsWaitingForBrowser = false;
+            IsSignedIn = AppServices.Google.IsSignedIn;
+            ShellPage.Current?.RefreshConnectedServices();
+        }
+    }
 
     [RelayCommand(CanExecute = nameof(IsSignedIn))]
     private async Task SignOutAsync()
