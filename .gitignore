@@ -14,6 +14,7 @@ token_store_picker/
 ## HTML reports (--report) and picker cache files (--cache).
 /*.html
 /*.json
+!/global.json
 ## Staging folders (--stage)
 _staged*/
 
