@@ -1,0 +1,9 @@
+<Project>
+
+  <!-- Every project. The target framework stays in each one: the Windows app targets a Windows version. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
