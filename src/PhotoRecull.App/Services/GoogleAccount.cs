@@ -25,7 +25,15 @@ internal sealed class GoogleAccount(AppStateDatabase database)
         using var _ = await pickerClient.AuthorizeAsync(cancellationToken: cancellationToken);
     }
 
-    public void SignOut() => database.ClearGoogleToken();
+    // onSignedOut runs once the account is forgotten here, before Google is
+    // asked to revoke it, which can take a while.
+    public async Task SignOutAsync(Action onSignedOut)
+    {
+        var grant = await GooglePhotosPickerClient.ForgetSignInAsync(_tokenStore);
+        onSignedOut();
+        if (grant is not null)
+            await GooglePhotosPickerClient.RevokeAsync(grant);
+    }
 
     private static async Task<ClientSecrets> LoadDeveloperOAuthClientAsync(string? developerCredentialsPath)
     {
