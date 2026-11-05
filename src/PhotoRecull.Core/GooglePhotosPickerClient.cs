@@ -78,29 +78,35 @@ public class GooglePhotosPickerClient
     }
 
     /// <summary>
-    /// Forgets the signed-in account, so the next sign-in can choose another.
-    /// The app's access is also revoked at Google, so that sign-in asks for
-    /// consent again; if Google can't be reached, the token is still forgotten
-    /// here and the access lapses when the refresh token expires or is removed
-    /// from the account's third-party connections. The token is forgotten
-    /// before Google is asked: a pick started meanwhile signs in afresh, and
-    /// its new token isn't the one cleared.
+    /// Signing out, first step: forgets the signed-in account, so the next
+    /// sign-in can choose another. Returns the grant to pass to
+    /// <see cref="RevokeAsync"/>, or null if no one was signed in. Forgetting
+    /// comes first: a pick started meanwhile signs in afresh, and its new token
+    /// isn't the one cleared.
     /// </summary>
-    public static async Task SignOutAsync(IDataStore tokenStore, CancellationToken cancellationToken = default)
+    public static async Task<string?> ForgetSignInAsync(IDataStore tokenStore)
     {
         var token = await tokenStore.GetAsync<TokenResponse>(TokenUser);
         await tokenStore.ClearAsync();
-        if ((token?.RefreshToken ?? token?.AccessToken) is { } grant)
+        return token?.RefreshToken ?? token?.AccessToken;
+    }
+
+    /// <summary>
+    /// Signing out, second step: revokes the app's access at Google, so the
+    /// next sign-in asks for consent again. If Google can't be reached, the
+    /// access lapses when the refresh token expires or is removed from the
+    /// account's third-party connections.
+    /// </summary>
+    public static async Task RevokeAsync(string grant, CancellationToken cancellationToken = default)
+    {
+        try
         {
-            try
-            {
-                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                using var _ = await http.PostAsync(RevokeUrl,
-                    new FormUrlEncodedContent([new("token", grant)]), cancellationToken);
-            }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-            {
-            }
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var _ = await http.PostAsync(RevokeUrl,
+                new FormUrlEncodedContent([new("token", grant)]), cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
         }
     }
 

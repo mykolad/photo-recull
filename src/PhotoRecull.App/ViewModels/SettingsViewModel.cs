@@ -80,9 +80,11 @@ public sealed partial class GooglePhotosSettingsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(IsSignedIn))]
     private async Task SignOutAsync()
     {
-        await AppServices.Google.SignOutAsync();
-        IsSignedIn = AppServices.Google.IsSignedIn;
-        ShellPage.Current?.RefreshConnectedServices();
+        await AppServices.Google.SignOutAsync(onSignedOut: () =>
+        {
+            IsSignedIn = AppServices.Google.IsSignedIn;
+            ShellPage.Current?.RefreshConnectedServices();
+        });
     }
 }
 
