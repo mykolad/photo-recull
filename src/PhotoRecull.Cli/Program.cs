@@ -37,12 +37,12 @@ for (int i = 0; i < args.Length; i++)
         case "--credentials": credentialsPath = args[++i]; break;
         case "--stage":
             wantStage = true;
-            if (i + 1 < args.Length && !args[i + 1].StartsWith("--")) stageFolder = args[++i];
+            if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) stageFolder = args[++i];
             break;
         case "--output":      outputCsv       = args[++i]; break;
         case "--report":
             wantHtml = true;
-            if (i + 1 < args.Length && !args[i + 1].StartsWith("--")) outputHtml = args[++i];
+            if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) outputHtml = args[++i];
             break;
         case "--browser":     browser         = args[++i]; break;
         case "--cache":       cachePath       = args[++i]; break;

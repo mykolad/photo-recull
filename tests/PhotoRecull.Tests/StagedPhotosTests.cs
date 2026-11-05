@@ -13,7 +13,7 @@ public class StagedPhotosTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private string FileAt(string path)
+    private static string FileAt(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, Path.GetFileName(path));

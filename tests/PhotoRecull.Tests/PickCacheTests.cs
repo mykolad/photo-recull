@@ -1,5 +1,4 @@
 using PhotoRecull.Core;
-using Xunit;
 
 namespace PhotoRecull.Tests;
 

@@ -225,13 +225,13 @@ public static class PhotoScanner
     /// </summary>
     private static DateTimeOffset ParseFilenameTimestamp(Match m)
     {
-        int year  = int.Parse(m.Groups[1].Value);
-        int month = int.Parse(m.Groups[2].Value);
-        int day   = int.Parse(m.Groups[3].Value);
-        int hour  = int.Parse(m.Groups[4].Value);
-        int min   = int.Parse(m.Groups[5].Value);
-        int sec   = int.Parse(m.Groups[6].Value);
-        int ms    = int.Parse(m.Groups[7].Value);
+        int year  = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+        int month = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+        int day   = int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture);
+        int hour  = int.Parse(m.Groups[4].Value, CultureInfo.InvariantCulture);
+        int min   = int.Parse(m.Groups[5].Value, CultureInfo.InvariantCulture);
+        int sec   = int.Parse(m.Groups[6].Value, CultureInfo.InvariantCulture);
+        int ms    = int.Parse(m.Groups[7].Value, CultureInfo.InvariantCulture);
 
         return new DateTimeOffset(year, month, day, hour, min, sec, ms, TimeSpan.Zero);
     }

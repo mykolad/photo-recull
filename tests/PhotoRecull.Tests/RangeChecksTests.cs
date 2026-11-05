@@ -1,3 +1,4 @@
+using System.Globalization;
 using PhotoRecull.Core.Library;
 
 namespace PhotoRecull.Tests;
@@ -44,7 +45,7 @@ public class RangeChecksTests
     public void LeavesSomePickedPhotosOutside(string from, string to, bool expected)
     {
         Assert.Equal(expected,
-            RangeChecks.LeavesSomePickedPhotosOutside(DateOnly.Parse(from), DateOnly.Parse(to), EarliestPicked, LatestPicked));
+            RangeChecks.LeavesSomePickedPhotosOutside(DateOnly.Parse(from, CultureInfo.InvariantCulture), DateOnly.Parse(to, CultureInfo.InvariantCulture), EarliestPicked, LatestPicked));
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Globalization;
 using PhotoRecull.Core;
 using PhotoRecull.Core.Library;
 
@@ -135,7 +136,7 @@ public class LivePhotoAndVideoTests : IDisposable
     [InlineData("2026:04:11 10:33:33", null, null, "2026-04-11T10:33:33.000Z")]
     public void ExifCaptureTime_AppliesTheOffsetWhereThePhotoWasTaken(string taken, string? subSecond, string? offset, string expectedUtc)
     {
-        Assert.Equal(DateTimeOffset.Parse(expectedUtc), PhotoScanner.ExifCaptureTime(taken, subSecond, offset));
+        Assert.Equal(DateTimeOffset.Parse(expectedUtc, CultureInfo.InvariantCulture), PhotoScanner.ExifCaptureTime(taken, subSecond, offset));
     }
 
     [Fact]

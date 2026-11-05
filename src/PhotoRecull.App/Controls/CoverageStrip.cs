@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+using System.Globalization;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
@@ -105,7 +105,7 @@ public sealed class CoverageStrip : UserControl
 
             var label = new TextBlock
             {
-                Text = new DateTime(_year, month, 1).ToString("MMM"),
+                Text = new DateTime(_year, month, 1).ToString("MMM", CultureInfo.CurrentCulture),
                 FontSize = 11,
                 Foreground = secondaryText,
             };
