@@ -6,7 +6,6 @@ using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
 using PhotoRecull.Core;
 using PhotoRecull.Core.Library;
-using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
 
@@ -55,7 +54,7 @@ public sealed partial class StagedReviewViewModel : ObservableObject
     public string Summary => Photos.Count == 0
         ? "No staged photos are left."
         : $"{PhotoCount(Photos.Count)} waiting · {FileSizeText.Format(Photos.Sum(p => p.Photo.SizeBytes))} · "
-            + string.Join(", ", Photos.Select(p => SyncTargets.DisplayName(p.Photo.Target.Kind)).Distinct());
+            + string.Join(", ", Photos.Select(p => p.Photo.Target.Name).Distinct());
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(MoveAllBackCommand))]
@@ -217,14 +216,14 @@ public sealed partial class StagedTileViewModel(StagedPhoto photo, Action<Staged
 
     public StagedPhoto Photo { get; } = photo;
     public string FileName => Photo.FileName;
-    public string TargetGlyph => ShellPage.TargetGlyph(Photo.Target.Kind);
+    public string TargetGlyph => ShellPage.TargetGlyph(Photo.Target);
     // Below the target's folder, which the target's name stands for.
     public string OriginalFolder
     {
         get
         {
             var below = Path.GetRelativePath(Photo.Target.FolderPath, Path.GetDirectoryName(Photo.OriginalPath)!);
-            var target = SyncTargets.DisplayName(Photo.Target.Kind);
+            var target = Photo.Target.Name;
             return below == "." || below.StartsWith("..", StringComparison.Ordinal) ? $"From {target}" : $"From {target} · {below}";
         }
     }

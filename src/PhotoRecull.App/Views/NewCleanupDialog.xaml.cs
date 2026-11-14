@@ -11,9 +11,9 @@ public sealed partial class TargetChoice(TargetSettings target, Action selection
 {
     public TargetSettings Target { get; } = target;
 
-    public string Glyph => ShellPage.TargetGlyph(Target.Kind);
+    public string Glyph => ShellPage.TargetGlyph(Target);
 
-    public string Name => SyncTargets.DisplayName(Target.Kind);
+    public string Name => Target.Name;
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; } = true;

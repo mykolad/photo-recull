@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using PhotoRecull.App.Services;
 using PhotoRecull.App.ViewModels;
+using PhotoRecull.Core;
 using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.Views;
@@ -65,11 +66,15 @@ public sealed partial class ShellPage : Page
             new("", "Google Photos", AppServices.Google.IsSignedIn ? "Source · Signed in" : "Source · Not signed in"),
         };
         rows.AddRange(settings.Targets.Select(t =>
-            new ConnectedServiceRow(TargetGlyph(t.Kind), SyncTargets.DisplayName(t.Kind), $"Target · {t.FolderPath}")));
+            new ConnectedServiceRow(TargetGlyph(t), t.Name, $"Target · {t.FolderPath}")));
         ConnectedServicesList.ItemsSource = rows;
     }
 
-    public static string TargetGlyph(TargetKind kind) => kind == TargetKind.OneDrive ? "" : "";
+    // OneDrive's cloud for a folder it syncs, a NAS for a network folder, a folder otherwise.
+    public static string TargetGlyph(TargetSettings target) =>
+        SyncTargets.IsInOneDrive(target.FolderPath) ? ""
+        : FileActions.IsNetworkFolder(target.FolderPath) ? ""
+        : "";
 
     private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {

@@ -6,20 +6,29 @@ namespace PhotoRecull.Tests;
 public class SyncTargetsTests
 {
     [Fact]
-    public void Create_OneDrive_UsesTheConfiguredFolder()
+    public void Create_IsAFolderTargetWithTheConfiguredNameAndFolder()
     {
-        var target = SyncTargets.Create(new TargetSettings(TargetKind.OneDrive, @"D:\Camera Roll"));
+        var target = SyncTargets.Create(new TargetSettings("Synology Photos", @"\\nas\home\Photos\MobileBackup\iPhone"));
 
-        var oneDrive = Assert.IsType<OneDriveTarget>(target);
-        Assert.Equal(@"D:\Camera Roll", oneDrive.FolderPath);
+        var folder = Assert.IsType<FolderTarget>(target);
+        Assert.Equal("Synology Photos", folder.DisplayName);
+        Assert.Equal(@"\\nas\home\Photos\MobileBackup\iPhone", folder.FolderPath);
+    }
+
+    [Theory]
+    [InlineData(@"\\nas\home\Photos\MobileBackup\iPhone", "Synology Photos")]
+    [InlineData(@"\\nas\photo\Phones", "nas")]
+    [InlineData(@"D:\Backups\iPhone\", "iPhone")]
+    [InlineData(@"E:\", "Drive E")]
+    [InlineData("", "Folder")]
+    public void SuggestedName_IsTheServiceTheNasOrTheFolder(string folder, string expected)
+    {
+        Assert.Equal(expected, SyncTargets.SuggestedName(folder, []));
     }
 
     [Fact]
-    public void Create_SynologyPhotos_UsesTheConfiguredFolder()
+    public void SuggestedName_IsNeverOneAnotherTargetHas()
     {
-        var target = SyncTargets.Create(new TargetSettings(TargetKind.SynologyPhotos, @"\\nas\home\Photos\MobileBackup\iPhone"));
-
-        var synology = Assert.IsType<SynologyPhotosTarget>(target);
-        Assert.Equal(@"\\nas\home\Photos\MobileBackup\iPhone", synology.FolderPath);
+        Assert.Equal("iPhone 3", SyncTargets.SuggestedName(@"D:\Backups\iPhone", ["iphone", "iPhone 2"]));
     }
 }

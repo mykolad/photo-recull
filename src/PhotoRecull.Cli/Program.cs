@@ -8,7 +8,7 @@ using PhotoRecull.Core.Settings;
 // CLI argument parsing
 // ---------------------------------------------------------------------------
 
-string? targetName      = null;   // --target onedrive|synology
+string? targetName      = null;   // --target <name>
 string? targetFolder    = null;
 string? credentialsPath = "credentials.json";
 string? stageFolder     = null;
@@ -73,15 +73,15 @@ if (targetFolder is null)
     return 1;
 }
 
-TargetKind targetKind;
-switch (targetName?.ToLowerInvariant())
+// Any folder works; the name is only what messages call it. "onedrive" and
+// "synology" are what --target took when it chose between two kinds of target.
+var targetDisplayName = targetName?.ToLowerInvariant() switch
 {
-    case null or "onedrive": targetKind = TargetKind.OneDrive;       break;
-    case "synology":         targetKind = TargetKind.SynologyPhotos; break;
-    default:
-        Console.Error.WriteLine($"ERROR: --target must be onedrive or synology, not \"{targetName}\".");
-        return 1;
-}
+    null => SyncTargets.SuggestedName(targetFolder, []),
+    "onedrive" => "OneDrive",
+    "synology" => "Synology Photos",
+    _ => targetName,
+};
 
 // Dry run is the default. An action mode (--stage / --delete) overrides it.
 dryRun = !wantStage && !deleteMode;
@@ -232,7 +232,7 @@ else
 // Step 2: Scan the target folder, then apply date range filter
 // ---------------------------------------------------------------------------
 
-ISyncTarget target = SyncTargets.Create(new TargetSettings(targetKind, targetFolder));
+ISyncTarget target = SyncTargets.Create(new TargetSettings(targetDisplayName, targetFolder));
 
 Console.Write($"Scanning {target.DisplayName} folder... ");
 List<PhotoFile> targetPhotos;
@@ -335,7 +335,7 @@ if (dryRun)
 {
     Console.WriteLine("\nDry run complete. No files were moved or deleted.");
     if (result.Unmatched.Count > 0)
-        PrintNextSteps(targetKind, targetFolder, fromDate, toDate, effectiveCache, stageFolder);
+        PrintNextSteps(targetName, targetFolder, fromDate, toDate, effectiveCache, stageFolder);
     return 0;
 }
 
@@ -368,8 +368,8 @@ if (deleteMode)
 {
     Console.WriteLine($"\nAbout to PERMANENTLY DELETE {result.Unmatched.Count} file(s).");
     Console.WriteLine("This cannot be undone! Review the report first (run without --delete), or use --stage to move them instead.");
-    if (targetKind == TargetKind.SynologyPhotos)
-        Console.WriteLine("On Synology they can only be restored from #recycle, if the Recycle Bin is on for this shared folder in DSM.");
+    if (FileActions.IsNetworkFolder(targetFolder))
+        Console.WriteLine("On a network folder they can only be restored from the NAS's own recycle bin (#recycle on Synology, @Recycle on QNAP), if it's on for this shared folder.");
     if (assumeYes)
     {
         Console.WriteLine("--yes given: skipping confirmation.");
@@ -427,21 +427,24 @@ static string DescribeRange(DateOnly? from, DateOnly? to) => (from, to) switch
 static void PrintHelp()
 {
     Console.WriteLine("""
-        PhotoRecull — Remove backed-up iPhone photos (OneDrive, Synology Photos)
-        that you already deleted from Google Photos
+        PhotoRecull — Remove backed-up iPhone photos that you already deleted
+        from Google Photos, from any folder they're backed up to
 
         USAGE:
-          dotnet run --project src/PhotoRecull.Cli -- --target <kind> --path <folder> [options] <mode>
+          dotnet run --project src/PhotoRecull.Cli -- --path <folder> [options] <mode>
 
         REQUIRED:
-          --path <folder>         The target's photo folder: the OneDrive Camera Roll
-                                  (C:\Users\you\OneDrive\Pictures\Camera Roll),
-                                  or the Synology Photos backup folder, read over
-                                  the network (\\nas\home\Photos\MobileBackup\iPhone)
+          --path <folder>         The folder your iPhone photos are backed up to,
+                                  read with its subfolders: the OneDrive Camera
+                                  Roll (C:\Users\you\OneDrive\Pictures\Camera Roll),
+                                  a NAS folder such as Synology Photos' backup
+                                  (\\nas\home\Photos\MobileBackup\iPhone), or any
+                                  other folder File Explorer can open
 
         TARGET:
-          --target <kind>         onedrive (default) or synology. Synology folders
-                                  are read with their year and month subfolders.
+          --target <name>         What messages call the folder. Default: told
+                                  from the folder (OneDrive, Synology Photos, the
+                                  NAS's name, or the folder's own name).
           --onedrive <folder>     Same as --target onedrive --path <folder>
 
         DATE RANGE (optional — process one month at a time):
@@ -521,15 +524,16 @@ static bool IsWholeMonth(DateOnly from, DateOnly to) =>
     && to.Day == DateTime.DaysInMonth(to.Year, to.Month);
 
 // After a dry run, print the exact command to move the candidates to staging.
-static void PrintNextSteps(TargetKind targetKind, string targetFolder, DateOnly? from, DateOnly? to,
+static void PrintNextSteps(string? targetName, string targetFolder, DateOnly? from, DateOnly? to,
     string? effectiveCache, string? stageFolder)
 {
     var stageDir = stageFolder ?? $"_staged_{DefaultLabel(from, to)}";
 
     string BaseCmd()
     {
-        var target = targetKind == TargetKind.SynologyPhotos ? "synology" : "onedrive";
-        var c = $"dotnet run --project src/PhotoRecull.Cli -- --target {target} --path \"{targetFolder}\"";
+        var c = "dotnet run --project src/PhotoRecull.Cli --"
+            + (targetName is not null ? $" --target \"{targetName}\"" : "")
+            + $" --path \"{targetFolder}\"";
         if (from.HasValue) c += $" --from {from:yyyy-MM-dd}";
         if (to.HasValue)   c += $" --to {to:yyyy-MM-dd}";
         if (effectiveCache is not null) c += $" --cache \"{effectiveCache}\"";

@@ -156,7 +156,7 @@ public class PhotoScannerTests
     [Fact]
     public void OneDriveTarget_ScansItsCameraRollFolder()
     {
-        var target = new OneDriveTarget(TestDataDir);
+        var target = new FolderTarget("OneDrive", TestDataDir);
 
         Assert.Equal("OneDrive", target.DisplayName);
         Assert.Equal(2, target.Scan(firstDay: null, lastDay: null).Count);

@@ -243,9 +243,9 @@ public sealed class AppStateDatabase
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
         insert.CommandText = """
-            INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, destination,
+            INSERT INTO runs (cleanup_id, ran_at, action, target_name, target_folder, destination,
                               succeeded_count, failed_count, freed_bytes)
-            VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination,
+            VALUES ($cleanupId, $ranAt, $action, $targetName, $targetFolder, $destination,
                     $succeeded, $failed, $freed)
             """;
         foreach (var run in runs)
@@ -256,7 +256,7 @@ public sealed class AppStateDatabase
             // daylight-saving change.
             insert.Parameters.AddWithValue("$ranAt", run.RanAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
             insert.Parameters.AddWithValue("$action", run.Action.ToString());
-            insert.Parameters.AddWithValue("$targetKind", run.Target.Kind.ToString());
+            insert.Parameters.AddWithValue("$targetName", run.Target.Name);
             insert.Parameters.AddWithValue("$targetFolder", run.Target.FolderPath);
             insert.Parameters.AddWithValue("$destination", (object?)run.Destination ?? DBNull.Value);
             insert.Parameters.AddWithValue("$succeeded", run.SucceededCount);
@@ -272,7 +272,7 @@ public sealed class AppStateDatabase
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT cleanup_id, ran_at, action, target_kind, target_folder, destination,
+            SELECT cleanup_id, ran_at, action, target_name, target_folder, destination,
                    succeeded_count, failed_count, freed_bytes, id, status, photos_recorded, went_to_recycle_bin
             FROM runs ORDER BY ran_at DESC, id DESC
             """;
@@ -284,7 +284,7 @@ public sealed class AppStateDatabase
                 Guid.Parse(reader.GetString(0)),
                 DateTimeOffset.Parse(reader.GetString(1), CultureInfo.InvariantCulture),
                 Enum.Parse<CleanupAction>(reader.GetString(2)),
-                new TargetSettings(Enum.Parse<TargetKind>(reader.GetString(3)), reader.GetString(4)),
+                new TargetSettings(reader.GetString(3), reader.GetString(4)),
                 reader.IsDBNull(5) ? null : reader.GetString(5),
                 reader.GetInt32(6),
                 reader.GetInt32(7),
@@ -309,15 +309,15 @@ public sealed class AppStateDatabase
         using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId;
-            INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, destination,
+            INSERT INTO runs (cleanup_id, ran_at, action, target_name, target_folder, destination,
                               succeeded_count, failed_count, freed_bytes, status, photos_recorded, went_to_recycle_bin)
-            VALUES ($cleanupId, $ranAt, $action, $targetKind, $targetFolder, $destination, 0, 0, 0, 'InProgress', 1, $recycled);
+            VALUES ($cleanupId, $ranAt, $action, $targetName, $targetFolder, $destination, 0, 0, 0, 'InProgress', 1, $recycled);
             SELECT last_insert_rowid();
             """;
         command.Parameters.AddWithValue("$cleanupId", run.CleanupId.ToString());
         command.Parameters.AddWithValue("$ranAt", run.RanAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$action", run.Action.ToString());
-        command.Parameters.AddWithValue("$targetKind", run.Target.Kind.ToString());
+        command.Parameters.AddWithValue("$targetName", run.Target.Name);
         command.Parameters.AddWithValue("$targetFolder", run.Target.FolderPath);
         command.Parameters.AddWithValue("$recycled", run.WentToRecycleBin is { } recycled ? (object)(recycled ? 1 : 0) : DBNull.Value);
         command.Parameters.AddWithValue("$destination", (object?)run.Destination ?? DBNull.Value);
@@ -629,6 +629,26 @@ public sealed class AppStateDatabase
         ALTER TABLE runs ADD COLUMN photos_recorded INTEGER NOT NULL DEFAULT 0;
         -- What a delete did; null for runs saved before it was recorded.
         ALTER TABLE runs ADD COLUMN went_to_recycle_bin INTEGER;
+        """,
+        """
+        -- A target is any folder, with a name, rather than one of two kinds: the
+        -- OneDrive and Synology Photos targets keep those names.
+        ALTER TABLE runs RENAME COLUMN target_kind TO target_name;
+        UPDATE runs SET target_name = 'Synology Photos' WHERE target_name = 'SynologyPhotos';
+
+        UPDATE settings SET value = (
+            SELECT json_group_array(json_object(
+                'Name', CASE json_extract(target.value, '$.Kind') WHEN 'SynologyPhotos' THEN 'Synology Photos' ELSE json_extract(target.value, '$.Kind') END,
+                'FolderPath', json_extract(target.value, '$.FolderPath')))
+            FROM json_each(settings.value) AS target)
+        WHERE key = 'Targets';
+
+        UPDATE cleanups SET targets = (
+            SELECT json_group_array(json_object(
+                'Name', CASE json_extract(target.value, '$.Kind') WHEN 'SynologyPhotos' THEN 'Synology Photos' ELSE json_extract(target.value, '$.Kind') END,
+                'FolderPath', json_extract(target.value, '$.FolderPath')))
+            FROM json_each(cleanups.targets) AS target)
+        WHERE targets IS NOT NULL;
         """,
     ];
 

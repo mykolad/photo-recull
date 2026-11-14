@@ -12,7 +12,7 @@ public class CleanupScannerTests
     [Fact]
     public void PickedOnce_OneCopyKeptAndTheOtherBecomesACandidate()
     {
-        var result = CleanupScanner.ScanAndMatch(new OneDriveTarget(TestDataDir), [SamplePhotoTime],
+        var result = CleanupScanner.ScanAndMatch(new FolderTarget("OneDrive", TestDataDir), [SamplePhotoTime],
             new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30), TimeZoneInfo.Utc);
 
         Assert.Equal(2, result.PhotoFilesFound);
@@ -24,7 +24,7 @@ public class CleanupScannerTests
     [Fact]
     public void RangeExcludesThePhotos_NothingInRange()
     {
-        var result = CleanupScanner.ScanAndMatch(new OneDriveTarget(TestDataDir), [],
+        var result = CleanupScanner.ScanAndMatch(new FolderTarget("OneDrive", TestDataDir), [],
             new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31), TimeZoneInfo.Utc);
 
         Assert.Equal(2, result.PhotoFilesFound);

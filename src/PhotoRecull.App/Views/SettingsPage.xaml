@@ -94,7 +94,7 @@
             <StackPanel Spacing="4" Margin="0,16,0,0">
                 <TextBlock Text="Targets" Style="{StaticResource BodyStrongTextBlockStyle}" />
                 <TextBlock
-                    Text="Where else your iPhone photos are backed up. A new cleanup can scan every target that's on."
+                    Text="Folders your iPhone photos are backed up to, whichever app puts them there: OneDrive's Camera Roll, a NAS, or any folder File Explorer can open. A new cleanup can scan every one."
                     Style="{StaticResource SecondaryCaptionTextBlockStyle}"
                     TextWrapping="Wrap" />
             </StackPanel>
@@ -113,26 +113,21 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <FontIcon Glyph="{x:Bind Folder.Glyph}" FontSize="24" />
+                                    <FontIcon Glyph="{x:Bind Folder.Glyph, Mode=OneWay}" FontSize="24" />
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Bind Folder.Name}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="{x:Bind Folder.Name, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                         <TextBlock
                                             Text="{x:Bind StatusText, Mode=OneWay}"
                                             Style="{StaticResource SecondaryCaptionTextBlockStyle}"
                                             TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <ToggleSwitch
+                                    <Button
                                         Grid.Column="2"
-                                        MinWidth="0"
-                                        OnContent="On"
-                                        OffContent="Off"
-                                        AutomationProperties.Name="{x:Bind Folder.Name}"
-                                        IsOn="{x:Bind IsUsed, Mode=TwoWay}"
-                                        IsEnabled="{x:Bind CanBeTurnedOff, Mode=OneWay}" />
+                                        Content="Remove"
+                                        VerticalAlignment="Center"
+                                        Command="{x:Bind RemoveCommand}" />
                                 </Grid>
-                                <Border
-                                    Style="{StaticResource SettingRowDividerStyle}"
-                                    Visibility="{x:Bind IsUsed, Mode=OneWay}">
+                                <Border Style="{StaticResource SettingRowDividerStyle}">
                                     <views:TargetFolderEditor Folder="{x:Bind Folder}" />
                                 </Border>
                             </StackPanel>
@@ -140,6 +135,13 @@
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
+
+            <Button HorizontalAlignment="Left" Command="{x:Bind ViewModel.AddTargetCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE710;" FontSize="14" />
+                    <TextBlock Text="Add folder" />
+                </StackPanel>
+            </Button>
         </StackPanel>
     </ScrollViewer>
 </Page>
