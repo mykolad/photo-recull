@@ -4,7 +4,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-*Effective date: 27 October 2026*
+*Effective date: 14 November 2026*
 
 PhotoRecull is open-source software that runs entirely on your own computer. It has no
 servers, no accounts and no analytics. This policy explains what data it accesses and what
@@ -60,11 +60,13 @@ PhotoRecull reads the folders you point it to: file names and photo metadata suc
 time and camera make and model. It creates thumbnails for a review report saved on your
 computer. It moves or deletes files only when you explicitly choose to stage or delete them.
 
-## Your own Google Cloud project
+## Command-line app and builds from source
 
-To use PhotoRecull you create your own Google Cloud project and OAuth client (see
-[Setup](SETUP.md)). The app then signs in through your project, and Google's handling of
-that is covered by Google's own privacy policy.
+The Windows app from the Microsoft Store signs in through PhotoRecull's own Google OAuth
+client, so there's nothing to set up. The command-line app, and the Windows app built from
+source, sign in through a Google Cloud project and OAuth client you create yourself (see
+[Setup](SETUP.md)). Google's handling of that project is covered by Google's own privacy
+policy. What PhotoRecull reads and stores is the same either way.
 
 ## Changes
 
