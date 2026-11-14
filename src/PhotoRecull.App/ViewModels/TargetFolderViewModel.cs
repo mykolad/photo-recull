@@ -150,15 +150,17 @@ public sealed partial class TargetFolderViewModel : ObservableObject
         var foldersWithYears = new List<string>();
         if (years.Count == 0)
         {
-            foreach (var subfolder in Directory.EnumerateDirectories(folderPath))
+            // Links are skipped, as the scan skips them: one pointing somewhere
+            // unreadable mustn't make the whole folder look unusable.
+            foreach (var subfolder in new DirectoryInfo(folderPath).EnumerateDirectories())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (Path.GetFileName(subfolder) is ['@' or '#' or '.', ..])
+                if (subfolder.Name is ['@' or '#' or '.', ..] || FolderTarget.IsLinkToAnotherFolder(subfolder))
                     continue;
-                var subfolderYears = YearsOfYearFolders(subfolder);
+                var subfolderYears = YearsOfYearFolders(subfolder.FullName);
                 years.AddRange(subfolderYears);
                 if (subfolderYears.Count > 0)
-                    foldersWithYears.Add(Path.GetFileName(subfolder));
+                    foldersWithYears.Add(subfolder.Name);
             }
         }
         if (years.Count > 0)

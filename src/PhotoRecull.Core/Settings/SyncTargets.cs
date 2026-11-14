@@ -7,6 +7,11 @@ public static class SyncTargets
     public static ISyncTarget Create(TargetSettings settings) =>
         new FolderTarget(settings.Name, settings.FolderPath, settings.OnlyIphonePhotos);
 
+    // A target is its folder: its name and settings can change and it's still the
+    // same target, with the same cleanups and history.
+    public static bool IsSameFolder(TargetSettings a, TargetSettings b) =>
+        string.Equals(FileActions.ComparablePath(a.FolderPath), FileActions.ComparablePath(b.FolderPath), StringComparison.OrdinalIgnoreCase);
+
     // Targets whose default stage folders would be the same (two folders side by
     // side, or two backups under one Synology Photos folder) each get a folder of
     // their own inside it, named after the target, so photos with the same name

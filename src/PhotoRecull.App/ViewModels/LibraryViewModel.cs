@@ -117,12 +117,15 @@ public sealed partial class LibraryViewModel : ObservableObject
     }
 
     // A cleanup repeats the cull on the targets chosen when it started, as long as
-    // they're still configured; cleanups saved before targets were recorded (or
-    // whose targets have all been removed since) use the current ones.
+    // their folders are still configured, under the names they have now;
+    // cleanups saved before targets were recorded (or whose targets have all been
+    // removed since) use the current ones.
     private static List<TargetSettings> TargetsToReopen(Cleanup cleanup)
     {
         var configured = AppServices.Database.LoadSettings().Targets;
-        var stillConfigured = cleanup.Targets?.Where(configured.Contains).ToList() ?? [];
+        var stillConfigured = cleanup.Targets is { } chosen
+            ? configured.Where(target => chosen.Any(c => SyncTargets.IsSameFolder(c, target))).ToList()
+            : [];
         return stillConfigured.Count > 0 ? stillConfigured : configured;
     }
 

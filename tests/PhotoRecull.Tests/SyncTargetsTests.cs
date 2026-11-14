@@ -58,6 +58,15 @@ public class SyncTargetsTests
     }
 
     [Fact]
+    public void IsSameFolder_IgnoresTheNameAndHowThePathIsWritten()
+    {
+        var before = new TargetSettings("Synology Photos", @"\\nas\home\Photos\MobileBackup\iPhone");
+
+        Assert.True(SyncTargets.IsSameFolder(before, new TargetSettings("NAS", @"\\NAS\home\Photos\MobileBackup\iPhone\")));
+        Assert.False(SyncTargets.IsSameFolder(before, new TargetSettings("Synology Photos", @"\\nas\home\Photos\MobileBackup")));
+    }
+
+    [Fact]
     public void SuggestedName_IsNeverOneAnotherTargetHas()
     {
         Assert.Equal("iPhone 3", SyncTargets.SuggestedName(@"D:\Backups\iPhone", ["iphone", "iPhone 2"]));
