@@ -58,8 +58,8 @@ public static class FileActions
     public const string StageFolderInsideTarget =
         "The stage folder is inside the target's folder, so the next scan would find these photos again";
 
-    // A stage folder inside a target is read by its next scan (Synology's is
-    // recursive), and photos waiting there for review come up for removal again.
+    // A stage folder inside a target is read by its next scan (subfolders are
+    // read too), and photos waiting there for review come up for removal again.
     public static bool IsSameOrInside(string folder, string parent)
     {
         try
@@ -306,6 +306,23 @@ public static class FileActions
         if (new Uri(fullPath).IsUnc || Path.GetPathRoot(fullPath) is not { Length: > 0 } root)
             return false;
         return new DriveInfo(root).DriveType is DriveType.Fixed or DriveType.Removable;
+    }
+
+    // A shared folder (\\nas\home) or a drive mapped to one.
+    // Asked as a path is typed, so an empty or half-typed one is just not one.
+    public static bool IsNetworkFolder(string path)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            if (new Uri(fullPath).IsUnc)
+                return true;
+            return Path.GetPathRoot(fullPath) is { Length: > 0 } root && new DriveInfo(root).DriveType == DriveType.Network;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or UriFormatException)
+        {
+            return false;
+        }
     }
 
     // The shell's delete (SHFileOperation with "allow undo") is what puts a file in

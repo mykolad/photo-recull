@@ -9,7 +9,7 @@ public class StagedPhotosTests : IDisposable
     private readonly string _root = Directory.CreateTempSubdirectory("photorecull-staged-").FullName;
     private string Target => Path.Combine(_root, "Camera Roll");
     private string Stage => Path.Combine(_root, "_staged");
-    private TargetSettings OneDrive => new(TargetKind.OneDrive, Target);
+    private TargetSettings OneDrive => new("OneDrive", Target);
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 

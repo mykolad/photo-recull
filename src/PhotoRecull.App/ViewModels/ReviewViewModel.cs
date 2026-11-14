@@ -52,8 +52,8 @@ public sealed partial class ReviewViewModel : ObservableObject
 
     public IReadOnlyList<TargetSettings> Targets { get; }
 
-    // A photo shows as kept when any of its copies was kept (say, on OneDrive,
-    // before Synology Photos was added). Keep is then saved for the other copies
+    // A photo shows as kept when any of its copies was kept (say, in one folder,
+    // before another was added). Keep is then saved for the other copies
     // too, so a later scan that doesn't group them can't make one a candidate.
     private bool KeepEveryCopyIfOneIsKept(IReadOnlyList<ReviewCopy> copies)
     {
@@ -226,7 +226,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         get
         {
             var perTarget = string.Join(" · ", CandidatesToActOn
-                .GroupBy(c => SyncTargets.DisplayName(c.Target.Kind))
+                .GroupBy(c => c.Target.Name)
                 .Select(g => $"{g.Key} {g.Count():N0}"));
             var kept = KeptByUserCount;
             return kept > 0
