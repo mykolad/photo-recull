@@ -54,7 +54,7 @@ description: Deleted it from Google Photos? PhotoRecull removes it from OneDrive
   </div>
   <div>
     <h3>Private by design</h3>
-    <p>PhotoRecull runs on your PC. It reads only the capture time of the photos you pick,
+    <p>PhotoRecull runs on your PC. Of the photos you pick it uses only their capture time,
     never downloads them, and has no servers or analytics.</p>
   </div>
 </div>
@@ -84,7 +84,8 @@ description: Deleted it from Google Photos? PhotoRecull removes it from OneDrive
 ## Questions
 
 **Does PhotoRecull change anything in Google Photos?**
-No. It can only read the photos you select in the Photos Picker, and only their capture time.
+No. It only has read access to the photos you select in the Photos Picker, and of those it
+uses only the capture time.
 See the [privacy policy](privacy.md).
 
 **What do I need?**
