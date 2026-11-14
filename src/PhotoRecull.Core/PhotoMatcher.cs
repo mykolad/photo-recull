@@ -103,12 +103,12 @@ public static class PhotoMatcher
         // A guessed timestamp keeps the guessed offset, so its DateTime is the clock time.
         var clockTime = DateTime.SpecifyKind(photo.Timestamp!.Value.DateTime, DateTimeKind.Utc);
         var tolerance = TimeSpan.FromSeconds(tol);
-        int i = LowerBound(googleUtc, clockTime - LatestOffset - tolerance);
-        for (; i < googleUtc.Length && googleUtc[i] <= clockTime - EarliestOffset + tolerance; i++)
+        // One lookup per time zone, rather than every picked photo in the 26 hours.
+        for (var offset = EarliestOffset; offset <= LatestOffset; offset += OffsetStep)
         {
-            var offset = clockTime - googleUtc[i];
-            var nearestStep = TimeSpan.FromTicks((long)Math.Round((double)offset.Ticks / OffsetStep.Ticks) * OffsetStep.Ticks);
-            if ((offset - nearestStep).Duration() <= tolerance)
+            var utc = clockTime - offset;
+            int i = LowerBound(googleUtc, utc - tolerance);
+            if (i < googleUtc.Length && googleUtc[i] <= utc + tolerance)
                 return true;
         }
         return false;
