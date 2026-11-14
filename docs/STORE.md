@@ -27,9 +27,11 @@ The Windows app ships as an MSIX package. Normal builds stay unpackaged, so
 5. **Google consent screen in production.** In Google Cloud Console › Google Auth Platform ›
    Audience, publish the app. While it's in *Testing*, only listed test users can sign
    in, and their sign-in expires after 7 days. Google may ask for verification of the
-   Photos Picker scope. Have the [privacy policy](https://mykolad.github.io/photo-recull/privacy)
-   and [terms](https://mykolad.github.io/photo-recull/terms) links on the consent screen's
-   Branding page.
+   Photos Picker scope. Have the [privacy policy](https://photorecull.com/privacy)
+   and [terms](https://photorecull.com/terms) links on the consent screen's
+   Branding page. They have to be on a domain you own and have verified in Search Console:
+   Google rejected `mykolad.github.io`, so the site moved to `photorecull.com` (a Domain
+   property, verified by a DNS TXT record).
 
 ## Build the package
 
@@ -71,8 +73,8 @@ In Partner Center, create a submission for PhotoRecull:
 - **Pricing and availability:** Free; markets as you like.
 - **Properties:**
   - Category: *Photo & video*.
-  - Privacy policy URL: `https://mykolad.github.io/photo-recull/privacy`.
-  - Website: `https://mykolad.github.io/photo-recull/`.
+  - Privacy policy URL: `https://photorecull.com/privacy`.
+  - Website: `https://photorecull.com/`.
   - Support contact: an email address or the repository's issues page.
 - **Age ratings:** the questionnaire. PhotoRecull has no user-generated content, chat,
   purchases or location sharing, so it should rate for everyone.

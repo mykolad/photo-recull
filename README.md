@@ -5,9 +5,9 @@
 Repeat your Google Photos culls on your other copies: find and remove OneDrive
 and Synology Photos copies of photos you've already deleted from Google Photos.
 
-🌐 **Website:** [mykolad.github.io/photo-recull](https://mykolad.github.io/photo-recull/)
-(setup and usage guides, [privacy policy](https://mykolad.github.io/photo-recull/privacy),
-[terms of service](https://mykolad.github.io/photo-recull/terms))
+🌐 **Website:** [photorecull.com](https://photorecull.com/)
+(setup and usage guides, [privacy policy](https://photorecull.com/privacy),
+[terms of service](https://photorecull.com/terms))
 
 ## Why
 
@@ -70,9 +70,9 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 - **[docs/SETUP.md](docs/SETUP.md)** — Google Cloud / OAuth setup
 - **[docs/USAGE.md](docs/USAGE.md)** — full command-line reference and workflows
 - **[docs/STORE.md](docs/STORE.md)** — packaging and publishing the Windows app to the Microsoft Store
-- **[Website](https://mykolad.github.io/photo-recull/)**, with the
-  [privacy policy](https://mykolad.github.io/photo-recull/privacy) and
-  [terms of service](https://mykolad.github.io/photo-recull/terms)
+- **[Website](https://photorecull.com/)**, with the
+  [privacy policy](https://photorecull.com/privacy) and
+  [terms of service](https://photorecull.com/terms)
 
 ## Repository layout
 

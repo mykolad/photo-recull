@@ -70,7 +70,7 @@
                                     VerticalAlignment="Center" />
                                 <HyperlinkButton
                                     Content="Setup guide"
-                                    NavigateUri="https://mykolad.github.io/photo-recull/SETUP"
+                                    NavigateUri="https://photorecull.com/SETUP"
                                     Padding="2,0"
                                     FontSize="12" />
                             </StackPanel>
