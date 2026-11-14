@@ -16,7 +16,7 @@ public class CleanupScannerTests
             new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30), TimeZoneInfo.Utc);
 
         Assert.Equal(2, result.PhotoFilesFound);
-        Assert.Equal(2, result.IphonePhotosInRange);
+        Assert.Equal(2, result.MatchablePhotosInRange);
         Assert.Single(result.Match.Matched);
         Assert.Single(result.Match.Unmatched);
     }
@@ -28,7 +28,7 @@ public class CleanupScannerTests
             new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31), TimeZoneInfo.Utc);
 
         Assert.Equal(2, result.PhotoFilesFound);
-        Assert.Equal(0, result.IphonePhotosInRange);
+        Assert.Equal(0, result.MatchablePhotosInRange);
     }
 
     [Fact]
@@ -47,6 +47,8 @@ public class CleanupScannerTests
     private sealed class FixedTarget(List<PhotoFile> photos) : ISyncTarget
     {
         public string DisplayName => "Test";
+
+        public bool OnlyIphonePhotos => true;
 
         public string FolderPath => @"C:\fake";
 

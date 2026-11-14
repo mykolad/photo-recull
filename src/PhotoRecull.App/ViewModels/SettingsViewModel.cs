@@ -229,7 +229,8 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
 
     private void OnFolderChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(TargetFolderViewModel.IsFolderValid) or nameof(TargetFolderViewModel.Name) && Folder.IsFolderValid)
+        if (e.PropertyName is nameof(TargetFolderViewModel.IsFolderValid) or nameof(TargetFolderViewModel.Name)
+                or nameof(TargetFolderViewModel.OnlyIphonePhotos) && Folder.IsFolderValid)
             SaveAs(Folder.Settings);
         else if (e.PropertyName == nameof(TargetFolderViewModel.FolderPath))
         {

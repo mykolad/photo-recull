@@ -103,15 +103,18 @@ public class LivePhotoAndVideoTests : IDisposable
     }
 
     [Fact]
-    public void AVideoFromAnotherCamera_IsSkipped()
+    public void AVideoFromAnotherCamera_KeepsItsRecordingStart_AndIsMatchedOnlyWhenEveryCameraIs()
     {
         QuickTimeTestFile.Write(PathOf("clip.mp4"), new DateTime(2026, 1, 1, 12, 0, 0),
             ("com.apple.quicktime.creationdate", "2026-01-01T14:00:00+0200"));
+        var started = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
         var video = Assert.Single(PhotoScanner.ScanFolder(_folder));
 
         Assert.False(video.IsIphone);
-        Assert.Null(video.Timestamp);
+        Assert.Equal(started, video.Timestamp);
+        Assert.Equal([video], PhotoMatcher.Match([started], [video]).Skipped);
+        Assert.Equal([video], PhotoMatcher.Match([started], [video], onlyIphonePhotos: false).Matched);
     }
 
     [Fact]
