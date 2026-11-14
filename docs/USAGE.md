@@ -16,6 +16,7 @@ You must supply `--path`. The **mode** defaults to a dry run; pass `--stage` or
 | `--path <folder>` | **Required.** The folder your iPhone photos are backed up to. |
 | `--target <name>` | What messages call the folder. Default: told from the folder (OneDrive, Synology Photos, the NAS's name, or the folder's own name). |
 | `--onedrive <folder>` | Same as `--target onedrive --path <folder>`. |
+| `--all-cameras` | Match photos from any phone or camera, not only iPhones. See [How matching works](#how-matching-works). |
 
 Any folder works, whichever app backs up to it, as long as it holds the original photo
 files. It's read with its subfolders; ones named after dates (`2026\01`, or `2026-01`)
@@ -142,10 +143,20 @@ NAS's API.
 
 - OneDrive iPhone photos are detected by filename (`YYYYMMDD_hhmmssSSS_iOS.ext`); other
   photos (such as Synology's `IMG_1234.HEIC`) by EXIF (`Make=Apple`, `Model` contains
-  `iPhone`), and videos by their QuickTime metadata. Non-iPhone files are skipped.
+  `iPhone`), and videos by their QuickTime metadata. By default other cameras' files are
+  skipped; `--all-cameras` (or turning off "Only iPhone photos" for a folder in the app)
+  matches them too.
 - Capture time is normalized to UTC: OneDrive filenames encode UTC directly; EXIF times
   use `DateTimeOriginal` + `OffsetTimeOriginal` + `SubSecTimeOriginal`; videos use the
-  time recording started (Apple's `creationdate`).
+  time recording started (Apple's `creationdate`). Videos without it, and files without
+  a capture time (screenshots, saved images), are skipped.
+- A photo saved without its time zone (some cameras, older iPhones) is placed in the PC's
+  time zone as a best guess, but it isn't matched one-to-one: it stays whenever any
+  picked photo could be it, in that time zone or any other. Without a time zone, which
+  photo of a moment was kept can't be told, so a burst from such a camera stays whole
+  when one frame was kept. Near the range's first or last day, where it could belong to
+  the range next door, it's skipped. A wrong guess can only keep a photo, never remove
+  one.
 - A Live Photo's video (`IMG_1234.MOV` next to `IMG_1234.HEIC`) counts as part of its
   photo, as in Google Photos: it's kept, staged or deleted together with the photo.
 - Matching is **one-to-one** within a ±2s tolerance: each Google photo keeps at most one

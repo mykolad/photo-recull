@@ -4,7 +4,8 @@ namespace PhotoRecull.Core.Settings;
 
 public static class SyncTargets
 {
-    public static ISyncTarget Create(TargetSettings settings) => new FolderTarget(settings.Name, settings.FolderPath);
+    public static ISyncTarget Create(TargetSettings settings) =>
+        new FolderTarget(settings.Name, settings.FolderPath, settings.OnlyIphonePhotos);
 
     // A target is its folder: its name and settings can change and it's still the
     // same target, with the same cleanups and history.

@@ -28,6 +28,14 @@ public record PhotoFile(
     // OneDrive file name or EXIF with sub-seconds is to the millisecond, even when
     // that happens to be .000.
     public bool TimestampInWholeSeconds { get; init; }
+
+    // No time zone was saved with the capture time (some cameras, older iPhones),
+    // so Timestamp is that clock time in the PC's time zone, as a best guess,
+    // keeping that offset. PhotoMatcher never lets a wrong guess remove a photo.
+    public bool TimestampOffsetGuessed { get; init; }
+
+    // Make and model from the photo's metadata ("Google Pixel 8"), when it has them.
+    public string? Camera { get; init; }
 }
 
 /// <summary>
@@ -101,12 +109,14 @@ public static class PhotoScanner
             if (liveVideo is not null)
                 sizeBytes += SizeOrZeroIfGone(liveVideo);
             var fileName = System.IO.Path.GetFileName(file);
-            var (isIphone, timestamp, source, inWholeSeconds) = ClassifyFile(file, fileName);
+            var (isIphone, timestamp, source, inWholeSeconds, offsetGuessed, camera) = ClassifyFile(file, fileName);
             results.Add(new PhotoFile(file, fileName, timestamp, isIphone, source)
             {
                 SizeBytes = sizeBytes,
                 LivePhotoVideoPath = liveVideo,
                 TimestampInWholeSeconds = inWholeSeconds,
+                TimestampOffsetGuessed = offsetGuessed,
+                Camera = camera,
             });
         }
 
@@ -163,7 +173,7 @@ public static class PhotoScanner
         }
     }
 
-    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source, bool InWholeSeconds) ClassifyFile(
+    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source, bool InWholeSeconds, bool OffsetGuessed, string? Camera) ClassifyFile(
         string path, string fileName)
     {
         // Fast path: filename matches the iOS upload pattern → definitely iPhone, parse timestamp from name
@@ -171,7 +181,7 @@ public static class PhotoScanner
         if (match.Success)
         {
             var ts = ParseFilenameTimestamp(match);
-            return (true, ts, "filename", false);
+            return (true, ts, "filename", false, false, null);
         }
 
         // Fallback: read EXIF (or a video's QuickTime metadata) to check Make/Model and get timestamp
@@ -184,21 +194,27 @@ public static class PhotoScanner
             var ifd0 = dirs.OfType<ExifIfd0Directory>().FirstOrDefault();
             var subIfd = dirs.OfType<ExifSubIfdDirectory>().FirstOrDefault();
 
-            bool isIphone = IsIphone(ifd0?.GetString(ExifDirectoryBase.TagMake), ifd0?.GetString(ExifDirectoryBase.TagModel));
+            var make = ifd0?.GetString(ExifDirectoryBase.TagMake)?.Trim();
+            var model = ifd0?.GetString(ExifDirectoryBase.TagModel)?.Trim();
+            bool isIphone = IsIphone(make, model);
             var subSecond = subIfd?.GetString(ExifDirectoryBase.TagSubsecondTimeOriginal);
-            DateTimeOffset? timestamp = isIphone && subIfd is not null
-                ? ExifCaptureTime(
-                    subIfd.GetString(ExifDirectoryBase.TagDateTimeOriginal),
-                    subSecond,
-                    subIfd.GetString(ExifDirectoryBase.TagTimeZoneOriginal))
-                : null;
+            var offset = subIfd?.GetString(ExifDirectoryBase.TagTimeZoneOriginal);
+            DateTimeOffset? timestamp = subIfd is null
+                ? null
+                : ExifCaptureTime(subIfd.GetString(ExifDirectoryBase.TagDateTimeOriginal), subSecond, offset);
+            bool offsetGuessed = timestamp.HasValue && !TryParseOffset(offset, out _);
+            if (offsetGuessed)
+            {
+                var clockTime = timestamp!.Value.DateTime;
+                timestamp = new DateTimeOffset(clockTime, TimeZoneInfo.Local.GetUtcOffset(clockTime));
+            }
             string? source = timestamp.HasValue ? "exif" : null;
 
-            return (isIphone, timestamp, source, string.IsNullOrEmpty(subSecond));
+            return (isIphone, timestamp, source, string.IsNullOrEmpty(subSecond), offsetGuessed, CameraName(make, model));
         }
         catch
         {
-            return (false, null, null, false);
+            return (false, null, null, false, false, null);
         }
     }
 
@@ -207,17 +223,29 @@ public static class PhotoScanner
     // a fallback: it's when the file was written, so a long video's end, which
     // would match nothing and make a kept video look deleted. Without a start
     // time the video is skipped and left alone.
-    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source, bool InWholeSeconds) ClassifyVideo(
+    private static (bool IsIphone, DateTimeOffset? Timestamp, string? Source, bool InWholeSeconds, bool OffsetGuessed, string? Camera) ClassifyVideo(
         QuickTimeMetadataHeaderDirectory quickTime)
     {
-        bool isIphone = IsIphone(
-            quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagMake),
-            quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagModel));
-        DateTimeOffset? timestamp = isIphone && quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var started)
+        var make = quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagMake)?.Trim();
+        var model = quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagModel)?.Trim();
+        bool isIphone = IsIphone(make, model);
+        DateTimeOffset? timestamp = quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var started)
             ? new DateTimeOffset(started).ToUniversalTime()
             : null;
-        return (isIphone, timestamp, timestamp.HasValue ? "video" : null, true);
+        return (isIphone, timestamp, timestamp.HasValue ? "video" : null, true, false, CameraName(make, model));
     }
+
+    // "Google" and "Pixel 8" → "Google Pixel 8"; a model that already starts with
+    // its make ("Canon EOS R6") stays as it is.
+    private static string? CameraName(string? make, string? model) =>
+        (make, model) switch
+        {
+            ({ Length: > 0 }, { Length: > 0 }) when model.StartsWith(make, StringComparison.OrdinalIgnoreCase) => model,
+            ({ Length: > 0 }, { Length: > 0 }) => $"{make} {model}",
+            (_, { Length: > 0 }) => model,
+            ({ Length: > 0 }, _) => make,
+            _ => null,
+        };
 
     /// <summary>
     /// The OneDrive filename encodes UTC time: 20260411_073333208_iOS.heic
@@ -254,13 +282,18 @@ public static class PhotoScanner
         if (subSecond is { Length: > 0 } && subSecond.All(char.IsAsciiDigit))
             dt = dt.AddMilliseconds(int.Parse(subSecond.PadRight(3, '0')[..3], CultureInfo.InvariantCulture));
 
-        TimeSpan utcOffset = TimeSpan.Zero;
-        if (offset is not null && TimeSpan.TryParseExact(
-            offset.TrimStart('+', '-'), @"hh\:mm", CultureInfo.InvariantCulture, out var magnitude))
-        {
-            utcOffset = offset.StartsWith('-') ? -magnitude : magnitude;
-        }
-
+        var utcOffset = TryParseOffset(offset, out var parsed) ? parsed : TimeSpan.Zero;
         return new DateTimeOffset(dt, utcOffset).ToUniversalTime();
+    }
+
+    // "+03:00" or "-04:00".
+    private static bool TryParseOffset(string? offset, out TimeSpan utcOffset)
+    {
+        utcOffset = TimeSpan.Zero;
+        if (offset is null || !TimeSpan.TryParseExact(
+            offset.TrimStart('+', '-'), @"hh\:mm", CultureInfo.InvariantCulture, out var magnitude))
+            return false;
+        utcOffset = offset.StartsWith('-') ? -magnitude : magnitude;
+        return true;
     }
 }
