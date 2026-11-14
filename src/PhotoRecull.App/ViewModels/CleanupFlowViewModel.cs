@@ -534,7 +534,7 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public void CancelConfirm() => Step = CleanupFlowStep.Review;
 
     public string? DefaultStageFolderFor(TargetSettings target) =>
-        SyncTargets.Create(target).DefaultStageFolder(_cleanup!.From, _cleanup.To);
+        SyncTargets.DefaultStageFolders(Targets, _cleanup!.From, _cleanup.To).GetValueOrDefault(target);
 
     public IReadOnlyList<(TargetSettings Target, int Count, long Bytes)> CandidatesPerTarget() =>
         Review?.CandidatesToActOn

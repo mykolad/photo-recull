@@ -75,11 +75,13 @@ public sealed partial class TargetFolderViewModel : ObservableObject
             FolderPath = path;
     }
 
+    // The check starts first: it marks the folder not valid before it awaits, so
+    // the name suggested next isn't saved with a folder that hasn't been found.
     partial void OnFolderPathChanged(string value)
     {
+        _ = ValidateFolderAsync(value);
         if (!_isNameTyped)
             SuggestName();
-        _ = ValidateFolderAsync(value);
     }
 
     private async Task ValidateFolderAsync(string folderPath)

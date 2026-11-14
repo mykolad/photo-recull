@@ -4,6 +4,41 @@ public static class SyncTargets
 {
     public static ISyncTarget Create(TargetSettings settings) => new FolderTarget(settings.Name, settings.FolderPath);
 
+    // Targets whose default stage folders would be the same (two folders side by
+    // side, or two backups under one Synology Photos folder) each get a folder of
+    // their own inside it, named after the target, so photos with the same name
+    // in the same place don't collide.
+    public static Dictionary<TargetSettings, string?> DefaultStageFolders(
+        IEnumerable<TargetSettings> targets, DateOnly firstDay, DateOnly lastDay)
+    {
+        var folders = targets.Distinct().ToDictionary(t => t, t => Create(t).DefaultStageFolder(firstDay, lastDay));
+        var shared = folders
+            .Where(f => f.Value is not null)
+            .GroupBy(f => FileActions.ComparablePath(f.Value!), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .ToList();
+        foreach (var group in shared)
+        {
+            var namesInUse = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (target, folder) in group)
+            {
+                var name = FolderNameFor(target.Name);
+                var unique = name;
+                for (var number = 2; !namesInUse.Add(unique); number++)
+                    unique = $"{name} {number}";
+                folders[target] = Path.Combine(folder!, unique);
+            }
+        }
+        return folders;
+    }
+
+    private static string FolderNameFor(string targetName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var name = string.Concat(targetName.Select(c => invalid.Contains(c) ? '_' : c)).Trim().TrimEnd('.');
+        return name.Length > 0 ? name : "Target";
+    }
+
     // The folders the OneDrive app syncs for the signed-in Windows user: a personal
     // account, a work or school one, or both.
     private static readonly string[] OneDriveFolderVariables = ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"];
