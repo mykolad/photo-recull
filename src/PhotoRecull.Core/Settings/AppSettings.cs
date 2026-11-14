@@ -2,13 +2,8 @@ using PhotoRecull.Core.Library;
 
 namespace PhotoRecull.Core.Settings;
 
-public enum TargetKind
-{
-    OneDrive,
-    SynologyPhotos,
-}
-
-public record TargetSettings(TargetKind Kind, string FolderPath);
+// A folder a cleanup repeats the Google Photos culls in, and what it's called.
+public record TargetSettings(string Name, string FolderPath);
 
 public record AppSettings
 {

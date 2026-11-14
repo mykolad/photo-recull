@@ -6,7 +6,7 @@
     xmlns:views="using:PhotoRecull.App.Views">
 
     <StackPanel Spacing="6">
-        <TextBlock Text="{x:Bind Folder.FolderLabel, Mode=OneWay}" />
+        <TextBlock Text="Folder" />
         <Grid ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -15,7 +15,7 @@
             <TextBox
                 Text="{x:Bind Folder.FolderPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                 PlaceholderText="{x:Bind Folder.PlaceholderText, Mode=OneWay}"
-                AutomationProperties.Name="{x:Bind Folder.FolderLabel, Mode=OneWay}" />
+                AutomationProperties.Name="Folder" />
             <Button Grid.Column="1" Content="Browse…" Command="{x:Bind Folder.BrowseFolderCommand, Mode=OneWay}" />
         </Grid>
         <TextBlock
@@ -27,5 +27,14 @@
             Style="{StaticResource CaptionTextBlockStyle}"
             TextWrapping="Wrap"
             Foreground="{x:Bind views:XamlFunctions.ValidationResultBrush(Folder.IsFolderValid, Folder.IsCheckingFolder), Mode=OneWay}" />
+        <TextBlock Text="Name" Margin="0,8,0,0" />
+        <TextBox
+            Text="{x:Bind Folder.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+            PlaceholderText="OneDrive, NAS, Dropbox…"
+            AutomationProperties.Name="Name" />
+        <TextBlock
+            Text="What PhotoRecull calls this folder. Suggested from the folder until you type one."
+            Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+            TextWrapping="Wrap" />
     </StackPanel>
 </UserControl>

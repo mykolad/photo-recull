@@ -51,16 +51,17 @@ dotnet run --project src/PhotoRecull.Cli -- --onedrive "<Camera Roll folder>" --
 #    or re-run with --delete (permanent).
 ```
 
-For Synology Photos, point at the mobile backup folder on the NAS instead (File Explorer
-must already be able to open it). Only that month's folders are read:
+Any other backup folder works the same way with `--path`, such as Synology Photos' mobile
+backup on a NAS (File Explorer must already be able to open it). Only that month's
+folders are read:
 
 ```bash
-dotnet run --project src/PhotoRecull.Cli -- --target synology --path "\\nas\home\Photos\MobileBackup\iPhone" --from 2026-08 --to 2026-08
+dotnet run --project src/PhotoRecull.Cli -- --path "\\nas\home\Photos\MobileBackup\iPhone" --from 2026-08 --to 2026-08
 ```
 
 Add `--stage "\\nas\home\PhotoRecull staged"` to keep the staged photos on the NAS,
 outside the `Photos` folder that Synology Photos shows. See
-[docs/USAGE.md](docs/USAGE.md#synology-photos).
+[docs/USAGE.md](docs/USAGE.md#network-folders).
 
 Work **one month at a time** so the manual pick stays manageable, and prefer
 `--dry-run`/`--stage` over `--delete`.
@@ -80,7 +81,7 @@ Work **one month at a time** so the manual pick stays manageable, and prefer
 |---|---|
 | `src/PhotoRecull.Core` | Scanning, matching, the Google Photos Picker client, stage/delete, the cleanup library. Shared by every front end. |
 | `src/PhotoRecull.Cli` | The command-line app, including the HTML review report |
-| `src/PhotoRecull.App` | The Windows app (WinUI 3): setup, the Library, and a full cleanup for OneDrive and Synology Photos (pick, date range, scan, review, stage or delete); targets in Settings |
+| `src/PhotoRecull.App` | The Windows app (WinUI 3): setup, the Library, and a full cleanup of any backup folder, such as OneDrive's Camera Roll or a NAS (pick, date range, scan, review, stage or delete); target folders in Settings |
 | `tests/PhotoRecull.Tests` | xUnit tests |
 
 To run the Windows app: `dotnet run --project src/PhotoRecull.App`. It keeps its settings,

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,16 +9,17 @@ using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
 
-public sealed class SettingsViewModel
+public sealed partial class SettingsViewModel
 {
     public SettingsViewModel()
     {
-        var savedTargets = AppServices.Database.LoadSettings().Targets;
-        Targets = [.. new[] { TargetKind.OneDrive, TargetKind.SynologyPhotos }
-            .Select(kind => new TargetSettingsRowViewModel(
-                kind, savedTargets.FirstOrDefault(t => t.Kind == kind), SaveTargets, OtherTargetOverlapping))];
-        RefreshWhichTargetsCanBeTurnedOff();
+        foreach (var saved in AppServices.Database.LoadSettings().Targets)
+            Targets.Add(NewRow(saved));
+        RefreshWhichTargetsCanBeRemoved();
     }
+
+    private TargetSettingsRowViewModel NewRow(TargetSettings? saved) =>
+        new(saved, SaveTargets, RemoveTarget, OtherTargetOverlapping, OtherTargetNames);
 
     // Two targets reading the same folder would list each photo twice, and could
     // stage or delete one file on behalf of both.
@@ -28,7 +30,10 @@ public sealed class SettingsViewModel
             .FirstOrDefault(saved => saved is not null
                 && (FileActions.IsSameOrInside(folder, saved.FolderPath) || FileActions.IsSameOrInside(saved.FolderPath, folder)));
 
-    public List<TargetSettingsRowViewModel> Targets { get; }
+    private List<string> OtherTargetNames(TargetSettingsRowViewModel row) =>
+        Targets.Where(other => other != row).Select(other => other.Folder.Name).ToList();
+
+    public ObservableCollection<TargetSettingsRowViewModel> Targets { get; } = [];
 
     public GooglePhotosSettingsViewModel GooglePhotos { get; } = new();
 
@@ -44,29 +49,41 @@ public sealed class SettingsViewModel
         GooglePhotos.SignInCancelCommand.Execute(null);
     }
 
-    private void SaveTargets(TargetSettingsRowViewModel changed)
+    // A new folder is saved once it's found, like a changed one.
+    [RelayCommand]
+    private void AddTarget()
+    {
+        Targets.Add(NewRow(null));
+        RefreshWhichTargetsCanBeRemoved();
+    }
+
+    private void RemoveTarget(TargetSettingsRowViewModel row)
+    {
+        Targets.Remove(row);
+        if (row.Saved is not null)
+            SaveTargets();
+        else
+            RefreshWhichTargetsCanBeRemoved();
+    }
+
+    private void SaveTargets()
     {
         if (_isClosed)
             return;
-        var current = AppServices.Database.LoadSettings();
-        var settings = current with
+        var settings = AppServices.Database.LoadSettings() with
         {
-            Targets = current.Targets
-                .Where(t => t.Kind != changed.Folder.Kind)
-                .Concat(changed.Saved is { } saved ? [saved] : [])
-                .OrderBy(t => t.Kind)
-                .ToList(),
+            Targets = Targets.Select(row => row.Saved).OfType<TargetSettings>().ToList(),
         };
         AppServices.Database.SaveSettings(settings);
-        RefreshWhichTargetsCanBeTurnedOff();
+        RefreshWhichTargetsCanBeRemoved();
         ShellPage.Current?.RefreshConnectedServices();
     }
 
-    // A cleanup needs a target to scan, so the last one in use stays on.
-    private void RefreshWhichTargetsCanBeTurnedOff()
+    // A cleanup needs a target to scan, so the last one saved stays.
+    private void RefreshWhichTargetsCanBeRemoved()
     {
         foreach (var row in Targets)
-            row.CanBeTurnedOff = !row.IsUsed || Targets.Any(other => other != row && other.Saved is not null);
+            row.CanBeRemoved = row.Saved is null || Targets.Any(other => other != row && other.Saved is not null);
     }
 }
 
@@ -169,24 +186,26 @@ public sealed partial class GooglePhotosSettingsViewModel : ObservableObject
     }
 }
 
-// One target in Settings: on or off, and its folder. A folder is saved once it's
+// One target in Settings: its folder and name. A folder is saved once it's
 // found, so a half-typed or unreachable path never replaces a working one.
 public sealed partial class TargetSettingsRowViewModel : ObservableObject
 {
-    private readonly Action<TargetSettingsRowViewModel> _saveTargets;
+    private readonly Action _saveTargets;
+    private readonly Action<TargetSettingsRowViewModel> _remove;
     private readonly Func<TargetSettingsRowViewModel, string, TargetSettings?> _otherTargetOverlapping;
     private TargetSettings? _refusedForOverlapping;
 
     public TargetSettingsRowViewModel(
-        TargetKind kind, TargetSettings? saved, Action<TargetSettingsRowViewModel> saveTargets,
-        Func<TargetSettingsRowViewModel, string, TargetSettings?> otherTargetOverlapping)
+        TargetSettings? saved, Action saveTargets, Action<TargetSettingsRowViewModel> remove,
+        Func<TargetSettingsRowViewModel, string, TargetSettings?> otherTargetOverlapping,
+        Func<TargetSettingsRowViewModel, IReadOnlyCollection<string>> otherTargetNames)
     {
         _saveTargets = saveTargets;
+        _remove = remove;
         _otherTargetOverlapping = otherTargetOverlapping;
         Saved = saved;
-        Folder = new TargetFolderViewModel(kind, saved?.FolderPath ?? "");
+        Folder = new TargetFolderViewModel(saved, () => otherTargetNames(this));
         Folder.PropertyChanged += OnFolderChanged;
-        IsUsed = saved is not null;
     }
 
     public TargetFolderViewModel Folder { get; }
@@ -195,31 +214,22 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusText))]
-    public partial bool IsUsed { get; set; }
+    [NotifyCanExecuteChangedFor(nameof(RemoveCommand))]
+    public partial bool CanBeRemoved { get; set; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusText))]
-    public partial bool CanBeTurnedOff { get; set; }
+    [RelayCommand(CanExecute = nameof(CanBeRemoved))]
+    private void Remove() => _remove(this);
 
-    public string StatusText => !IsUsed ? "Off. New cleanups can't use it."
-        : _refusedForOverlapping is { } other
-            ? $"Not saved: this folder overlaps {SyncTargets.DisplayName(other.Kind)}'s, so its photos would be scanned twice."
+    public string StatusText => _refusedForOverlapping is { } other
+            ? $"Not saved: this folder overlaps {other.Name}'s, so its photos would be scanned twice."
         : Saved is null ? "Saved once the folder is found."
         : Saved.FolderPath != Folder.Settings.FolderPath ? $"Still using {Saved.FolderPath} until the new folder is found."
-        : !CanBeTurnedOff ? "Saved. A cleanup needs a target, and this is the only one saved: turn on another and choose its folder to turn this one off."
+        : !CanBeRemoved ? "Saved. A cleanup needs a target, so this one stays until you add another."
         : "Saved. New cleanups can use it.";
-
-    partial void OnIsUsedChanged(bool value)
-    {
-        if (!value)
-            SaveAs(null);
-        else if (Folder.IsFolderValid)
-            SaveAs(Folder.Settings);
-    }
 
     private void OnFolderChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(TargetFolderViewModel.IsFolderValid) && Folder.IsFolderValid && IsUsed)
+        if (e.PropertyName is nameof(TargetFolderViewModel.IsFolderValid) or nameof(TargetFolderViewModel.Name) && Folder.IsFolderValid)
             SaveAs(Folder.Settings);
         else if (e.PropertyName == nameof(TargetFolderViewModel.FolderPath))
         {
@@ -228,9 +238,9 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
         }
     }
 
-    private void SaveAs(TargetSettings? target)
+    private void SaveAs(TargetSettings target)
     {
-        _refusedForOverlapping = target is null ? null : _otherTargetOverlapping(this, target.FolderPath);
+        _refusedForOverlapping = _otherTargetOverlapping(this, target.FolderPath);
         if (_refusedForOverlapping is not null)
         {
             OnPropertyChanged(nameof(StatusText));
@@ -240,6 +250,6 @@ public sealed partial class TargetSettingsRowViewModel : ObservableObject
             return;
         Saved = target;
         OnPropertyChanged(nameof(StatusText));
-        _saveTargets(this);
+        _saveTargets();
     }
 }

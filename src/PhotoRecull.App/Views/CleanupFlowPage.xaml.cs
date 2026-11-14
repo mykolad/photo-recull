@@ -152,8 +152,8 @@ public sealed partial class CleanupFlowPage : Page
     private async Task DeleteAsync()
     {
         ViewModel.BeginConfirm();
-        var dsmRecycleBins = await ViewModel.CheckDsmRecycleBinsBeforeDeleteAsync();
-        var choice = await new DeleteDialog(XamlRoot, ViewModel, ViewModel.Review?.KeptByUserCount ?? 0, dsmRecycleBins).ChooseAsync();
+        var nasRecycleBins = await ViewModel.CheckNasRecycleBinsBeforeDeleteAsync();
+        var choice = await new DeleteDialog(XamlRoot, ViewModel, ViewModel.Review?.KeptByUserCount ?? 0, nasRecycleBins).ChooseAsync();
         switch (choice)
         {
             case DeleteChoice.Delete:

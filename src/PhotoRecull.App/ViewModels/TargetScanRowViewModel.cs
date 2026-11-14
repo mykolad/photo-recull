@@ -10,9 +10,9 @@ public sealed partial class TargetScanRowViewModel(TargetSettings target) : Obse
 {
     public TargetSettings Target { get; } = target;
 
-    public string Glyph => ShellPage.TargetGlyph(Target.Kind);
+    public string Glyph => ShellPage.TargetGlyph(Target);
 
-    public string Name => SyncTargets.DisplayName(Target.Kind);
+    public string Name => Target.Name;
 
     public string FolderPath => Target.FolderPath;
 

@@ -55,13 +55,13 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     public ReviewTileKind Kind => CandidateCopies.Any() ? ReviewTileKind.Candidate : Copies[0].Kind;
     public string FileName => Photo.FileName;
     public string FullPath => Photo.Path;
-    public string TargetGlyphs => string.Join(" ", Copies.Select(c => ShellPage.TargetGlyph(c.Target.Kind)));
+    public string TargetGlyphs => string.Join(" ", Copies.Select(c => ShellPage.TargetGlyph(c.Target)));
     public string TargetNames => NamesOf(Copies);
 
     // Where each copy stands, for the target badge's tooltip: a photo can stay on
     // one target and go from another.
     public string CopyMarksText => string.Join(Environment.NewLine, Copies.Select(c =>
-        $"{SyncTargets.DisplayName(c.Target.Kind)}: {CopyMarkText(c)}"));
+        $"{c.Target.Name}: {CopyMarkText(c)}"));
     public bool IsVideo => Thumbnails.IsVideo(Photo.Path);
     public bool CanBeKept => Kind == ReviewTileKind.Candidate;
 
@@ -70,10 +70,10 @@ public sealed partial class ReviewTileViewModel : ObservableObject
     private bool StaysSomewhere => Copies.Any(c => c.Kind == ReviewTileKind.Match);
 
     private static string NamesOf(IEnumerable<ReviewCopy> copies) =>
-        string.Join(" and ", copies.Select(c => SyncTargets.DisplayName(c.Target.Kind)));
+        string.Join(" and ", copies.Select(c => c.Target.Name));
 
     public string CopiesText => string.Join(Environment.NewLine + Environment.NewLine, Copies.Select(c =>
-        $"{SyncTargets.DisplayName(c.Target.Kind)} · {CopyMarkText(c)}{Environment.NewLine}{c.Photo.Path}"));
+        $"{c.Target.Name} · {CopyMarkText(c)}{Environment.NewLine}{c.Photo.Path}"));
 
     private string CopyMarkText(ReviewCopy copy) => copy.Kind switch
     {

@@ -11,7 +11,7 @@ public class RunJournalTests : IDisposable
     private readonly AppStateDatabase _database;
     private readonly Cleanup _cleanup = new(Guid.NewGuid(), new(2026, 10, 1), new(2026, 10, 31), CleanupState.ReadyToAct,
         PickedCount: 5, PickedAt: DateTimeOffset.UnixEpoch, LastActivityAt: DateTimeOffset.UnixEpoch);
-    private static readonly TargetSettings OneDrive = new(TargetKind.OneDrive, @"C:\Camera Roll");
+    private static readonly TargetSettings OneDrive = new("OneDrive", @"C:\Camera Roll");
 
     public RunJournalTests()
     {

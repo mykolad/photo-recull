@@ -7,7 +7,6 @@ using PhotoRecull.App.Services;
 using PhotoRecull.App.Views;
 using PhotoRecull.Core;
 using PhotoRecull.Core.Library;
-using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
 
@@ -75,11 +74,11 @@ public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupR
     public string Title => $"{Run.Action switch { CleanupAction.Staged => "Staged", CleanupAction.MovedBack => "Moved back", _ => "Deleted" }} {PhotoCount(Run.SucceededCount)}"
         + (Run.Action == CleanupAction.Deleted && Run.FreedBytes > 0 ? $" · {FileSizeText.Format(Run.FreedBytes)} freed" : "");
 
-    public string TargetGlyph => ShellPage.TargetGlyph(Run.Target.Kind);
+    public string TargetGlyph => ShellPage.TargetGlyph(Run.Target);
 
     public string Details => string.Join(" · ", new[]
     {
-        SyncTargets.DisplayName(Run.Target.Kind),
+        Run.Target.Name,
         cleanupRange is null ? null : $"Cleanup {cleanupRange}",
         Run.FailedCount > 0 ? $"{PhotoCount(Run.FailedCount)} failed" : null,
     }.OfType<string>());
@@ -87,7 +86,7 @@ public sealed partial class HistoryRunViewModel(CleanupRun run, string? cleanupR
     public string WhereText => Run.Action == CleanupAction.Staged ? $"Moved to {Run.Destination}"
         : Run.Action == CleanupAction.MovedBack ? $"Back to {Run.Target.FolderPath}, and kept"
         : Run.WentToRecycleBin ?? CleanupFlowViewModel.DeletesGoToRecycleBin(Run.Target) ? "Moved to the Recycle Bin"
-        : "Deleted on the NAS (to #recycle if DSM's Recycle Bin was on)";
+        : "Deleted on the NAS (to its recycle bin, if that was on)";
 
     public bool IsInterrupted => Run.Status == RunStatus.Interrupted;
 

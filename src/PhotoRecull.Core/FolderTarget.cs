@@ -2,12 +2,13 @@ using System.Globalization;
 
 namespace PhotoRecull.Core;
 
-// Synology Photos reached as a folder on the network (\\nas\home\Photos\MobileBackup\iPhone)
-// or a mapped drive. Its mobile backup files photos in date folders (2026\01,
-// or 2026-01), so a cleanup only reads the folders its days can be in.
-public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
+// A folder the user's iPhone photos are backed up to, whichever app puts them
+// there: OneDrive's Camera Roll, Synology Photos' mobile backup on a NAS, or any
+// other folder File Explorer can open. Subfolders are read too; ones named after
+// dates (2026\01, or 2026-01) are only read when the cleanup's days can be in them.
+public sealed class FolderTarget(string name, string folderPath) : ISyncTarget
 {
-    public string DisplayName => "Synology Photos";
+    public string DisplayName { get; } = name;
 
     public string FolderPath { get; } = folderPath;
 
@@ -16,31 +17,48 @@ public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
         IProgress<ScanProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(FolderPath))
-            throw new DirectoryNotFoundException(
-                $"Can't open {FolderPath}. Check that the NAS is on and that File Explorer can open this folder.");
+            throw new DirectoryNotFoundException(FileActions.IsNetworkFolder(FolderPath)
+                ? $"Can't open {FolderPath}. Check that the NAS or server is on and that File Explorer can open this folder."
+                : $"Can't open {FolderPath}. Check the path, and that its drive is connected.");
         var photoFiles = ListPhotoFiles(FolderPath, firstDay, lastDay, cancellationToken);
         return PhotoScanner.ReadPhotos(photoFiles, progress, cancellationToken);
     }
 
-    // Outside the Photos folder of the personal space (\\nas\home\Photos), which
-    // Synology Photos shows: staged photos left inside it would show up there
-    // again. Shared Space (\\nas\photo) or a drive mapped to the Photos folder
-    // itself has no folder outside it to tell, so the user chooses one.
+    // Outside the folder, so its next scan doesn't find the staged photos again,
+    // and outside any library app's view of it where that can be told:
+    // - A Photos folder (Synology Photos' personal space, \nas\home\Photos) is
+    //   shown whole by Synology Photos, so the stage folder goes next to it.
+    // - Synology Photos' Shared Space (\nas\photo\MobileBackup) shows the whole
+    //   shared folder, which has nothing outside it to tell: the user chooses.
+    // - Anything else (OneDrive's Camera Roll) gets one next to the folder.
     public string? DefaultStageFolder(DateOnly firstDay, DateOnly lastDay)
     {
-        var photosFolder = FolderAndItsParents(Path.TrimEndingDirectorySeparator(FolderPath))
-            .FirstOrDefault(f => Path.GetFileName(f).Equals("Photos", StringComparison.OrdinalIgnoreCase));
-        return photosFolder is not null && Path.GetDirectoryName(photosFolder) is { } outsidePhotos
-            ? Path.Combine(outsidePhotos, StageFolderName, $"{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}")
+        var folder = Path.TrimEndingDirectorySeparator(FolderPath);
+        var folders = FolderAndItsParents(folder).ToList();
+        var photosFolder = folders.FirstOrDefault(f => Path.GetFileName(f).Equals("Photos", StringComparison.OrdinalIgnoreCase));
+        if (photosFolder is not null)
+            return Path.GetDirectoryName(photosFolder) is { } outsidePhotos
+                ? Path.Combine(outsidePhotos, StageFolderName, $"{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}")
+                : null;
+        if (folders.Any(f => Path.GetFileName(f).Equals("MobileBackup", StringComparison.OrdinalIgnoreCase)))
+            return null;
+        return Path.GetDirectoryName(folder) is { } parent
+            ? Path.Combine(parent, $"_staged_{firstDay:yyyy-MM-dd}_{lastDay:yyyy-MM-dd}")
             : null;
     }
 
-    // Deleting over the network skips the Windows Recycle Bin; DSM catches the
-    // files here instead when the Recycle Bin is on for the shared folder.
-    public string RecycleBinFolder =>
-        Path.Combine(Path.GetPathRoot(Path.GetFullPath(FolderPath)) ?? FolderPath, "#recycle");
+    // Deleting from a network folder skips the Windows Recycle Bin. A NAS can keep
+    // deleted files itself, at the root of the shared folder, when that's turned
+    // on: #recycle on Synology (DSM), @Recycle on QNAP. Finding the folder shows it
+    // was turned on once, not that it still is.
+    public static readonly string[] NasRecycleBinNames = ["#recycle", "@Recycle"];
 
-    public bool HasRecycleBin => Directory.Exists(RecycleBinFolder);
+    public string? NasRecycleBinFolder()
+    {
+        if (!FileActions.IsNetworkFolder(FolderPath) || Path.GetPathRoot(Path.GetFullPath(FolderPath)) is not { Length: > 0 } shareRoot)
+            return null;
+        return NasRecycleBinNames.Select(name => Path.Combine(shareRoot, name)).FirstOrDefault(Directory.Exists);
+    }
 
     // A folder is named after the capture date where the photo was taken, while
     // the days are in the user's time zone. Those can be up to 26 hours apart
@@ -62,20 +80,26 @@ public sealed class SynologyPhotosTarget(string folderPath) : ISyncTarget
                 if (PhotoScanner.IsPhotoOrVideo(file))
                     files.Add(file);
             }
-            foreach (var subfolder in Directory.EnumerateDirectories(folder.Path))
+            foreach (var subfolder in new DirectoryInfo(folder.Path).EnumerateDirectories())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var name = Path.GetFileName(subfolder);
-                if (IsSkippedFolder(name))
+                var name = subfolder.Name;
+                if (IsSkippedFolder(name) || IsLinkToAnotherFolder(subfolder))
                     continue;
                 var dates = DateFolder.FromName(name, folder.Dates) ?? folder.Dates;
                 if (dates is null || dates.Overlaps(firstDayWithMargin, lastDayWithMargin))
-                    foldersToList.Push((subfolder, dates));
+                    foldersToList.Push((subfolder.FullName, dates));
             }
         }
         files.Sort(StringComparer.OrdinalIgnoreCase);
         return files;
     }
+
+    // A junction or symbolic link shows another folder's photos a second time: two
+    // paths to one file, one matched and one not, would remove the photo that stays.
+    // OneDrive's own folders are reparse points too, but not links, so they're read.
+    public static bool IsLinkToAnotherFolder(DirectoryInfo folder) =>
+        folder.Attributes.HasFlag(FileAttributes.ReparsePoint) && folder.LinkTarget is not null;
 
     // @eaDir holds Synology's thumbnails, #recycle and #snapshot its Recycle Bin
     // and snapshots. PhotoRecull's own stage folders hold photos waiting for
