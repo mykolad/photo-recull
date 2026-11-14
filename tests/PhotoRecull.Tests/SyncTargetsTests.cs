@@ -42,6 +42,21 @@ public class SyncTargetsTests
         Assert.Equal(@"C:\Users\me\OneDrive\Pictures\_staged_2026-01-01_2026-01-31", folders[elsewhere]);
     }
 
+    [Theory]
+    [InlineData("CON", "_CON")]
+    [InlineData("nul.txt", "_nul.txt")]
+    [InlineData("COM1", "_COM1")]
+    [InlineData("Console", "Console")]
+    public void DefaultStageFolders_NeverUseANameWindowsKeepsForADevice(string targetName, string expectedFolderName)
+    {
+        var device = new TargetSettings(targetName, @"D:\Backups\Phone1");
+        var other = new TargetSettings("Phone", @"D:\Backups\Phone2");
+
+        var folders = SyncTargets.DefaultStageFolders([device, other], new(2026, 1, 1), new(2026, 1, 31));
+
+        Assert.Equal(expectedFolderName, Path.GetFileName(folders[device]));
+    }
+
     [Fact]
     public void SuggestedName_IsNeverOneAnotherTargetHas()
     {

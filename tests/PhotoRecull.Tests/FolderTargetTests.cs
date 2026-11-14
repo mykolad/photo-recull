@@ -104,6 +104,29 @@ public class FolderTargetTests : IDisposable
     }
 
     [Fact]
+    public void ListPhotoFiles_SkipsAFolderThatIsALinkToAnother()
+    {
+        CreateFile(@"Photos\IMG_0001.HEIC");
+        var alias = Path.Combine(_backupFolder, "Alias");
+        // A junction, which unlike a symbolic link needs no administrator rights.
+        using (var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", $"/c mklink /J \"{alias}\" \"{Path.Combine(_backupFolder, "Photos")}\"")
+            { CreateNoWindow = true, UseShellExecute = false })!)
+            mklink.WaitForExit();
+        try
+        {
+            Assert.True(Directory.Exists(alias));
+
+            Assert.Equal([@"Photos\IMG_0001.HEIC"], ListedRelativePaths(firstDay: null, lastDay: null));
+        }
+        finally
+        {
+            // Removes the junction itself, not the folder it points to.
+            Directory.Delete(alias);
+        }
+    }
+
+    [Fact]
     public void Scan_ALocalFolderThatIsMissing_SaysToCheckItsDrive()
     {
         var target = new FolderTarget("Camera Roll", Path.Combine(_backupFolder, "missing"));
