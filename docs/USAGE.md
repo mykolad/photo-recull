@@ -151,9 +151,12 @@ NAS's API.
   time recording started (Apple's `creationdate`). Videos without it, and files without
   a capture time (screenshots, saved images), are skipped.
 - A photo saved without its time zone (some cameras, older iPhones) is placed in the PC's
-  time zone as a best guess. It's matched one-to-one at that guess, so bursts are still
-  culled, and then, if nothing matched, kept when any picked photo could be it in
-  another time zone. A wrong guess can only keep a photo, never remove one.
+  time zone as a best guess. It's matched one-to-one at that guess, so a camera's bursts
+  are still culled. If nothing matched, it's kept when the picked photo it could be went
+  to another camera's photo or one with a known time zone, or when any picked photo
+  could be it in another time zone; near the range's first or last day, where it could
+  belong to the range next door, it's skipped. A wrong guess can only keep a photo,
+  never remove one.
 - A Live Photo's video (`IMG_1234.MOV` next to `IMG_1234.HEIC`) counts as part of its
   photo, as in Google Photos: it's kept, staged or deleted together with the photo.
 - Matching is **one-to-one** within a ±2s tolerance: each Google photo keeps at most one
