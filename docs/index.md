@@ -111,16 +111,21 @@ folder: OneDrive, a NAS such as Synology, or any folder File Explorer can open.
 
 **Can I undo it?**
 Yes, if you stage first: photos move to a review folder and nothing is deleted, so you can
-move any back. Deleting from your PC sends photos to the Recycle Bin. Deleting from a NAS
-over the network skips the Windows Recycle Bin, so turn on the NAS's own recycle bin for the
-shared folder first (on Synology: Control Panel › Shared Folder › Edit; on QNAP: Network
-Recycle Bin). PhotoRecull checks for it and tells you before it deletes anything.
+move any back. Deleting from your PC sends photos to the Recycle Bin, unless Windows can't
+recycle a file (say, it's bigger than the Recycle Bin), in which case Windows asks before
+deleting it for good. Deleting from a NAS over the network skips the Windows Recycle Bin,
+so turn on the NAS's own recycle bin for the shared folder first (on Synology: Control
+Panel › Shared Folder › Edit; on QNAP: Network Recycle Bin). PhotoRecull warns you before
+it deletes there, and looks for the recycle bin's folder, but a folder only shows it was
+turned on once: check it still is.
 
 **What about photos from other phones or cameras?**
-By default PhotoRecull only touches iPhone photos: an iPhone saves the time zone with every
-photo, so it matches Google Photos exactly. You can turn that off for any folder to include
-other phones and cameras. A photo saved without its time zone is only removed when no photo
-you kept could be it, in any time zone.
+By default PhotoRecull only touches iPhone photos: an iPhone saves the time zone with its
+photos, so they match Google Photos exactly. You can turn that off for any folder to include
+other phones and cameras. A photo saved without its time zone (some cameras, older iPhones)
+is matched in your PC's time zone first, so a camera's bursts are still culled, and then
+checked against every other time zone: it's only removed when none of the photos you kept
+could be it.
 
 **Is it open source?**
 Yes, under the MIT License. There's also a command-line version.
