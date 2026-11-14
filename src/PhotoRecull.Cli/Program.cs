@@ -338,7 +338,7 @@ if (dryRun)
 {
     Console.WriteLine("\nDry run complete. No files were moved or deleted.");
     if (result.Unmatched.Count > 0)
-        PrintNextSteps(targetName, targetFolder, fromDate, toDate, effectiveCache, stageFolder);
+        PrintNextSteps(targetName, targetFolder, allCameras, fromDate, toDate, effectiveCache, stageFolder);
     return 0;
 }
 
@@ -531,7 +531,7 @@ static bool IsWholeMonth(DateOnly from, DateOnly to) =>
     && to.Day == DateTime.DaysInMonth(to.Year, to.Month);
 
 // After a dry run, print the exact command to move the candidates to staging.
-static void PrintNextSteps(string? targetName, string targetFolder, DateOnly? from, DateOnly? to,
+static void PrintNextSteps(string? targetName, string targetFolder, bool allCameras, DateOnly? from, DateOnly? to,
     string? effectiveCache, string? stageFolder)
 {
     var stageDir = stageFolder ?? $"_staged_{DefaultLabel(from, to)}";
@@ -540,7 +540,8 @@ static void PrintNextSteps(string? targetName, string targetFolder, DateOnly? fr
     {
         var c = "dotnet run --project src/PhotoRecull.Cli --"
             + (targetName is not null ? $" --target \"{targetName}\"" : "")
-            + $" --path \"{targetFolder}\"";
+            + $" --path \"{targetFolder}\""
+            + (allCameras ? " --all-cameras" : "");
         if (from.HasValue) c += $" --from {from:yyyy-MM-dd}";
         if (to.HasValue)   c += $" --to {to:yyyy-MM-dd}";
         if (effectiveCache is not null) c += $" --cache \"{effectiveCache}\"";

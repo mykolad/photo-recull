@@ -34,16 +34,29 @@ public class OtherCamerasTests : IDisposable
     }
 
     [Fact]
-    public void Match_AGuessedTimeZone_StillCullsABurst()
+    public void Match_ABurstWithoutATimeZone_StaysWhole_WhenOneFrameWasKept()
     {
+        // Without a time zone, which frame was kept can't be told for sure.
         var frames = Enumerable.Range(0, 3)
             .Select(i => OtherCameraPhoto(ClockTime.AddMilliseconds(400 * i), offsetGuessed: true, $"PXL_{i}.jpg"))
             .ToList();
 
         var result = PhotoMatcher.Match([frames[1].Timestamp!.Value], frames, onlyIphonePhotos: false);
 
-        Assert.Equal([frames[1]], result.Matched);
-        Assert.Equal([frames[0], frames[2]], result.Unmatched);
+        Assert.Equal(frames, result.Matched);
+        Assert.Empty(result.Unmatched);
+    }
+
+    [Fact]
+    public void Match_TwoCamerasPhotosOfTheSameClockTimeWithoutTimeZones_BothStay()
+    {
+        var picked = OtherCameraPhoto(ClockTime, offsetGuessed: true, "PXL_1.jpg");
+        var notPicked = OtherCameraPhoto(ClockTime, offsetGuessed: true, "DSC_1.jpg") with { Camera = "Canon EOS R6" };
+
+        var result = PhotoMatcher.Match([ClockTime], [notPicked, picked], onlyIphonePhotos: false);
+
+        Assert.Equal(2, result.Matched.Count);
+        Assert.Empty(result.Unmatched);
     }
 
     [Fact]
