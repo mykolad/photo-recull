@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace PhotoRecull.Core.Settings;
 
 public static class SyncTargets
@@ -33,12 +35,20 @@ public static class SyncTargets
         return folders;
     }
 
+    // Characters a folder name can't have become _, and a name Windows keeps for a
+    // device (CON, NUL, COM1, also with an extension) gets one in front.
     private static string FolderNameFor(string targetName)
     {
         var invalid = Path.GetInvalidFileNameChars();
         var name = string.Concat(targetName.Select(c => invalid.Contains(c) ? '_' : c)).Trim().TrimEnd('.');
-        return name.Length > 0 ? name : "Target";
+        if (name.Length == 0)
+            return "Target";
+        return ReservedDeviceName.IsMatch(name) ? "_" + name : name;
     }
+
+    private static readonly Regex ReservedDeviceName = new(
+        @"^(CON|PRN|AUX|NUL|COM[0-9¹²³]|LPT[0-9¹²³])(\..*)?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     // The folders the OneDrive app syncs for the signed-in Windows user: a personal
     // account, a work or school one, or both.

@@ -82,20 +82,26 @@ public sealed class FolderTarget(string name, string folderPath, bool onlyIphone
                 if (PhotoScanner.IsPhotoOrVideo(file))
                     files.Add(file);
             }
-            foreach (var subfolder in Directory.EnumerateDirectories(folder.Path))
+            foreach (var subfolder in new DirectoryInfo(folder.Path).EnumerateDirectories())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var name = Path.GetFileName(subfolder);
-                if (IsSkippedFolder(name))
+                var name = subfolder.Name;
+                if (IsSkippedFolder(name) || IsLinkToAnotherFolder(subfolder))
                     continue;
                 var dates = DateFolder.FromName(name, folder.Dates) ?? folder.Dates;
                 if (dates is null || dates.Overlaps(firstDayWithMargin, lastDayWithMargin))
-                    foldersToList.Push((subfolder, dates));
+                    foldersToList.Push((subfolder.FullName, dates));
             }
         }
         files.Sort(StringComparer.OrdinalIgnoreCase);
         return files;
     }
+
+    // A junction or symbolic link shows another folder's photos a second time: two
+    // paths to one file, one matched and one not, would remove the photo that stays.
+    // OneDrive's own folders are reparse points too, but not links, so they're read.
+    private static bool IsLinkToAnotherFolder(DirectoryInfo folder) =>
+        folder.Attributes.HasFlag(FileAttributes.ReparsePoint) && folder.LinkTarget is not null;
 
     // @eaDir holds Synology's thumbnails, #recycle and #snapshot its Recycle Bin
     // and snapshots. PhotoRecull's own stage folders hold photos waiting for
