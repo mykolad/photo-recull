@@ -212,6 +212,17 @@ public class FileActionsTests : IDisposable
         Assert.False(FileActions.HasRecycleBin(@"\\server\share\Camera Roll\a.heic"));
     }
 
+    [Theory]
+    [InlineData(@"\\server\share\Camera Roll", true)]
+    [InlineData(@"C:\Users\me\Pictures", false)]
+    [InlineData("", false)]
+    [InlineData(" ", false)]
+    [InlineData(@"\\", false)]
+    public void IsNetworkFolder_IsTrueForAShare_AndFalseForAnythingElseTyped(string path, bool expected)
+    {
+        Assert.Equal(expected, FileActions.IsNetworkFolder(path));
+    }
+
     [Fact]
     public void MoveToStageFolder_ExplainsANameAlreadyInTheStageFolder()
     {

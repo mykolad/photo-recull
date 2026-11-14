@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PhotoRecull.App.Services;
 using PhotoRecull.Core;
-using PhotoRecull.Core.Settings;
 
 namespace PhotoRecull.App.ViewModels;
 
@@ -18,20 +17,11 @@ public sealed partial class SetupViewModel : ObservableObject
     public SetupViewModel()
     {
         GoogleConnection = AppServices.Google.IsSignedIn ? GoogleConnection.Connected : GoogleConnection.NotConnected;
-        OneDriveFolder.PropertyChanged += OnTargetFolderChanged;
-        SynologyFolder.PropertyChanged += OnTargetFolderChanged;
+        TargetFolder.PropertyChanged += OnTargetFolderChanged;
     }
 
-    public TargetFolderViewModel OneDriveFolder { get; } = new(TargetKind.OneDrive, SuggestedOneDriveCameraRollOrEmpty());
-
-    public TargetFolderViewModel SynologyFolder { get; } = new(TargetKind.SynologyPhotos, "");
-
-    // 0 is OneDrive, 1 Synology Photos, in the order of the radio buttons.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectedFolder), nameof(CanFinishSetup))]
-    public partial int SelectedTargetIndex { get; set; }
-
-    public TargetFolderViewModel SelectedFolder => SelectedTargetIndex == 1 ? SynologyFolder : OneDriveFolder;
+    // OneDrive's Camera Roll is suggested when it's there; any other folder can be chosen.
+    public TargetFolderViewModel TargetFolder { get; } = new(saved: null, otherTargetNames: () => [], SuggestedOneDriveCameraRollOrEmpty());
 
     private void OnTargetFolderChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -91,7 +81,7 @@ public sealed partial class SetupViewModel : ObservableObject
 
     public string SignInButtonText => IsWaitingForBrowser ? "Waiting for Google…" : "Sign in with Google";
 
-    public bool CanFinishSetup => IsConnected && SelectedFolder.IsFolderValid && HasUsableOAuthClient;
+    public bool CanFinishSetup => IsConnected && TargetFolder.IsFolderValid && HasUsableOAuthClient;
 
     [RelayCommand]
     private async Task BrowseDeveloperCredentialsAsync()
@@ -151,7 +141,7 @@ public sealed partial class SetupViewModel : ObservableObject
         var settings = AppServices.Database.LoadSettings() with
         {
             SignInBrowser = SignInBrowser,
-            Targets = [SelectedFolder.Settings],
+            Targets = [TargetFolder.Settings],
             DeveloperCredentialsPath = NullIfEmpty(DeveloperCredentialsPath),
             SetupCompletedAt = DateTimeOffset.Now,
         };

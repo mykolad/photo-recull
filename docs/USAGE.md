@@ -1,7 +1,7 @@
 # Usage
 
 ```bash
-dotnet run --project src/PhotoRecull.Cli -- --target <onedrive|synology> --path <folder> [options] <mode>
+dotnet run --project src/PhotoRecull.Cli -- --path <folder> [options] <mode>
 ```
 
 You must supply `--path`. The **mode** defaults to a dry run; pass `--stage` or
@@ -13,15 +13,22 @@ You must supply `--path`. The **mode** defaults to a dry run; pass `--stage` or
 
 | Flag | Description |
 |------|-------------|
-| `--path <folder>` | **Required.** The target's photo folder. |
-| `--target <kind>` | `onedrive` (the default) or `synology`. |
+| `--path <folder>` | **Required.** The folder your iPhone photos are backed up to. |
+| `--target <name>` | What messages call the folder. Default: told from the folder (OneDrive, Synology Photos, the NAS's name, or the folder's own name). |
 | `--onedrive <folder>` | Same as `--target onedrive --path <folder>`. |
 
+Any folder works, whichever app backs up to it, as long as it holds the original photo
+files. It's read with its subfolders; ones named after dates (`2026\01`, or `2026-01`)
+are only read when the range can be in them, with two days' margin for time zones.
+PhotoRecull's own stage folders and NAS housekeeping folders (`@eaDir`, `#recycle`,
+`#snapshot`) are skipped. For example:
+
 - **OneDrive:** your local (synced) Camera Roll folder, e.g.
-  `C:\Users\you\OneDrive\Pictures\Camera Roll`. Only the folder itself is read.
-- **Synology Photos:** the mobile backup folder, read over the network, e.g.
-  `\\nas\home\Photos\MobileBackup\iPhone`, or a mapped drive. File Explorer must
-  already be able to open it. See [Synology Photos](#synology-photos).
+  `C:\Users\you\OneDrive\Pictures\Camera Roll`, with the year and month folders OneDrive
+  can sort uploads into.
+- **A NAS:** a network folder or mapped drive that File Explorer can already open, such
+  as Synology Photos' mobile backup, `\\nas\home\Photos\MobileBackup\iPhone`. See
+  [Network folders](#network-folders).
 
 ### Mode (default: dry run)
 
@@ -110,25 +117,26 @@ dotnet run --project src/PhotoRecull.Cli -- --onedrive "C:\...\Camera Roll" --fr
 After a dry run with candidates, the tool prints the exact stage command, pre-filled with
 your paths, range, and cache.
 
-For Synology Photos, swap `--onedrive "C:\...\Camera Roll"` for
-`--target synology --path "\\nas\home\Photos\MobileBackup\iPhone"`.
+For another folder, swap `--onedrive "C:\...\Camera Roll"` for `--path "<folder>"`,
+e.g. `--path "\\nas\home\Photos\MobileBackup\iPhone"`.
 
-## Synology Photos
+## Network folders
 
-PhotoRecull reads the Synology Photos mobile backup as a network folder; it doesn't use
-the Synology API.
+PhotoRecull reads a NAS as a network folder; it doesn't use Synology's or any other
+NAS's API.
 
-- **Folders:** the backup's date folders (`2026\01`, or `2026-01`) are read below the
-  folder you give. Only the months a cleanup's dates can be in are read, with two days'
-  margin for time zones, so a month takes seconds rather than a scan of the whole
-  library. Synology's own folders (`@eaDir`, `#recycle`, `#snapshot`) are skipped.
+- **Folders:** a backup filed in date folders, like Synology Photos', is read a month at
+  a time: only the months a cleanup's dates can be in, so a month takes seconds rather
+  than a scan of the whole library.
 - **Stage folder:** the app stages photos outside the `Photos` folder that Synology Photos
   shows, e.g. `\\nas\home\PhotoRecull staged\2026-08-01_2026-08-31`, so they don't show up
-  in Synology Photos again. With the CLI, `--stage` defaults to `_staged_<range>` in the
-  current folder; pass a folder on the NAS to keep the move on the NAS.
-- **Delete:** deleting over the network skips the Windows Recycle Bin. Turn on the
-  Recycle Bin for the shared folder in DSM (Control Panel › Shared Folder › Edit) to be
-  able to undo it: deleted photos then wait in the share's `#recycle` folder.
+  in Synology Photos again; other folders get one next to them. With the CLI, `--stage`
+  defaults to `_staged_<range>` in the current folder; pass a folder on the NAS to keep
+  the move on the NAS.
+- **Delete:** deleting over the network skips the Windows Recycle Bin. Turn on the NAS's
+  own recycle bin for the shared folder to be able to undo it: on Synology, Control
+  Panel › Shared Folder › Edit (deleted photos then wait in the share's `#recycle`
+  folder); on QNAP, the shared folder's Network Recycle Bin (`@Recycle`).
 
 ## How matching works
 

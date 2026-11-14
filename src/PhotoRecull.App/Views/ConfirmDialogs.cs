@@ -30,9 +30,9 @@ internal static class ConfirmDialogContent
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.Children.Add(new FontIcon { Glyph = ShellPage.TargetGlyph(target.Kind), FontSize = 20 });
+        row.Children.Add(new FontIcon { Glyph = ShellPage.TargetGlyph(target), FontSize = 20 });
         var name = new StackPanel();
-        name.Children.Add(new TextBlock { Text = SyncTargets.DisplayName(target.Kind) });
+        name.Children.Add(new TextBlock { Text = target.Name });
         name.Children.Add(new TextBlock
         {
             Text = $"{count:N0} file{(count == 1 ? "" : "s")} · {FileSizeText.Format(bytes)}",
@@ -56,8 +56,8 @@ internal sealed class StageDialog
     private readonly Dictionary<TargetSettings, TextBox> _folderBoxes = [];
     private readonly Dictionary<TargetSettings, TextBlock> _folderProblems = [];
 
-    // Every target's folder, not only the one being staged from: OneDrive photos
-    // staged inside the Synology backup would come up there in its next scan.
+    // Every target's folder, not only the one being staged from: photos staged
+    // inside another target's folder would come up there in its next scan.
     private readonly List<TargetSettings> _allTargets;
 
     public StageDialog(XamlRoot xamlRoot, CleanupFlowViewModel flow)
@@ -82,7 +82,7 @@ internal sealed class StageDialog
             {
                 Text = flow.DefaultStageFolderFor(target) ?? "",
                 Header = "Stage folder",
-                PlaceholderText = $"A folder outside {SyncTargets.DisplayName(target.Kind)}, so staged photos don't show up there again",
+                PlaceholderText = $"A folder outside {target.Name}, so staged photos don't show up there again",
             };
             folder.TextChanged += (_, _) => UpdatePrimaryButton();
             _folderProblems[target] = new TextBlock
@@ -131,7 +131,7 @@ internal sealed class StageDialog
                 : _allTargets.FirstOrDefault(t => FileActions.IsSameOrInside(folder, t.FolderPath));
             var problem = scannedTarget is null ? null
                 : scannedTarget == target ? $"{FileActions.StageFolderInsideTarget}."
-                : $"This is inside {SyncTargets.DisplayName(scannedTarget.Kind)}'s folder, so its next scan would find these photos.";
+                : $"This is inside {scannedTarget.Name}'s folder, so its next scan would find these photos.";
             _folderProblems[target].Text = problem ?? "";
             _folderProblems[target].Visibility = problem is null ? Visibility.Collapsed : Visibility.Visible;
             allUsable &= Path.IsPathFullyQualified(folder) && problem is null;
@@ -152,11 +152,12 @@ internal sealed class DeleteDialog
     private readonly ContentDialog _dialog;
     private DeleteChoice _choice = DeleteChoice.Cancel;
 
-    // A #recycle folder on the NAS only shows DSM's Recycle Bin was turned on
-    // once, so a Synology delete is always presented as permanent unless it's on.
+    // A NAS's recycle bin folder (#recycle, @Recycle) only shows it was turned on
+    // once, so deleting from a network folder is always presented as permanent
+    // unless it's on.
     public DeleteDialog(
         XamlRoot xamlRoot, CleanupFlowViewModel flow, int keptByUserCount,
-        IReadOnlyDictionary<TargetSettings, string?> dsmRecycleBins)
+        IReadOnlyDictionary<TargetSettings, string?> nasRecycleBins)
     {
         var perTarget = flow.CandidatesPerTarget();
         int total = perTarget.Sum(t => t.Count);
@@ -172,10 +173,10 @@ internal sealed class DeleteDialog
             IsClosable = false,
             Severity = permanentTargets.Count > 0 ? InfoBarSeverity.Error : InfoBarSeverity.Warning,
             Message = permanentTargets.Count > 0
-                ? $"Deleting on {string.Join(" and ", permanentTargets.Select(t => SyncTargets.DisplayName(t.Target.Kind)))} skips the Windows Recycle Bin, so it's permanent unless DSM's Recycle Bin is on for the shared folder. "
-                    + (permanentTargets.Any(t => dsmRecycleBins.GetValueOrDefault(t.Target) is not null)
-                        ? "Its #recycle folder shows it was turned on once; check it still is (Control Panel › Shared Folder › Edit). "
-                        : "To be able to undo it, turn it on first (Control Panel › Shared Folder › Edit). ")
+                ? $"Deleting on {string.Join(" and ", permanentTargets.Select(t => t.Target.Name))} skips the Windows Recycle Bin, so it's permanent unless the NAS keeps its own recycle bin for the shared folder. "
+                    + (permanentTargets.Any(t => nasRecycleBins.GetValueOrDefault(t.Target) is not null)
+                        ? "Its recycle bin folder shows it was turned on once; check it still is (on Synology: Control Panel › Shared Folder › Edit). "
+                        : "To be able to undo it, turn it on first (on Synology: Control Panel › Shared Folder › Edit; on QNAP: the shared folder's Network Recycle Bin). ")
                     + "Make sure every photo you kept was picked."
                 : "Deleted photos go to the Recycle Bin. Make sure every photo you kept was picked.",
         });
@@ -184,7 +185,7 @@ internal sealed class DeleteDialog
             bool isPermanent = permanentTargets.Any(t => t.Target == target);
             var where = new TextBlock
             {
-                Text = isPermanent ? "Permanent unless DSM's Recycle Bin is on" : "Goes to the Recycle Bin",
+                Text = isPermanent ? "Permanent unless the NAS's recycle bin is on" : "Goes to the Recycle Bin",
                 FontWeight = isPermanent ? FontWeights.SemiBold : FontWeights.Normal,
                 Foreground = XamlFunctions.ThemeBrush(isPermanent ? "SystemFillColorCriticalBrush" : "TextFillColorPrimaryBrush"),
             };

@@ -44,7 +44,7 @@ public class AppStateDatabaseTests : IDisposable
         var saved = new AppSettings
         {
             SignInBrowser = "chrome",
-            Targets = [new TargetSettings(TargetKind.OneDrive, @"C:\Users\me\OneDrive\Pictures\Camera Roll")],
+            Targets = [new TargetSettings("OneDrive", @"C:\Users\me\OneDrive\Pictures\Camera Roll")],
             ShowCaptureTimesInUtc = true,
             ReviewFilter = ReviewFilter.OnlyToRemove,
             SetupCompletedAt = new DateTimeOffset(2026, 10, 28, 9, 0, 0, TimeSpan.FromHours(2)),
@@ -79,7 +79,7 @@ public class AppStateDatabaseTests : IDisposable
         var august = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));
         var july = CleanupFor(new(2026, 7, 1), new(2026, 7, 31)) with
         {
-            Targets = [new TargetSettings(TargetKind.OneDrive, @"D:\Camera Roll")],
+            Targets = [new TargetSettings("OneDrive", @"D:\Camera Roll")],
             EarliestPickedDay = new(2026, 7, 2),
             LatestPickedDay = new(2026, 7, 30),
         };
@@ -229,7 +229,7 @@ public class AppStateDatabaseTests : IDisposable
     public void DiscardCleanup_ThatMovedOrDeletedFiles_KeepsItAndItsHistory()
     {
         var database = new AppStateDatabase(DatabasePath);
-        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var oneDrive = new TargetSettings("OneDrive", @"C:\Camera Roll");
         var staged = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.Staged) with { StagedCount = 2 };
         // Partly staged: some photos failed, so it's still Ready to act, but files moved.
         var partlyStaged = CleanupFor(new(2026, 9, 1), new(2026, 9, 30), CleanupState.ReadyToAct);
@@ -248,7 +248,7 @@ public class AppStateDatabaseTests : IDisposable
     public void DiscardCleanup_WhoseRunCompletedNoPhoto_StillKeepsIt_SinceALivePhotosVideoMayHaveMoved()
     {
         var database = new AppStateDatabase(DatabasePath);
-        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var oneDrive = new TargetSettings("OneDrive", @"C:\Camera Roll");
         var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.ReadyToAct);
         var failedRun = new CleanupRun(cleanup.Id, DateTimeOffset.UnixEpoch, CleanupAction.Deleted, oneDrive, null, 0, 1, 4_000_000);
         database.RecordRunsWithCleanup(cleanup, [failedRun]);
@@ -284,7 +284,7 @@ public class AppStateDatabaseTests : IDisposable
     public void Runs_AreRecordedWithTheCleanupsNewStateAndListedNewestFirst()
     {
         var database = new AppStateDatabase(DatabasePath);
-        var oneDrive = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var oneDrive = new TargetSettings("OneDrive", @"C:\Camera Roll");
         var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31), CleanupState.ReadyToAct);
         var staged = new CleanupRun(cleanup.Id, new DateTimeOffset(2026, 9, 1, 10, 0, 0, TimeSpan.Zero),
             CleanupAction.Staged, oneDrive, @"C:\_staged_2026-08-01_2026-08-31", 40, 1, 0);
@@ -323,7 +323,7 @@ public class AppStateDatabaseTests : IDisposable
     {
         var database = new AppStateDatabase(DatabasePath);
         var cleanup = CleanupFor(new(2026, 10, 1), new(2026, 10, 31));
-        var target = new TargetSettings(TargetKind.OneDrive, @"C:\Camera Roll");
+        var target = new TargetSettings("OneDrive", @"C:\Camera Roll");
         // 02:55 summer time (00:55 UTC) is earlier than 02:05 winter time (01:05 UTC).
         var beforeChange = new CleanupRun(cleanup.Id, new DateTimeOffset(2026, 10, 25, 2, 55, 0, TimeSpan.FromHours(2)),
             CleanupAction.Staged, target, @"C:\_staged", 1, 0, 0);
@@ -370,6 +370,53 @@ public class AppStateDatabaseTests : IDisposable
         Assert.Equal(cleanup, Assert.Single(upgraded.LoadCleanups()));
         Assert.Single(upgraded.LoadKeptPhotoPaths(cleanup.Id));
         Assert.Empty(upgraded.LoadRunsNewestFirst());
+    }
+
+    [Fact]
+    public void DatabaseFromBeforeAnyFolderCouldBeATarget_KeepsItsTargetsUnderTheirOldNames()
+    {
+        var cleanupId = Guid.NewGuid();
+        const string OldTargets = """[{"Kind":"OneDrive","FolderPath":"C:\\Camera Roll"},{"Kind":"SynologyPhotos","FolderPath":"\\\\nas\\home\\Photos\\MobileBackup\\iPhone"}]""";
+        using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE cleanups (id TEXT PRIMARY KEY, from_day TEXT NOT NULL, to_day TEXT NOT NULL,
+                    state TEXT NOT NULL, picked_count INTEGER NOT NULL, picked_at TEXT NOT NULL,
+                    last_activity_at TEXT NOT NULL, targets TEXT, earliest_picked_day TEXT, latest_picked_day TEXT,
+                    to_remove_count INTEGER, kept_by_user_count INTEGER NOT NULL DEFAULT 0,
+                    staged_count INTEGER NOT NULL DEFAULT 0, removed_count INTEGER NOT NULL DEFAULT 0,
+                    freed_bytes INTEGER NOT NULL DEFAULT 0, has_ever_run INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE runs (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cleanup_id TEXT NOT NULL REFERENCES cleanups(id) ON DELETE CASCADE, ran_at TEXT NOT NULL,
+                    action TEXT NOT NULL, target_kind TEXT NOT NULL, target_folder TEXT NOT NULL, destination TEXT,
+                    succeeded_count INTEGER NOT NULL, failed_count INTEGER NOT NULL, freed_bytes INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'Complete', photos_recorded INTEGER NOT NULL DEFAULT 0,
+                    went_to_recycle_bin INTEGER);
+                INSERT INTO settings VALUES ('Targets', '{OldTargets}');
+                INSERT INTO cleanups (id, from_day, to_day, state, picked_count, picked_at, last_activity_at, targets)
+                    VALUES ('{cleanupId}', '2026-08-01', '2026-08-31', 'Done', 3,
+                            '2026-09-01T10:00:00.0000000+00:00', '2026-09-01T10:00:00.0000000+00:00', '{OldTargets}');
+                INSERT INTO runs (cleanup_id, ran_at, action, target_kind, target_folder, succeeded_count, failed_count, freed_bytes)
+                    VALUES ('{cleanupId}', '2026-09-01T10:05:00.0000000Z', 'Deleted', 'SynologyPhotos',
+                            '\\nas\home\Photos\MobileBackup\iPhone', 2, 0, 1000);
+                PRAGMA user_version = 6;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var upgraded = new AppStateDatabase(DatabasePath);
+
+        TargetSettings[] expected =
+        [
+            new("OneDrive", @"C:\Camera Roll"),
+            new("Synology Photos", @"\\nas\home\Photos\MobileBackup\iPhone"),
+        ];
+        Assert.Equal(expected, upgraded.LoadSettings().Targets);
+        Assert.Equal(expected, Assert.Single(upgraded.LoadCleanups()).Targets);
+        Assert.Equal(expected[1], Assert.Single(upgraded.LoadRunsNewestFirst()).Target);
     }
 
     [Fact]

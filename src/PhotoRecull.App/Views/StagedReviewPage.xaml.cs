@@ -57,7 +57,7 @@ public sealed partial class StagedReviewPage : Page
                 IsClosable = false,
                 Severity = ViewModel.DeletesArePermanent ? InfoBarSeverity.Error : InfoBarSeverity.Warning,
                 Message = ViewModel.DeletesArePermanent
-                    ? "Some stage folders are on a network drive, which skips the Windows Recycle Bin: deleting there is permanent unless DSM's Recycle Bin is on for the shared folder. Move back any photo you want to keep first."
+                    ? "Some stage folders are on a network drive, which skips the Windows Recycle Bin: deleting there is permanent unless the NAS keeps its own recycle bin for the shared folder. Move back any photo you want to keep first."
                     : "They go to the Recycle Bin. Move back any photo you want to keep first.",
             };
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)

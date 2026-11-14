@@ -2,9 +2,9 @@ using PhotoRecull.Core;
 
 namespace PhotoRecull.Tests;
 
-public class SynologyPhotosTargetTests : IDisposable
+public class FolderTargetTests : IDisposable
 {
-    private readonly string _backupFolder = Directory.CreateTempSubdirectory("photorecull-synology-").FullName;
+    private readonly string _backupFolder = Directory.CreateTempSubdirectory("photorecull-folder-").FullName;
 
     public void Dispose() => Directory.Delete(_backupFolder, recursive: true);
 
@@ -17,7 +17,7 @@ public class SynologyPhotosTargetTests : IDisposable
     }
 
     private List<string> ListedRelativePaths(DateOnly? firstDay, DateOnly? lastDay) =>
-        SynologyPhotosTarget.ListPhotoFiles(_backupFolder, firstDay, lastDay)
+        FolderTarget.ListPhotoFiles(_backupFolder, firstDay, lastDay)
             .Select(p => Path.GetRelativePath(_backupFolder, p))
             .ToList();
 
@@ -83,7 +83,7 @@ public class SynologyPhotosTargetTests : IDisposable
         File.Copy(testData, CreateFile(@"2026\04\IMG_5587.HEIC"), overwrite: true);
         CreateFile(@"2026\06\IMG_5600.HEIC");
 
-        var photos = new SynologyPhotosTarget(_backupFolder).Scan(new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30));
+        var photos = new FolderTarget("Synology Photos", _backupFolder).Scan(new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30));
 
         var photo = Assert.Single(photos);
         Assert.Equal("IMG_5587.HEIC", photo.FileName);
@@ -92,20 +92,55 @@ public class SynologyPhotosTargetTests : IDisposable
     }
 
     [Fact]
-    public void Scan_AFolderThatCantBeReached_SaysToCheckTheNas()
+    public void Scan_ReadsPhotosInEveryFolderBelow_LikeOneDrivesYearAndMonthFolders()
     {
-        var target = new SynologyPhotosTarget(Path.Combine(_backupFolder, "missing"));
+        var testData = Path.Combine(AppContext.BaseDirectory, "TestData", "IMG_5587.HEIC");
+        File.Copy(testData, CreateFile(@"2026\04\IMG_5587.HEIC"), overwrite: true);
+        File.Copy(testData, CreateFile(@"Trip\IMG_5588.HEIC"), overwrite: true);
 
-        var error = Assert.Throws<DirectoryNotFoundException>(() => target.Scan(null, null));
-        Assert.Contains("Check that the NAS is on", error.Message);
+        var photos = new FolderTarget("OneDrive", _backupFolder).Scan(firstDay: null, lastDay: null);
+
+        Assert.Equal(["IMG_5587.HEIC", "IMG_5588.HEIC"], photos.Select(p => p.FileName).Order());
     }
 
-    [Theory]
-    [InlineData(@"\\nas\home\Photos\MobileBackup\iPhone", @"\\nas\home\#recycle")]
-    [InlineData(@"Z:\Photos\MobileBackup\iPhone", @"Z:\#recycle")]
-    public void RecycleBinFolder_IsDsmsRecycleBinAtTheRootOfTheSharedFolder(string backupFolder, string expected)
+    [Fact]
+    public void ListPhotoFiles_SkipsAFolderThatIsALinkToAnother()
     {
-        Assert.Equal(expected, new SynologyPhotosTarget(backupFolder).RecycleBinFolder);
+        CreateFile(@"Photos\IMG_0001.HEIC");
+        var alias = Path.Combine(_backupFolder, "Alias");
+        // A junction, which unlike a symbolic link needs no administrator rights.
+        using (var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", $"/c mklink /J \"{alias}\" \"{Path.Combine(_backupFolder, "Photos")}\"")
+            { CreateNoWindow = true, UseShellExecute = false })!)
+            mklink.WaitForExit();
+        try
+        {
+            Assert.True(Directory.Exists(alias));
+
+            Assert.Equal([@"Photos\IMG_0001.HEIC"], ListedRelativePaths(firstDay: null, lastDay: null));
+        }
+        finally
+        {
+            // Removes the junction itself, not the folder it points to.
+            Directory.Delete(alias);
+        }
+    }
+
+    [Fact]
+    public void Scan_ALocalFolderThatIsMissing_SaysToCheckItsDrive()
+    {
+        var target = new FolderTarget("Camera Roll", Path.Combine(_backupFolder, "missing"));
+
+        var error = Assert.Throws<DirectoryNotFoundException>(() => target.Scan(null, null));
+        Assert.Contains("that its drive is connected", error.Message);
+    }
+
+    [Fact]
+    public void NasRecycleBinFolder_IsNeverLookedForOnALocalFolder()
+    {
+        Directory.CreateDirectory(Path.Combine(_backupFolder, "#recycle"));
+
+        Assert.Null(new FolderTarget("Camera Roll", _backupFolder).NasRecycleBinFolder());
     }
 
     [Theory]
@@ -113,7 +148,7 @@ public class SynologyPhotosTargetTests : IDisposable
     [InlineData(@"Z:\Photos\MobileBackup\iPhone\", @"Z:\PhotoRecull staged\2026-01-01_2026-01-31")]
     public void DefaultStageFolder_IsOutsideThePhotosFolderThatSynologyPhotosShows(string backupFolder, string expected)
     {
-        var target = new SynologyPhotosTarget(backupFolder);
+        var target = new FolderTarget("Synology Photos", backupFolder);
 
         Assert.Equal(expected, target.DefaultStageFolder(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
     }
@@ -123,6 +158,22 @@ public class SynologyPhotosTargetTests : IDisposable
     [InlineData(@"Y:\MobileBackup\iPhone")]
     public void DefaultStageFolder_IsLeftToTheUser_WhenNoFolderOutsideSynologyPhotosCanBeTold(string backupFolder)
     {
-        Assert.Null(new SynologyPhotosTarget(backupFolder).DefaultStageFolder(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
+        Assert.Null(new FolderTarget("Synology Photos", backupFolder).DefaultStageFolder(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\me\OneDrive\Pictures\Camera Roll", @"C:\Users\me\OneDrive\Pictures\_staged_2026-01-01_2026-01-31")]
+    [InlineData(@"D:\Backups\iPhone\", @"D:\Backups\_staged_2026-01-01_2026-01-31")]
+    public void DefaultStageFolder_OfAnyOtherFolder_IsNextToIt(string folder, string expected)
+    {
+        var target = new FolderTarget("Folder", folder);
+
+        Assert.Equal(expected, target.DefaultStageFolder(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
+    }
+
+    [Fact]
+    public void DefaultStageFolder_OfAWholeDrive_IsLeftToTheUser()
+    {
+        Assert.Null(new FolderTarget("Drive E", @"E:\").DefaultStageFolder(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31)));
     }
 }
