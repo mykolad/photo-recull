@@ -2,8 +2,9 @@
 
 # PhotoRecull
 
-Repeat your Google Photos culls on your other copies: find and remove OneDrive
-and Synology Photos copies of photos you've already deleted from Google Photos.
+Repeat your Google Photos culls on your other copies: find and remove the copies in
+OneDrive, on a NAS or in any other backup folder of photos you've already deleted from
+Google Photos.
 
 🌐 **Website:** [photorecull.com](https://photorecull.com/)
 (setup and usage guides, [privacy policy](https://photorecull.com/privacy),
@@ -11,17 +12,19 @@ and Synology Photos copies of photos you've already deleted from Google Photos.
 
 ## Why
 
-iPhone photos back up to Google Photos, iCloud, **and** OneDrive or a Synology NAS. Deleting
-a photo from Google Photos also removes it from iCloud (they sync), but OneDrive and
-Synology Photos keep their copy forever. Over years, they accumulate thousands of stale duplicates you
-already curated out of Google Photos. PhotoRecull finds them.
+iPhone photos back up to Google Photos, iCloud, **and** OneDrive, a NAS or another folder.
+Deleting a photo from Google Photos also removes it from iCloud (they sync), but the other
+backups keep their copy forever. Over years, they accumulate thousands of stale duplicates
+you already curated out of Google Photos. Finding them by hand doesn't work: OneDrive renames
+`IMG_4821.HEIC` to `20261025_092323544_iOS.heic` (its capture time in UTC), so only capture
+times can tell which copy is which. PhotoRecull compares them for you.
 
 ## How it works
 
 1. You select the photos you **still have** in Google Photos using the Google Photos
    Picker (opens in your browser, multi-select).
-2. PhotoRecull scans your OneDrive or Synology Photos folder, identifies iPhone photos, and reads
-   each one's capture time.
+2. PhotoRecull scans your backup folders (OneDrive's Camera Roll, a NAS, any folder),
+   identifies iPhone photos, and reads each one's capture time.
 3. It matches those photos to Google photos by UTC timestamp (±2s, **one-to-one** —
    so a culled burst doesn't keep every frame).
 4. iPhone photos with **no** match were deleted from Google Photos → they're
