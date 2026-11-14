@@ -268,7 +268,8 @@ catch (Exception ex)
 // ---------------------------------------------------------------------------
 
 Console.WriteLine("Matching photos...");
-var result = PhotoMatcher.Match(googleTimestamps, targetPhotos, onlyIphonePhotos: target.OnlyIphonePhotos);
+var result = DateRangeFilter.SetAsideGuessedPhotosNearTheEdges(
+    PhotoMatcher.Match(googleTimestamps, targetPhotos, onlyIphonePhotos: target.OnlyIphonePhotos), fromDate, toDate);
 
 // ---------------------------------------------------------------------------
 // Step 4: Report
@@ -318,7 +319,7 @@ if (wantHtml || (dryRun && !noReport))
 {
     var htmlPath = outputHtml ?? $"{DefaultLabel(fromDate, toDate)}.html";
     Console.Write("Generating HTML report (decoding HEIC thumbnails)... ");
-    HtmlReportGenerator.Write(htmlPath, result, target.DisplayName, target.FolderPath, fromDate, toDate);
+    HtmlReportGenerator.Write(htmlPath, result, target.DisplayName, target.FolderPath, fromDate, toDate, target.OnlyIphonePhotos);
     Console.WriteLine("done.");
     Console.WriteLine($"HTML report saved to: {Path.GetFullPath(htmlPath)}");
     // The report is a local file with no Google login — always use the default browser.

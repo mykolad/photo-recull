@@ -229,7 +229,7 @@ public static class PhotoScanner
         var make = quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagMake)?.Trim();
         var model = quickTime.GetString(QuickTimeMetadataHeaderDirectory.TagModel)?.Trim();
         bool isIphone = IsIphone(make, model);
-        DateTimeOffset? timestamp = isIphone && quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var started)
+        DateTimeOffset? timestamp = quickTime.TryGetDateTime(QuickTimeMetadataHeaderDirectory.TagCreationDate, out var started)
             ? new DateTimeOffset(started).ToUniversalTime()
             : null;
         return (isIphone, timestamp, timestamp.HasValue ? "video" : null, true, false, CameraName(make, model));

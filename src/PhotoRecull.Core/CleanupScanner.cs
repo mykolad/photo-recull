@@ -11,7 +11,8 @@ public static class CleanupScanner
     // Google Photos keeps one copy on every target. Picked photos outside the
     // range are left out, as the Range screen promises; otherwise a pick from
     // just before midnight could keep a target photo from just after it. A photo
-    // whose time zone is a guess is still kept by any picked photo it could be.
+    // whose time zone is a guess is still kept by any picked photo it could be,
+    // and never removed when it could be from outside the range.
     public static TargetScanResult ScanAndMatch(
         ISyncTarget target,
         IReadOnlyCollection<DateTimeOffset> pickedTimestamps,
@@ -28,8 +29,10 @@ public static class CleanupScanner
             var day = DateRangeFilter.CaptureDay(t, captureDayTimeZone);
             return day >= firstDay && day <= lastDay;
         });
-        var match = PhotoMatcher.Match(pickedInRange, photosInRange,
-            onlyIphonePhotos: target.OnlyIphonePhotos, timestampsAtAnyOffset: pickedTimestamps);
+        var match = DateRangeFilter.SetAsideGuessedPhotosNearTheEdges(
+            PhotoMatcher.Match(pickedInRange, photosInRange,
+                onlyIphonePhotos: target.OnlyIphonePhotos, timestampsAtAnyOffset: pickedTimestamps),
+            firstDay, lastDay, captureDayTimeZone);
         return new TargetScanResult(target, allPhotos.Count, match);
     }
 }

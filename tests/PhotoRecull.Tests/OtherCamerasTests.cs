@@ -70,15 +70,45 @@ public class OtherCamerasTests : IDisposable
     }
 
     [Fact]
-    public void Match_APhotoWithAGuessedTimeZone_NeverTakesTheMatchOfOneWithAKnownTimeZone()
+    public void Match_APhotoWithAGuessedTimeZone_NeverTakesTheMatchOfOneWithAKnownTimeZone_AndStaysToo()
     {
-        var iphone = new PhotoFile(@"C:\fake\IMG_1.HEIC", "IMG_1.HEIC", ClockTime, IsIphone: true, TimestampSource: "exif");
+        // The picked photo may be either: the iPhone's keeps the match, and the
+        // other camera's isn't taken for a culled frame just for being a second away.
+        var iphone = new PhotoFile(@"C:\fake\IMG_1.HEIC", "IMG_1.HEIC", ClockTime.AddSeconds(1), IsIphone: true, TimestampSource: "exif");
         var guessed = OtherCameraPhoto(ClockTime, offsetGuessed: true);
 
         var result = PhotoMatcher.Match([ClockTime], [guessed, iphone], onlyIphonePhotos: false);
 
-        Assert.Equal([iphone], result.Matched);
-        Assert.Equal([guessed], result.Unmatched);
+        Assert.Equal([iphone, guessed], result.Matched);
+        Assert.Empty(result.Unmatched);
+    }
+
+    [Fact]
+    public void Match_APhotoWithAGuessedTimeZone_StaysWhenAnotherCamerasPhotoTookItsMatch()
+    {
+        var pixel = OtherCameraPhoto(ClockTime, offsetGuessed: true, "PXL_1.jpg");
+        var canon = OtherCameraPhoto(ClockTime.AddSeconds(1), offsetGuessed: true, "DSC_1.jpg") with { Camera = "Canon EOS R6" };
+
+        var result = PhotoMatcher.Match([ClockTime.AddSeconds(1)], [pixel, canon], onlyIphonePhotos: false);
+
+        Assert.Equal(2, result.Matched.Count);
+        Assert.Empty(result.Unmatched);
+    }
+
+    [Fact]
+    public void SetAsideGuessedPhotosNearTheEdges_KeepsAPhotoThatCouldBeFromTheRangeBefore()
+    {
+        // 00:30 on 1 August where it was taken could be 31 July anywhere east of UTC.
+        var justAfterMidnight = OtherCameraPhoto(new DateTimeOffset(2026, 8, 1, 0, 30, 0, TimeSpan.Zero), offsetGuessed: true, "PXL_1.jpg");
+        var midMonth = OtherCameraPhoto(new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero), offsetGuessed: true, "PXL_2.jpg");
+        var known = OtherCameraPhoto(new DateTimeOffset(2026, 8, 1, 0, 30, 0, TimeSpan.Zero), offsetGuessed: false, "PXL_3.jpg");
+        var match = PhotoMatcher.Match([], [justAfterMidnight, midMonth, known], onlyIphonePhotos: false);
+
+        var result = DateRangeFilter.SetAsideGuessedPhotosNearTheEdges(match, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31));
+
+        Assert.Equal([justAfterMidnight], result.Skipped);
+        Assert.Equal([known, midMonth], result.Unmatched.OrderBy(p => p.Timestamp));
+        Assert.Equal("No time zone, and it could be from just outside the range", PhotoMatcher.WhySkipped(justAfterMidnight, onlyIphonePhotos: false));
     }
 
     [Fact]

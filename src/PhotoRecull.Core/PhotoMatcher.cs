@@ -31,12 +31,14 @@ public static class PhotoMatcher
 
     // onlyIphonePhotos leaves photos from other cameras skipped, as a target does
     // by default. A photo whose time zone had to be guessed (TimestampOffsetGuessed)
-    // is matched in two steps, so a wrong guess can only ever keep a photo:
+    // is matched in steps, so a wrong guess can only ever keep a photo:
     // - one-to-one at the guess, against the Google photos no photo with a known
     //   time zone has claimed, so bursts are culled as usual;
-    // - then, if that found nothing, kept when any Google photo in
-    //   timestampsAtAnyOffset (the whole pick, by default the same timestamps)
-    //   could be it in another time zone.
+    // - if that found nothing, kept when a Google photo it could be at the guess
+    //   went to a photo with a known time zone or from another camera: nearness
+    //   alone doesn't make it a culled frame of the same burst;
+    // - and kept when any Google photo in timestampsAtAnyOffset (the whole pick, by
+    //   default the same timestamps) could be it in another time zone.
     public static MatchResult Match(
         IEnumerable<DateTimeOffset> googleTimestamps,
         List<PhotoFile> photos,
@@ -60,44 +62,64 @@ public static class PhotoMatcher
 
         double tol = toleranceSeconds;
         var google = googleTimestamps.OrderBy(t => t).ToList();
-        var googleClaimed = new bool[google.Count];
+        var googleClaimedBy = new PhotoFile?[google.Count];
 
-        foreach (var (candidate, isClaimed) in MatchOneToOne(known, google, googleClaimed, tol))
+        foreach (var (candidate, isClaimed) in MatchOneToOne(known, google, googleClaimedBy, tol))
             (isClaimed ? matched : unmatched).Add(candidate);
 
         var anyOffset = (timestampsAtAnyOffset ?? google).Select(t => t.UtcDateTime).Order().ToArray();
-        foreach (var (candidate, isClaimed) in MatchOneToOne(guessed, google, googleClaimed, tol))
-            (isClaimed || CouldBeAtAnyOffset(candidate, anyOffset, tol) ? matched : unmatched).Add(candidate);
+        foreach (var (candidate, isClaimed) in MatchOneToOne(guessed, google, googleClaimedBy, tol))
+        {
+            bool stays = isClaimed
+                || WentToAnotherCameraOrAKnownTimeZone(candidate, google, googleClaimedBy, tol)
+                || CouldBeAtAnyOffset(candidate, anyOffset, tol);
+            (stays ? matched : unmatched).Add(candidate);
+        }
 
         return new MatchResult(matched, unmatched, skipped);
     }
 
-    public static string WhySkipped(PhotoFile photo) =>
-        photo.Timestamp is not null ? $"Not taken with an iPhone{(photo.Camera is { } camera ? $" ({camera})" : "")}"
-        : PhotoScanner.IsVideo(photo.Path) ? "No recording start time"
-        : "No capture time";
+    // onlyIphonePhotos as the target had it when the photos were matched.
+    public static string WhySkipped(PhotoFile photo, bool onlyIphonePhotos = true) =>
+        photo.Timestamp is null ? (PhotoScanner.IsVideo(photo.Path) ? "No recording start time" : "No capture time")
+        : onlyIphonePhotos && !photo.IsIphone ? $"Not taken with an iPhone{(photo.Camera is { } camera ? $" ({camera})" : "")}"
+        : "No time zone, and it could be from just outside the range";
 
     // Each Google photo claims its nearest still-available candidate within
-    // tolerance, Google photos in time order, so the assignment is stable; a
-    // Google photo that claims one is marked so a later step can't claim it again.
+    // tolerance, Google photos in time order, so the assignment is stable; the
+    // Google photo remembers which photo claimed it, so a later step can't claim
+    // it again and can tell whose it is.
     private static IEnumerable<(PhotoFile Candidate, bool IsClaimed)> MatchOneToOne(
-        List<PhotoFile> candidates, List<DateTimeOffset> google, bool[] googleClaimed, double tol)
+        List<PhotoFile> candidates, List<DateTimeOffset> google, PhotoFile?[] googleClaimedBy, double tol)
     {
         candidates.Sort((a, b) => a.Timestamp!.Value.CompareTo(b.Timestamp!.Value));
         var candTimes = candidates.Select(c => c.Timestamp!.Value).ToArray();
         var claimed = new bool[candidates.Count];
         for (int g = 0; g < google.Count; g++)
         {
-            if (googleClaimed[g])
+            if (googleClaimedBy[g] is not null)
                 continue;
             int idx = NearestAvailable(candTimes, claimed, google[g], tol);
             if (idx >= 0)
             {
                 claimed[idx] = true;
-                googleClaimed[g] = true;
+                googleClaimedBy[g] = candidates[idx];
             }
         }
         return candidates.Select((c, i) => (c, claimed[i]));
+    }
+
+    private static bool WentToAnotherCameraOrAKnownTimeZone(
+        PhotoFile photo, List<DateTimeOffset> google, PhotoFile?[] googleClaimedBy, double tol)
+    {
+        for (int g = 0; g < google.Count; g++)
+        {
+            if (googleClaimedBy[g] is { } claimant
+                && Math.Abs((google[g] - photo.Timestamp!.Value).TotalSeconds) <= tol
+                && (!claimant.TimestampOffsetGuessed || claimant.Camera != photo.Camera))
+                return true;
+        }
+        return false;
     }
 
     // The photo's clock time is where it was taken; a Google photo is it in some

@@ -82,7 +82,7 @@ public sealed partial class ReviewViewModel : ObservableObject
     public string TabExplanation => SelectedTab switch
     {
         ReviewTab.Timeline => "Newest first. Photos with no match in Google Photos are dimmed and marked to remove. Bursts are stacked: click one to see its frames.",
-        _ => "Without a capture time, or from another camera in a folder set to iPhone photos only. PhotoRecull never moves or deletes these.",
+        _ => "Without a capture time, from another camera in a folder set to iPhone photos only, or without a time zone near the range's edges. PhotoRecull never moves or deletes these.",
     };
 
     public bool HasNothingShown => Days.Count == 0;
