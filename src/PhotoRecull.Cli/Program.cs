@@ -26,6 +26,7 @@ bool deleteMode         = false;
 bool assumeYes          = false;
 bool wantStage          = false;   // --stage given (folder may be defaulted)
 bool wantHtml           = false;   // --report given (file may be defaulted)
+bool allCameras         = false;   // --all-cameras: not only iPhone photos
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -51,6 +52,7 @@ for (int i = 0; i < args.Length; i++)
         case "--no-report":   noReport        = true;      break;
         case "--dry-run":     dryRun          = true;      break;
         case "--delete":      deleteMode      = true;      break;
+        case "--all-cameras": allCameras      = true;      break;
         case "--yes":
         case "--force":       assumeYes       = true;      break;
         case "--from":        fromDate        = ParseDateArg(args[++i], "--from", startOfMonth: true);  break;
@@ -232,7 +234,7 @@ else
 // Step 2: Scan the target folder, then apply date range filter
 // ---------------------------------------------------------------------------
 
-ISyncTarget target = SyncTargets.Create(new TargetSettings(targetDisplayName, targetFolder));
+ISyncTarget target = SyncTargets.Create(new TargetSettings(targetDisplayName, targetFolder) { OnlyIphonePhotos = !allCameras });
 
 Console.Write($"Scanning {target.DisplayName} folder... ");
 List<PhotoFile> targetPhotos;
@@ -266,7 +268,7 @@ catch (Exception ex)
 // ---------------------------------------------------------------------------
 
 Console.WriteLine("Matching photos...");
-var result = PhotoMatcher.Match(googleTimestamps, targetPhotos);
+var result = PhotoMatcher.Match(googleTimestamps, targetPhotos, onlyIphonePhotos: target.OnlyIphonePhotos);
 
 // ---------------------------------------------------------------------------
 // Step 4: Report
@@ -275,8 +277,8 @@ var result = PhotoMatcher.Match(googleTimestamps, targetPhotos);
 Console.WriteLine();
 Console.WriteLine("=== RESULTS ===");
 Console.WriteLine($"  Date range            : {rangeLabel}");
-Console.WriteLine($"  iPhone photos scanned : {result.Matched.Count + result.Unmatched.Count}");
-Console.WriteLine($"  Non-iPhone (skipped)  : {result.Skipped.Count}");
+Console.WriteLine($"  {(target.OnlyIphonePhotos ? "iPhone photos scanned" : "Photos scanned       ")} : {result.Matched.Count + result.Unmatched.Count}");
+Console.WriteLine($"  Skipped               : {result.Skipped.Count}");
 Console.WriteLine($"  Matched (keep)        : {result.Matched.Count}");
 Console.WriteLine($"  Unmatched (candidates): {result.Unmatched.Count}");
 Console.WriteLine();
@@ -446,6 +448,10 @@ static void PrintHelp()
                                   from the folder (OneDrive, Synology Photos, the
                                   NAS's name, or the folder's own name).
           --onedrive <folder>     Same as --target onedrive --path <folder>
+          --all-cameras           Match photos from any phone or camera, not only
+                                  iPhones. A photo saved without its time zone
+                                  is only a candidate when no picked photo could
+                                  be it in any time zone.
 
         DATE RANGE (optional — process one month at a time):
           --from <date>           Start date: YYYY-MM or YYYY-MM-DD

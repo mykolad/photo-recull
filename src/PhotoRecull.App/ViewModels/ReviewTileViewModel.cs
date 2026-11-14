@@ -77,7 +77,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
 
     private string CopyMarkText(ReviewCopy copy) => copy.Kind switch
     {
-        ReviewTileKind.Skipped => "Skipped",
+        ReviewTileKind.Skipped => $"Skipped · {PhotoMatcher.WhySkipped(copy.Photo)}",
         ReviewTileKind.Match => "Stays",
         _ => IsKept ? "Kept by you" : "To remove",
     };
@@ -124,7 +124,7 @@ public sealed partial class ReviewTileViewModel : ObservableObject
 
     public bool IsMarkedToRemove => Mark == ReviewMark.ToRemove;
 
-    public string MarkText => Kind == ReviewTileKind.Skipped ? "Skipped" : Mark switch
+    public string MarkText => Kind == ReviewTileKind.Skipped ? $"Skipped · {PhotoMatcher.WhySkipped(Copies[0].Photo)}" : Mark switch
     {
         ReviewMark.ToRemove when StaysSomewhere =>
             $"To remove from {NamesOf(CandidateCopies)} · stays on {NamesOf(Copies.Where(c => c.Kind == ReviewTileKind.Match))}",

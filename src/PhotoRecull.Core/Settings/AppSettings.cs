@@ -3,7 +3,12 @@ using PhotoRecull.Core.Library;
 namespace PhotoRecull.Core.Settings;
 
 // A folder a cleanup repeats the Google Photos culls in, and what it's called.
-public record TargetSettings(string Name, string FolderPath);
+public record TargetSettings(string Name, string FolderPath)
+{
+    // Photos from other cameras are skipped unless the user turns this off: an
+    // iPhone's saves its time zone, so its capture times match Google's exactly.
+    public bool OnlyIphonePhotos { get; init; } = true;
+}
 
 public record AppSettings
 {

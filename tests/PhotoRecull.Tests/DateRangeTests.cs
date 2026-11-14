@@ -67,19 +67,19 @@ public class DateRangeTests
     }
 
     [Fact]
-    public void DateFilter_NonIphoneFiles_AlwaysIncluded()
+    public void DateFilter_FilesFromOtherCameras_AreFilteredByDateToo_AndFilesWithoutATimeAlwaysIncluded()
     {
-        // Simulate a scan result that contains a non-iPhone file
-        var nonIphone = new PhotoFile(
+        var otherCameraOutsideRange = new PhotoFile(
             Path: @"C:\fake\DSC001.jpg", FileName: "DSC001.jpg",
             Timestamp: new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
-            IsIphone: false, TimestampSource: null);
+            IsIphone: false, TimestampSource: "exif");
+        var screenshot = new PhotoFile(
+            Path: @"C:\fake\Screenshot.png", FileName: "Screenshot.png",
+            Timestamp: null, IsIphone: false, TimestampSource: null);
 
-        var photos = new List<PhotoFile> { nonIphone };
-        // Range doesn't include the timestamp, but non-iPhone should still appear
-        var filtered = ApplyDateFilter(photos, new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30));
+        var filtered = ApplyDateFilter([otherCameraOutsideRange, screenshot], new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30));
 
-        Assert.Single(filtered);
+        Assert.Equal([screenshot], filtered);
     }
 
     [Fact]

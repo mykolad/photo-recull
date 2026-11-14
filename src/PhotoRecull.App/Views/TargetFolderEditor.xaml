@@ -36,5 +36,15 @@
             Text="What PhotoRecull calls this folder. Suggested from the folder until you type one."
             Style="{StaticResource SecondaryCaptionTextBlockStyle}"
             TextWrapping="Wrap" />
+        <ToggleSwitch
+            Margin="0,8,0,0"
+            Header="Only iPhone photos (recommended)"
+            OnContent="On"
+            OffContent="Off"
+            IsOn="{x:Bind Folder.OnlyIphonePhotos, Mode=TwoWay}" />
+        <TextBlock
+            Text="iPhones save the time zone with each photo, so they match Google Photos exactly. Turn this off to clean up photos from other phones and cameras too: a photo without a time zone is only removed when no photo you kept could be it."
+            Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+            TextWrapping="Wrap" />
     </StackPanel>
 </UserControl>

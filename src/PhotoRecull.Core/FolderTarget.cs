@@ -6,11 +6,13 @@ namespace PhotoRecull.Core;
 // there: OneDrive's Camera Roll, Synology Photos' mobile backup on a NAS, or any
 // other folder File Explorer can open. Subfolders are read too; ones named after
 // dates (2026\01, or 2026-01) are only read when the cleanup's days can be in them.
-public sealed class FolderTarget(string name, string folderPath) : ISyncTarget
+public sealed class FolderTarget(string name, string folderPath, bool onlyIphonePhotos = true) : ISyncTarget
 {
     public string DisplayName { get; } = name;
 
     public string FolderPath { get; } = folderPath;
+
+    public bool OnlyIphonePhotos { get; } = onlyIphonePhotos;
 
     public List<PhotoFile> Scan(
         DateOnly? firstDay, DateOnly? lastDay,

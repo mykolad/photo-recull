@@ -280,8 +280,8 @@
                                                 <TextBlock Text="Photo files found" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1">
-                                                <TextBlock Text="{x:Bind IphonePhotosInRangeText, Mode=OneWay}" Style="{StaticResource StatNumberStyle}" />
-                                                <TextBlock Text="iPhone photos in range" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
+                                                <TextBlock Text="{x:Bind PhotosInRangeText, Mode=OneWay}" Style="{StaticResource StatNumberStyle}" />
+                                                <TextBlock Text="{x:Bind PhotosInRangeLabel}" Style="{StaticResource SecondaryCaptionTextBlockStyle}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="{x:Bind SkippedText, Mode=OneWay}" Style="{StaticResource StatNumberStyle}" />

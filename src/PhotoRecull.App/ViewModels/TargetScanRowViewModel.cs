@@ -28,7 +28,9 @@ public sealed partial class TargetScanRowViewModel(TargetSettings target) : Obse
     public partial string PhotoFilesFoundText { get; set; } = "0";
 
     [ObservableProperty]
-    public partial string IphonePhotosInRangeText { get; set; } = "–";
+    public partial string PhotosInRangeText { get; set; } = "–";
+
+    public string PhotosInRangeLabel => Target.OnlyIphonePhotos ? "iPhone photos in range" : "Photos in range";
 
     [ObservableProperty]
     public partial string SkippedText { get; set; } = "–";
@@ -50,7 +52,7 @@ public sealed partial class TargetScanRowViewModel(TargetSettings target) : Obse
         Percent = 100;
         IsDone = true;
         PhotoFilesFoundText = result.PhotoFilesFound.ToString("N0", CultureInfo.CurrentCulture);
-        IphonePhotosInRangeText = result.IphonePhotosInRange.ToString("N0", CultureInfo.CurrentCulture);
+        PhotosInRangeText = result.MatchablePhotosInRange.ToString("N0", CultureInfo.CurrentCulture);
         SkippedText = result.Match.Skipped.Count.ToString("N0", CultureInfo.CurrentCulture);
         CurrentActivityText = "Matched by capture time, one-to-one within ±2 s";
     }

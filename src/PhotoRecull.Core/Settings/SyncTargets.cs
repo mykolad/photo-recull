@@ -2,7 +2,8 @@ namespace PhotoRecull.Core.Settings;
 
 public static class SyncTargets
 {
-    public static ISyncTarget Create(TargetSettings settings) => new FolderTarget(settings.Name, settings.FolderPath);
+    public static ISyncTarget Create(TargetSettings settings) =>
+        new FolderTarget(settings.Name, settings.FolderPath, settings.OnlyIphonePhotos);
 
     // Targets whose default stage folders would be the same (two folders side by
     // side, or two backups under one Synology Photos folder) each get a folder of

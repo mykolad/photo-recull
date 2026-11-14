@@ -2,7 +2,7 @@ namespace PhotoRecull.Core;
 
 public sealed record TargetScanResult(ISyncTarget Target, int PhotoFilesFound, MatchResult Match)
 {
-    public int IphonePhotosInRange => Match.Matched.Count + Match.Unmatched.Count;
+    public int MatchablePhotosInRange => Match.Matched.Count + Match.Unmatched.Count;
 }
 
 public static class CleanupScanner
@@ -10,7 +10,8 @@ public static class CleanupScanner
     // Each target is matched against the pick independently: a photo kept in
     // Google Photos keeps one copy on every target. Picked photos outside the
     // range are left out, as the Range screen promises; otherwise a pick from
-    // just before midnight could keep a target photo from just after it.
+    // just before midnight could keep a target photo from just after it. A photo
+    // whose time zone is a guess is still kept by any picked photo it could be.
     public static TargetScanResult ScanAndMatch(
         ISyncTarget target,
         IReadOnlyCollection<DateTimeOffset> pickedTimestamps,
@@ -27,6 +28,8 @@ public static class CleanupScanner
             var day = DateRangeFilter.CaptureDay(t, captureDayTimeZone);
             return day >= firstDay && day <= lastDay;
         });
-        return new TargetScanResult(target, allPhotos.Count, PhotoMatcher.Match(pickedInRange, photosInRange));
+        var match = PhotoMatcher.Match(pickedInRange, photosInRange,
+            onlyIphonePhotos: target.OnlyIphonePhotos, timestampsAtAnyOffset: pickedTimestamps);
+        return new TargetScanResult(target, allPhotos.Count, match);
     }
 }

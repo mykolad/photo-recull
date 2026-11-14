@@ -232,11 +232,11 @@ public static class HtmlReportGenerator
         if (result.Skipped.Count > 0)
         {
             sb.AppendLine("""  <section class="skip">""");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"""    <details><summary><h2 style="display:inline">&#x2296; Skipped — not iPhone ({result.Skipped.Count})</h2></summary>""");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"""    <details><summary><h2 style="display:inline">&#x2296; Skipped — never moved or deleted ({result.Skipped.Count})</h2></summary>""");
             sb.AppendLine("""    <ul class="skipped-list" style="margin-top:12px">""");
             foreach (var p in result.Skipped.OrderBy(x => x.FileName))
             {
-                var reason = !p.IsIphone ? "not iPhone" : "no timestamp";
+                var reason = HtmlEncode(PhotoMatcher.WhySkipped(p));
                 sb.AppendLine(CultureInfo.InvariantCulture, $"""      <li>{HtmlEncode(p.FileName)}<span>{reason}</span></li>""");
             }
             sb.AppendLine("    </ul>");

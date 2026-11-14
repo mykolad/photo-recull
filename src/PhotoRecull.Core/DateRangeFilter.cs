@@ -2,8 +2,8 @@ namespace PhotoRecull.Core;
 
 public static class DateRangeFilter
 {
-    // Photos that can never be matched (non-iPhone, or no capture time) are kept
-    // regardless of date, so the user still sees them reported as skipped.
+    // Photos with no capture time can't be placed in a range, so they're kept
+    // regardless of date, and the user still sees them reported as skipped.
     // Days are calendar days in captureDayTimeZone (UTC when not given, as the CLI
     // documents); the app passes the user's local time zone so "1 Aug" means
     // their 1 Aug.
@@ -12,9 +12,7 @@ public static class DateRangeFilter
     {
         var zone = captureDayTimeZone ?? TimeZoneInfo.Utc;
         return photos
-            .Where(p => !p.IsIphone
-                     || !p.Timestamp.HasValue
-                     || IsWithin(CaptureDay(p.Timestamp.Value, zone), firstDay, lastDay))
+            .Where(p => !p.Timestamp.HasValue || IsWithin(CaptureDay(p.Timestamp.Value, zone), firstDay, lastDay))
             .ToList();
     }
 
