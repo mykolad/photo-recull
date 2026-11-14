@@ -10,6 +10,8 @@ public interface ISyncTarget
 
     string FolderPath { get; }
 
+    bool OnlyIphonePhotos { get; }
+
     // The days let a target skip folders that can't hold photos from them; it may
     // still return photos from outside, so callers filter by date themselves.
     List<PhotoFile> Scan(

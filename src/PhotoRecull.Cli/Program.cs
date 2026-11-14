@@ -26,6 +26,7 @@ bool deleteMode         = false;
 bool assumeYes          = false;
 bool wantStage          = false;   // --stage given (folder may be defaulted)
 bool wantHtml           = false;   // --report given (file may be defaulted)
+bool allCameras         = false;   // --all-cameras: not only iPhone photos
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -51,6 +52,7 @@ for (int i = 0; i < args.Length; i++)
         case "--no-report":   noReport        = true;      break;
         case "--dry-run":     dryRun          = true;      break;
         case "--delete":      deleteMode      = true;      break;
+        case "--all-cameras": allCameras      = true;      break;
         case "--yes":
         case "--force":       assumeYes       = true;      break;
         case "--from":        fromDate        = ParseDateArg(args[++i], "--from", startOfMonth: true);  break;
@@ -232,7 +234,7 @@ else
 // Step 2: Scan the target folder, then apply date range filter
 // ---------------------------------------------------------------------------
 
-ISyncTarget target = SyncTargets.Create(new TargetSettings(targetDisplayName, targetFolder));
+ISyncTarget target = SyncTargets.Create(new TargetSettings(targetDisplayName, targetFolder) { OnlyIphonePhotos = !allCameras });
 
 Console.Write($"Scanning {target.DisplayName} folder... ");
 List<PhotoFile> targetPhotos;
@@ -266,7 +268,8 @@ catch (Exception ex)
 // ---------------------------------------------------------------------------
 
 Console.WriteLine("Matching photos...");
-var result = PhotoMatcher.Match(googleTimestamps, targetPhotos);
+var result = DateRangeFilter.SetAsideGuessedPhotosNearTheEdges(
+    PhotoMatcher.Match(googleTimestamps, targetPhotos, onlyIphonePhotos: target.OnlyIphonePhotos), fromDate, toDate);
 
 // ---------------------------------------------------------------------------
 // Step 4: Report
@@ -275,8 +278,8 @@ var result = PhotoMatcher.Match(googleTimestamps, targetPhotos);
 Console.WriteLine();
 Console.WriteLine("=== RESULTS ===");
 Console.WriteLine($"  Date range            : {rangeLabel}");
-Console.WriteLine($"  iPhone photos scanned : {result.Matched.Count + result.Unmatched.Count}");
-Console.WriteLine($"  Non-iPhone (skipped)  : {result.Skipped.Count}");
+Console.WriteLine($"  {(target.OnlyIphonePhotos ? "iPhone photos scanned" : "Photos scanned       ")} : {result.Matched.Count + result.Unmatched.Count}");
+Console.WriteLine($"  Skipped               : {result.Skipped.Count}");
 Console.WriteLine($"  Matched (keep)        : {result.Matched.Count}");
 Console.WriteLine($"  Unmatched (candidates): {result.Unmatched.Count}");
 Console.WriteLine();
@@ -316,7 +319,7 @@ if (wantHtml || (dryRun && !noReport))
 {
     var htmlPath = outputHtml ?? $"{DefaultLabel(fromDate, toDate)}.html";
     Console.Write("Generating HTML report (decoding HEIC thumbnails)... ");
-    HtmlReportGenerator.Write(htmlPath, result, target.DisplayName, target.FolderPath, fromDate, toDate);
+    HtmlReportGenerator.Write(htmlPath, result, target.DisplayName, target.FolderPath, fromDate, toDate, target.OnlyIphonePhotos);
     Console.WriteLine("done.");
     Console.WriteLine($"HTML report saved to: {Path.GetFullPath(htmlPath)}");
     // The report is a local file with no Google login — always use the default browser.
@@ -335,7 +338,7 @@ if (dryRun)
 {
     Console.WriteLine("\nDry run complete. No files were moved or deleted.");
     if (result.Unmatched.Count > 0)
-        PrintNextSteps(targetName, targetFolder, fromDate, toDate, effectiveCache, stageFolder);
+        PrintNextSteps(targetName, targetFolder, allCameras, fromDate, toDate, effectiveCache, stageFolder);
     return 0;
 }
 
@@ -446,6 +449,10 @@ static void PrintHelp()
                                   from the folder (OneDrive, Synology Photos, the
                                   NAS's name, or the folder's own name).
           --onedrive <folder>     Same as --target onedrive --path <folder>
+          --all-cameras           Match photos from any phone or camera, not only
+                                  iPhones. A photo saved without its time zone
+                                  is only a candidate when no picked photo could
+                                  be it in any time zone.
 
         DATE RANGE (optional — process one month at a time):
           --from <date>           Start date: YYYY-MM or YYYY-MM-DD
@@ -524,7 +531,7 @@ static bool IsWholeMonth(DateOnly from, DateOnly to) =>
     && to.Day == DateTime.DaysInMonth(to.Year, to.Month);
 
 // After a dry run, print the exact command to move the candidates to staging.
-static void PrintNextSteps(string? targetName, string targetFolder, DateOnly? from, DateOnly? to,
+static void PrintNextSteps(string? targetName, string targetFolder, bool allCameras, DateOnly? from, DateOnly? to,
     string? effectiveCache, string? stageFolder)
 {
     var stageDir = stageFolder ?? $"_staged_{DefaultLabel(from, to)}";
@@ -533,7 +540,8 @@ static void PrintNextSteps(string? targetName, string targetFolder, DateOnly? fr
     {
         var c = "dotnet run --project src/PhotoRecull.Cli --"
             + (targetName is not null ? $" --target \"{targetName}\"" : "")
-            + $" --path \"{targetFolder}\"";
+            + $" --path \"{targetFolder}\""
+            + (allCameras ? " --all-cameras" : "");
         if (from.HasValue) c += $" --from {from:yyyy-MM-dd}";
         if (to.HasValue)   c += $" --to {to:yyyy-MM-dd}";
         if (effectiveCache is not null) c += $" --cache \"{effectiveCache}\"";

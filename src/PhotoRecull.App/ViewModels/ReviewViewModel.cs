@@ -82,7 +82,7 @@ public sealed partial class ReviewViewModel : ObservableObject
     public string TabExplanation => SelectedTab switch
     {
         ReviewTab.Timeline => "Newest first. Photos with no match in Google Photos are dimmed and marked to remove. Bursts are stacked: click one to see its frames.",
-        _ => "Not from an iPhone or without a capture time. PhotoRecull never moves or deletes these.",
+        _ => "Without a capture time, from another camera in a folder set to iPhone photos only, or without a time zone near the range's edges. PhotoRecull never moves or deletes these.",
     };
 
     public bool HasNothingShown => Days.Count == 0;
@@ -306,7 +306,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         ReviewMark.ToRemove when PreviewTile.Copies.Any(c => c.Kind == ReviewTileKind.Match) => PreviewTile.MarkText,
         ReviewMark.ToRemove => "To remove · no match in Google Photos",
         ReviewMark.KeptByYou => "Kept by you · not staged or deleted",
-        _ when PreviewTile?.Kind == ReviewTileKind.Skipped => "Skipped · never moved or deleted",
+        _ when PreviewTile?.Kind == ReviewTileKind.Skipped => $"{PreviewTile.MarkText} · never moved or deleted",
         _ => "Stays · matched a picked photo",
     };
 

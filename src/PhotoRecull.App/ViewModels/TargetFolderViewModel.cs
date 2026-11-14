@@ -23,6 +23,7 @@ public sealed partial class TargetFolderViewModel : ObservableObject
         _otherTargetNames = otherTargetNames;
         _isNameTyped = saved is not null;
         Name = saved?.Name ?? "";
+        OnlyIphonePhotos = saved?.OnlyIphonePhotos ?? true;
         FolderPath = saved?.FolderPath ?? suggestedFolderPath;
         if (!_isNameTyped)
             SuggestName();
@@ -41,6 +42,9 @@ public sealed partial class TargetFolderViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string Name { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool OnlyIphonePhotos { get; set; } = true;
 
     partial void OnNameChanged(string value)
     {
@@ -66,7 +70,10 @@ public sealed partial class TargetFolderViewModel : ObservableObject
 
     public TargetSettings Settings => new(
         string.IsNullOrWhiteSpace(Name) ? SyncTargets.SuggestedName(FolderPath, _otherTargetNames()) : Name.Trim(),
-        FolderPath.Trim());
+        FolderPath.Trim())
+    {
+        OnlyIphonePhotos = OnlyIphonePhotos,
+    };
 
     [RelayCommand]
     private async Task BrowseFolderAsync()
