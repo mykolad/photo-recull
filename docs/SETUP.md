@@ -34,7 +34,7 @@ pass its path with `--credentials <file>`.
 
 On the first run a browser window opens asking you to sign in and approve access. You'll
 see an "unverified app" warning (expected for a personal test app) — choose
-**Advanced → Go to … (unsafe)** to continue. The token is then cached under
+**Advanced → Go to … (unsafe)** to continue. The token is then cached, encrypted for your Windows account, under
 `src/PhotoRecull.Cli/bin/.../token_store_picker/`, so later runs don't prompt again.
 
 To sign in with a browser other than your default (e.g. keep the default signed out of
