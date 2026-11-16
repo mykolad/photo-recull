@@ -1,8 +1,8 @@
 using System.Globalization;
-using Google.Apis.Util.Store;
 using PhotoRecull.Cli;
 using PhotoRecull.Core;
 using PhotoRecull.Core.Settings;
+using PhotoRecull.Core.Storage;
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -158,7 +158,7 @@ else
     try
     {
         var oauthClient = await GooglePhotosPickerClient.LoadOAuthClientFromCredentialsFileAsync(credentialsPath);
-        pickerClient = new GooglePhotosPickerClient(oauthClient, new FileDataStore(tokenStore, true), browser);
+        pickerClient = new GooglePhotosPickerClient(oauthClient, new FolderGoogleTokenStore(tokenStore), browser);
         http = await pickerClient.AuthorizeAsync(onReauthenticatingAfterExpiredToken: () =>
             Console.WriteLine("Cached Google token has expired or was revoked — re-authenticating..."));
     }

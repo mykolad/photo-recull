@@ -4,7 +4,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-*Effective date: 14 November 2026*
+*Effective date: 16 November 2026*
 
 PhotoRecull is open-source software that runs entirely on your own computer. It has no
 servers, no accounts and no analytics. This policy explains what data it accesses and what
@@ -15,6 +15,7 @@ it does with it.
 - PhotoRecull reads only the **capture time** of the Google Photos items you select.
 - That data stays on your computer. It's never sent to the developer or anyone else.
 - PhotoRecull only talks to Google, to sign you in and to read the items you picked.
+- The sign-in token Google issues is encrypted on your computer.
 
 ## Data from your Google account
 
@@ -33,11 +34,11 @@ your OneDrive Camera Roll) to find copies of photos you've deleted from Google P
 **Where it's stored.** On your computer only:
 
 - **Windows app:** the capture times, with the date range and when you picked them, and the
-  sign-in token Google issues, in the app's database (`photorecull.db` in
+  encrypted sign-in token Google issues, in the app's database (`photorecull.db` in
   `%LOCALAPPDATA%\PhotoRecull`), together with your settings and cleanup history.
 - **Command-line app:** the capture times in a cache file (for example `2026-08.json`) in
-  the folder you run it from, and the sign-in token in a `token_store_picker` folder next
-  to the app.
+  the folder you run it from, and the encrypted sign-in token in a `token_store_picker`
+  folder next to the app.
 
 You can delete these files at any time.
 
@@ -53,6 +54,29 @@ including the Limited Use requirements.
 **Settings → Sign out** deletes the sign-in token from your computer and asks Google to
 revoke the app's access. For the command-line app, deleting the `token_store_picker` folder
 signs it out on your computer.
+
+## How your data is protected
+
+PhotoRecull protects Google user data with these security measures:
+
+- **No copies anywhere else.** PhotoRecull has no servers. Google user data stays on your
+  computer and is never sent to the developer or anyone else, so it can't be exposed by a
+  breach of an online service.
+- **Encryption in transit.** PhotoRecull connects only to Google, always over HTTPS (TLS).
+- **Encryption at rest.** The sign-in token Google issues, the data that could be used to
+  access your Google account, is encrypted with Windows Data Protection (DPAPI) for your
+  Windows user account before it's saved. Another user of the computer, or anyone with a
+  copy of the file, can't use it.
+- **Access limited to your Windows account.** The Windows app keeps its data in your Windows
+  user profile, which other standard users of the computer can't open.
+- **Least access.** PhotoRecull asks only for read-only access to the items you select, and
+  keeps only their capture times. It never sees your other photos, and never downloads a
+  photo, your name, your email address or your contacts.
+- **You stay in control.** In the Windows app, signing out deletes the token and asks Google
+  to revoke PhotoRecull's access. You can also remove that access in your Google Account, and
+  delete the stored data at any time.
+- **Open to review.** PhotoRecull's source code is public, so anyone can check how it handles
+  your data.
 
 ## Files on your computer
 

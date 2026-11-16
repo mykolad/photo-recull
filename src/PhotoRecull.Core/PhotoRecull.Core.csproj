@@ -12,6 +12,7 @@
     <PackageReference Include="Google.Apis.Auth" />
     <PackageReference Include="MetadataExtractor" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
   </ItemGroup>
 
 </Project>
