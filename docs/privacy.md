@@ -72,8 +72,9 @@ PhotoRecull protects Google user data with these security measures:
 - **Least access.** PhotoRecull asks only for read-only access to the items you select, and
   keeps only their capture times. It never sees your other photos, and never downloads a
   photo, your name, your email address or your contacts.
-- **You stay in control.** Signing out deletes the token and revokes PhotoRecull's access at
-  Google. You can delete the stored data at any time.
+- **You stay in control.** In the Windows app, signing out deletes the token and asks Google
+  to revoke PhotoRecull's access. You can also remove that access in your Google Account, and
+  delete the stored data at any time.
 - **Open to review.** PhotoRecull's source code is public, so anyone can check how it handles
   your data.
 
