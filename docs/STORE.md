@@ -3,15 +3,17 @@
 The Windows app ships as an MSIX package. Normal builds stay unpackaged, so
 `dotnet run` keeps working; a Store build adds `-p:PhotoRecullPackage=true`.
 
-> **Submit once #17–#20 are merged.** This guide, the listing text and the smoke test
-> describe the app with them: one tile per photo across backups (#17), Discard (#18),
-> History (#19) and Review staged (#20). Until then those screens are placeholders.
-
 ## One-time setup (the publisher does these)
 
-1. **Partner Center account.** Register as an individual developer at
-   [partner.microsoft.com](https://partner.microsoft.com/dashboard/registration); the
-   registration page shows the current terms.
+1. **Store developer account.** Register at
+   [storedeveloper.microsoft.com](https://storedeveloper.microsoft.com/en-US/onboarding)
+   with your Microsoft personal account, as an **Individual developer** (free; the Store
+   shows your own name as the publisher). It verifies your identity with a government ID
+   and a selfie. Partner Center's own Programs page doesn't open Apps and games for an
+   individual.
+   - *"Your account is in a deactivated state"* means the Microsoft account has an old
+     Partner Center registration that lapsed. Email reportap@microsoft.com to reactivate
+     it, with the account's email and its Seller ID (Account settings › Identifiers).
 2. **Reserve the name.** In Partner Center: Apps and games › New product › MSIX or PWA app ›
    reserve **PhotoRecull**.
 3. **Product identity.** Product management › Product identity shows three values. Put
@@ -24,14 +26,14 @@ The Windows app ships as an MSIX package. Normal builds stay unpackaged, so
 4. **Google OAuth client for the Store build.** The repository secrets
    `PHOTORECULLGOOGLECLIENTID` and `PHOTORECULLGOOGLECLIENTSECRET` hold the Desktop OAuth
    client that Store builds have built in. The package workflow fails if they're missing.
-5. **Google consent screen in production.** In Google Cloud Console › Google Auth Platform ›
-   Audience, publish the app. While it's in *Testing*, only listed test users can sign
-   in, and their sign-in expires after 7 days. Google may ask for verification of the
-   Photos Picker scope. Have the [privacy policy](https://photorecull.com/privacy)
-   and [terms](https://photorecull.com/terms) links on the consent screen's
-   Branding page. They have to be on a domain you own and have verified in Search Console:
-   Google rejected `mykolad.github.io`, so the site moved to `photorecull.com` (a Domain
-   property, verified by a DNS TXT record).
+5. **Google consent screen in production and verified** (done 20 November 2026). Google
+   Cloud Console › Google Auth Platform › Audience shows *In production*, and the
+   Verification centre shows the branding and data access verified, so users see
+   PhotoRecull's name and logo with no "unverified app" warning. Adding a scope, or
+   changing the app's name or logo, needs a new verification. The consent screen links
+   to the [privacy policy](https://photorecull.com/privacy) and
+   [terms](https://photorecull.com/terms) on `photorecull.com`, a domain verified in
+   Search Console: Google rejected `mykolad.github.io` as a homepage.
 
 ## Build the package
 
@@ -79,49 +81,53 @@ In Partner Center, create a submission for PhotoRecull:
 - **Age ratings:** the questionnaire. PhotoRecull has no user-generated content, chat,
   purchases or location sharing, so it should rate for everyone.
 - **Packages:** upload the `.msix` from the workflow.
-- **Store listing (English):** see below. Screenshots should show your own photos: take
-  them at 1366×768 or larger, of Library, the Review timeline, Review staged, and History.
+- **Store listing (English):** see below. Screenshots must be 1366×768 or larger. Use the
+  demo library of Unsplash photos, as the website does, never your own photos: the site's
+  `docs/assets/screenshots/review.jpg` and `library.png` qualify; add Review staged and
+  History taken the same way.
 - **Submission options › Restricted capabilities:** the package uses `runFullTrust`, which
   every desktop (Win32) app needs. Partner Center may ask why: *"PhotoRecull is a desktop
-  app that reads, moves and deletes photos in folders the user chooses (a OneDrive Camera
-  Roll, a Synology NAS folder)."*
+  app that reads, moves and deletes photos in folders the user chooses, such as a OneDrive
+  Camera Roll or a folder on a NAS."*
 
 ## Store listing text
 
 **Product name:** PhotoRecull
 
 **Short description:**
-Repeat your Google Photos culls on your OneDrive and Synology Photos backups.
+Deleted it from Google Photos? PhotoRecull removes it from OneDrive, your NAS and your other backups too.
 
 **Description:**
 
-> iPhone photos often back up to Google Photos and to OneDrive or a Synology NAS. Deleting a
-> photo in Google Photos doesn't remove the other copies, so over the years they fill up
-> with photos you already culled. PhotoRecull finds them.
+> Your iPhone backs up to Google Photos and to OneDrive, a NAS or another folder. You tidy
+> up in Google Photos, but every photo you delete there stays in your other copies, and over
+> the years they fill up with photos you already culled. PhotoRecull finds them.
 >
-> Pick the photos you still have in Google Photos, with Google's own Photos Picker, for a
-> date range. PhotoRecull scans your OneDrive Camera Roll and Synology Photos backup for the
-> same days, matches photos by their capture time, and shows the ones you deleted from
-> Google Photos in a timeline, dimmed and ready to remove. Bursts are stacked, Live Photos
-> stay with their video, and the same photo on both backups shows once.
+> Pick the photos you still have in Google Photos, for a month or any date range, in
+> Google's own Photos Picker. PhotoRecull scans your backup folders for the same days,
+> matches photos by their capture time, and shows the ones you deleted from Google Photos
+> in a timeline, dimmed and ready to remove. Bursts are stacked, Live Photos stay with their
+> video, and the same photo in two backups shows once.
 >
-> Nothing is removed without you: move candidates to a stage folder for a last look, keep
-> any you want, then delete them. On OneDrive they go to the Recycle Bin. History records
-> every stage and delete.
+> Nothing is removed without you: move the photos to a stage folder for a last look, keep
+> any you want, then delete them. Deleted files go to the Recycle Bin where the folder's
+> drive has one, and History records every stage and delete.
 >
 > Everything runs on your PC. PhotoRecull reads only the capture times of the photos you
-> pick in Google Photos; it never downloads or changes them.
+> pick in Google Photos; it never downloads or changes them, and has no servers or
+> analytics.
 
 **Features:**
-- Finds OneDrive and Synology Photos copies of photos you deleted from Google Photos
-- One timeline for the whole range, with photos to remove dimmed
+- Finds copies of photos you deleted from Google Photos in your other backups
+- Works with OneDrive's Camera Roll, Synology Photos or another NAS, or any folder
+- One timeline for the whole range, with the photos to remove dimmed
 - Bursts stacked like in Google Photos; Live Photos kept with their video
 - Stage first, review, then delete; move back anything you want to keep
-- Recycle Bin for OneDrive, with clear warnings for network folders
+- Only iPhone photos by default, so other cameras' photos are left alone
 - History of every stage and delete
-- Runs locally: only capture times are read from Google Photos
+- Runs on your PC: only capture times are read from Google Photos
 
-**Search terms:** Google Photos, OneDrive, Synology, duplicates, cleanup, iPhone, photos
+**Search terms:** Google Photos, OneDrive, Synology, NAS, backup, cleanup, iPhone
 
 ## Later
 
