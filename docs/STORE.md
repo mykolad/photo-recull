@@ -110,8 +110,8 @@ Deleted it from Google Photos? PhotoRecull removes it from OneDrive, your NAS an
 > video, and the same photo in two backups shows once.
 >
 > Nothing is removed without you: move the photos to a stage folder for a last look, keep
-> any you want, then delete them. Deleted files go to the Recycle Bin where the folder's
-> drive has one, and History records every stage and delete.
+> any you want, then delete them. PhotoRecull uses the Recycle Bin when Windows can, and
+> History records every stage and delete.
 >
 > Everything runs on your PC. PhotoRecull reads only the capture times of the photos you
 > pick in Google Photos; it never downloads or changes them, and has no servers or
