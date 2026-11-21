@@ -58,16 +58,18 @@ The package lands in `artifacts/store/`.
 The Store signs what you upload, so the built package isn't signed. To run it locally:
 
 1. Turn on **Developer Mode** (Settings › System › For developers).
-2. Build the package as above. The package depends on the Windows App SDK runtime, which
-   the Store installs with the app; locally, install it once from the build output:
+2. Build the package as above, for this PC's architecture (`x64`, or `ARM64` on Windows on
+   Arm). The package depends on the Windows App SDK runtime, which the Store installs with
+   the app; locally, install it once from the build output:
    ```powershell
-   Get-ChildItem artifacts\store -Recurse -Filter Microsoft.WindowsAppRuntime.2.msix | Where-Object { $_.Directory.Name -eq 'x64' } | ForEach-Object { Add-AppxPackage $_.FullName }
+   $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+   Get-ChildItem artifacts\store -Recurse -Filter Microsoft.WindowsAppRuntime.2.msix | Where-Object { $_.Directory.Name -eq $arch } | ForEach-Object { Add-AppxPackage $_.FullName }
    ```
 3. Register the build output in PowerShell. With
-   `dotnet build` the layout is in the `win-x64` folder itself; a Visual Studio build may
+   `dotnet build` the layout is in the `win-x64` (or `win-arm64`) folder itself; a Visual Studio build may
    put it in an `AppX` subfolder, so this finds whichever there is:
    ```powershell
-   $manifest = Get-ChildItem src\PhotoRecull.App\bin\x64\Release -Recurse -Filter AppxManifest.xml | Select-Object -First 1
+   $manifest = Get-ChildItem src\PhotoRecull.App\bin\$arch\Release -Recurse -Filter AppxManifest.xml | Select-Object -First 1
    Add-AppxPackage -Register $manifest.FullName
    ```
 4. Start PhotoRecull from the Start menu. The packaged app keeps its own settings and
