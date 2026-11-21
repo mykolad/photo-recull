@@ -54,16 +54,21 @@ The package lands in `artifacts/store/`.
 The Store signs what you upload, so the built package isn't signed. To run it locally:
 
 1. Turn on **Developer Mode** (Settings › System › For developers).
-2. Build the package as above, then register the build output in PowerShell. With
+2. Build the package as above. The package depends on the Windows App SDK runtime, which
+   the Store installs with the app; locally, install it once from the build output:
+   ```powershell
+   Get-ChildItem artifacts\store -Recurse -Filter Microsoft.WindowsAppRuntime.2.msix | Where-Object { $_.Directory.Name -eq 'x64' } | ForEach-Object { Add-AppxPackage $_.FullName }
+   ```
+3. Register the build output in PowerShell. With
    `dotnet build` the layout is in the `win-x64` folder itself; a Visual Studio build may
    put it in an `AppX` subfolder, so this finds whichever there is:
    ```powershell
    $manifest = Get-ChildItem src\PhotoRecull.App\bin\x64\Release -Recurse -Filter AppxManifest.xml | Select-Object -First 1
    Add-AppxPackage -Register $manifest.FullName
    ```
-3. Start PhotoRecull from the Start menu. The packaged app keeps its own settings and
+4. Start PhotoRecull from the Start menu. The packaged app keeps its own settings and
    library, apart from a `dotnet run` copy, so it starts at Setup.
-4. Remove it afterwards: Settings › Apps › Installed apps › PhotoRecull › Uninstall.
+5. Remove it afterwards: Settings › Apps › Installed apps › PhotoRecull › Uninstall.
 
 Check that Setup, Google sign-in, a cleanup with a saved pick, Stage, Review staged and
 History work.
