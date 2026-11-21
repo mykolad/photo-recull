@@ -51,9 +51,14 @@ jobs:
           # MSBuild reads these as the built-in Google OAuth client's properties.
           PhotoRecullGoogleClientId: ${{ secrets.PHOTORECULLGOOGLECLIENTID }}
           PhotoRecullGoogleClientSecret: ${{ secrets.PHOTORECULLGOOGLECLIENTSECRET }}
+        shell: pwsh
+        # PowerShell goes on after a failed native command, so each build is checked: a failed
+        # x64 build mustn't hide behind a successful Arm64 one.
         run: |
-          dotnet build src/PhotoRecull.App -c Release -p:Platform=x64 -p:PhotoRecullPackage=true
-          dotnet build src/PhotoRecull.App -c Release -p:Platform=ARM64 -p:PhotoRecullPackage=true
+          foreach ($platform in 'x64', 'ARM64') {
+            dotnet build src/PhotoRecull.App -c Release -p:Platform=$platform -p:PhotoRecullPackage=true
+            if ($LASTEXITCODE -ne 0) { throw "The $platform build failed" }
+          }
 
       - name: Check the Google client is built in
         shell: pwsh
@@ -74,7 +79,11 @@ jobs:
           $makeAppx = Get-ChildItem "$env:USERPROFILE/.nuget/packages/microsoft.windows.sdk.buildtools" -Recurse -Filter makeappx.exe |
             Where-Object { $_.Directory.Name -eq 'x64' } | Sort-Object FullName -Descending | Select-Object -First 1
           $packages = New-Item -ItemType Directory -Force artifacts/bundle-input
-          Get-ChildItem artifacts/store/*/PhotoRecull.App_*.msix | Copy-Item -Destination $packages
+          $built = Get-ChildItem artifacts/store/*/PhotoRecull.App_*.msix
+          foreach ($architecture in 'x64', 'arm64') {
+            if (-not ($built | Where-Object Name -like "*_$architecture.msix")) { throw "No $architecture package to bundle" }
+          }
+          $built | Copy-Item -Destination $packages
           & $makeAppx.FullName bundle /d $packages /p "artifacts/PhotoRecull_$env:PACKAGE_VERSION.msixbundle" /bv $env:PACKAGE_VERSION /o
           if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed" }
 
