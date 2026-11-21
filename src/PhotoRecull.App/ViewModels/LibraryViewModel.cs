@@ -53,18 +53,24 @@ public sealed partial class LibraryViewModel : ObservableObject
     // Staged photos deleted or moved by hand (e.g. in File Explorer from "Open folder")
     // leave a cleanup Staged until something checks its stage folders. Library checks
     // each time it opens, away from the UI thread, since a NAS can be slow or off.
-    // Returns what to tell the user when a cleanup became Done, or null.
-    public async Task<string?> SettleStagedCleanupsAsync()
+    // IsOutdated says whether Library should be rebuilt: a state changed since it was
+    // read, here or by the check of a Library opened earlier. Message says which
+    // cleanups this check made Done, if any.
+    public async Task<(bool IsOutdated, string? Message)> SettleStagedCleanupsAsync()
     {
         if (!_cleanups.Any(c => c.State == CleanupState.Staged))
-            return null;
-        var settled = await Task.Run(() => StagedPhotos.SettleStagedCleanups(AppServices.Database));
-        return settled switch
+            return (false, null);
+        var (settled, now) = await Task.Run(() =>
+            (StagedPhotos.SettleStagedCleanups(AppServices.Database), AppServices.Database.LoadCleanups()));
+        var shown = _cleanups.ToDictionary(c => c.Id, c => c.State);
+        bool isOutdated = now.Count != shown.Count
+            || now.Any(c => !shown.TryGetValue(c.Id, out var state) || state != c.State);
+        return (isOutdated, settled switch
         {
             [] => null,
             [var cleanup] => $"{DateRangeLabel.Format(cleanup.From, cleanup.To)} is now Done: no staged photos are left.",
             _ => $"{settled.Count} cleanups are now Done: no staged photos are left.",
-        };
+        });
     }
 
     public IReadOnlyList<CoverageSegment> CoverageSegments { get; }

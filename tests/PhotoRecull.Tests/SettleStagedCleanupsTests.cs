@@ -63,6 +63,34 @@ public class SettleStagedCleanupsTests : IDisposable
     }
 
     [Fact]
+    public void Settling_ChangesOnlyTheState_KeepingWhatEarlierRunsRemovedAndFreed()
+    {
+        var stageFolder = Path.Combine(_folder, "_staged");
+        var cleanup = StagedCleanup(stageFolder, StagedFile(stageFolder));
+        _database.SaveCleanup(cleanup with { RemovedCount = 3, FreedBytes = 4_000_000, KeptByUserCount = 1 });
+        Directory.Delete(stageFolder, recursive: true);
+
+        StagedPhotos.SettleStagedCleanups(_database);
+
+        var saved = _database.LoadCleanups().Single(c => c.Id == cleanup.Id);
+        Assert.Equal((CleanupState.Done, 3, 4_000_000L, 1), (saved.State, saved.RemovedCount, saved.FreedBytes, saved.KeptByUserCount));
+    }
+
+    [Fact]
+    public void ACleanupThatStartedARunSinceItWasChecked_IsLeftAsItIs()
+    {
+        var stageFolder = Path.Combine(_folder, "_staged");
+        var cleanup = StagedCleanup(stageFolder, StagedFile(stageFolder));
+        long checkedUpTo = _database.LoadRunsNewestFirst().Max(r => r.Id);
+        // Review staged starts moving the photos back while Library's check is running.
+        _database.StartRun(new CleanupRun(cleanup.Id, DateTimeOffset.Now, CleanupAction.MovedBack,
+            new TargetSettings("OneDrive", Target), Target, 0, 0, 0));
+
+        Assert.False(_database.SettleStagedCleanup(cleanup.Id, checkedUpTo, DateTimeOffset.Now));
+        Assert.Equal(CleanupState.Staged, StateOf(cleanup));
+    }
+
+    [Fact]
     public void AStagedCleanupWithAPhotoStillStaged_StaysStaged()
     {
         var stageFolder = Path.Combine(_folder, "_staged");

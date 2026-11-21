@@ -20,15 +20,17 @@ public sealed partial class LibraryPage : Page
         Loaded += async (_, _) => await ShowStagedCleanupsSettledAsync();
     }
 
-    // Library is shown at once, then rebuilt if a Staged cleanup turned out to be Done,
-    // unless the user has moved on to another page meanwhile.
+    // Library is shown at once, then rebuilt if a cleanup's state changed meanwhile (a
+    // Staged one turned out to be Done), unless the user has moved on to another page.
     private async Task ShowStagedCleanupsSettledAsync()
     {
-        if (await ViewModel.SettleStagedCleanupsAsync() is { } message && ReferenceEquals(Frame?.Content, this))
-        {
+        var (isOutdated, message) = await ViewModel.SettleStagedCleanupsAsync();
+        if (!ReferenceEquals(Frame?.Content, this))
+            return;
+        if (isOutdated)
             ShellPage.Current?.RefreshLibrary();
+        if (message is not null)
             ShellPage.Current?.ShowToast(message);
-        }
     }
 
     public LibraryViewModel ViewModel { get; } = new();

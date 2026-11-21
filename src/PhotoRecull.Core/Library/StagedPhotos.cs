@@ -83,29 +83,32 @@ public static class StagedPhotos
             : null;
 
     // Settles every Staged cleanup that has nothing left in its stage folders, as Library
-    // does each time it opens. Returns the cleanups that are now Done.
+    // does each time it opens, away from the UI thread. Returns the cleanups that are now
+    // Done. Only their state is saved, and not for one that started a run meanwhile (see
+    // AppStateDatabase.SettleStagedCleanup), so newer counts are never overwritten.
     public static List<Cleanup> SettleStagedCleanups(AppStateDatabase database)
     {
         var staged = database.LoadCleanups().Where(c => c.State == CleanupState.Staged).ToList();
         if (staged.Count == 0)
             return [];
-        var everyStageRun = LoadEveryStageRun(database);
+        var runs = database.LoadRunsNewestFirst();
+        var everyStageRun = LoadEveryStageRun(database, runs);
         var owners = new StagePathOwners(everyStageRun);
         var settled = new List<Cleanup>();
         foreach (var cleanup in staged)
         {
+            long lastRunId = runs.Where(r => r.CleanupId == cleanup.Id).Select(r => r.Id).DefaultIfEmpty(0).Max();
             var inventory = StillStaged(everyStageRun.Where(r => r.Run.CleanupId == cleanup.Id), owners);
-            if (SettledIfNothingIsLeft(cleanup, inventory) is { } done)
-            {
-                database.SaveCleanup(done);
+            if (SettledIfNothingIsLeft(cleanup, inventory) is { } done
+                && database.SettleStagedCleanup(cleanup.Id, lastRunId, done.LastActivityAt))
                 settled.Add(done);
-            }
         }
         return settled;
     }
 
-    public static List<(CleanupRun Run, List<RunFile> Files)> LoadEveryStageRun(AppStateDatabase database) =>
-        database.LoadRunsNewestFirst()
+    public static List<(CleanupRun Run, List<RunFile> Files)> LoadEveryStageRun(
+        AppStateDatabase database, IEnumerable<CleanupRun>? runsNewestFirst = null) =>
+        (runsNewestFirst ?? database.LoadRunsNewestFirst())
             .Where(r => r.Action == CleanupAction.Staged)
             .Select(r => (r, database.LoadRunFiles(r.Id)))
             .ToList();
