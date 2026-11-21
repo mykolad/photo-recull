@@ -60,9 +60,10 @@ The Store signs what you upload, so the built package isn't signed. To run it lo
 1. Turn on **Developer Mode** (Settings › System › For developers).
 2. Build the package as above, for this PC's architecture (`x64`, or `ARM64` on Windows on
    Arm). The package depends on the Windows App SDK runtime, which the Store installs with
-   the app; locally, install it once from the build output:
+   the app; locally, install it once from the build output. Set `$arch` to the platform
+   you built:
    ```powershell
-   $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+   $arch = 'x64'   # or 'arm64'
    Get-ChildItem artifacts\store -Recurse -Filter Microsoft.WindowsAppRuntime.2.msix | Where-Object { $_.Directory.Name -eq $arch } | ForEach-Object { Add-AppxPackage $_.FullName }
    ```
 3. Register the build output in PowerShell. With
