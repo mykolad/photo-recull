@@ -94,8 +94,8 @@ PhotoRecull reads each photo's capture time and matches it to Google Photos for 
 </ol>
 
 <figure class="screenshot">
-  <img src="assets/screenshots/library.png" alt="PhotoRecull's Library: a year's coverage bar and a card for each cleanup" width="1600" height="986">
-  <figcaption>The Library shows which months are cleaned up, and how much space each cleanup freed.</figcaption>
+  <video src="assets/screenshots/cleanup-flow.mp4" poster="assets/screenshots/cleanup-flow-poster.jpg" width="1600" height="1068" controls autoplay loop muted playsinline aria-label="A cleanup from start to finish: pick, check the range, scan, review, stage, a last look at the staged photos, and History"></video>
+  <figcaption>A month's cleanup, start to finish, on a demo library. The Library shows which months are cleaned up.</figcaption>
 </figure>
 
 ## Questions
