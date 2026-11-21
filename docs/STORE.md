@@ -39,9 +39,13 @@ The Windows app ships as an MSIX package. Normal builds stay unpackaged, so
 
 On GitHub: Actions › **Store package** › Run workflow, with a version like `1.0.0`. Or
 push a tag `v1.0.0`. The workflow stamps the version (the Store wants the fourth part to
-be 0), builds with the built-in Google client, and uploads the `.msix` as an artifact.
+be 0), builds an x64 and an Arm64 package with the built-in Google client, bundles them
+into `PhotoRecull_<version>.msixbundle`, and uploads the bundle and both packages as an
+artifact. Upload the bundle: the Store gives each PC the package for its architecture, so
+Windows on Arm runs PhotoRecull natively.
 
-Locally, with the client in `GoogleOAuthClient.local.props`:
+Locally, with the client in `GoogleOAuthClient.local.props`, one architecture at a time
+(`x64` or `ARM64`):
 
 ```bash
 dotnet build src/PhotoRecull.App -c Release -p:Platform=x64 -p:PhotoRecullPackage=true
@@ -85,7 +89,7 @@ In Partner Center, create a submission for PhotoRecull:
   - Support contact: an email address or the repository's issues page.
 - **Age ratings:** the questionnaire. PhotoRecull has no user-generated content, chat,
   purchases or location sharing, so it should rate for everyone.
-- **Packages:** upload the `.msix` from the workflow.
+- **Packages:** upload the `.msixbundle` from the workflow.
 - **Store listing (English):** see below. Screenshots must be 1366×768 or larger. Use the
   demo library of Unsplash photos, as the website does, never your own photos: the site's
   `docs/assets/screenshots/review.jpg` and `library.png` qualify; add Review staged and
@@ -136,5 +140,4 @@ Deleted it from Google Photos? PhotoRecull removes it from OneDrive, your NAS an
 
 ## Later
 
-- An Arm64 package: Windows on Arm runs the x64 package under emulation for now.
 - Releases need a higher version each time (1.0.1, 1.1.0, …).

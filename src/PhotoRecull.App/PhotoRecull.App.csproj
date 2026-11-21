@@ -7,8 +7,10 @@
     <RootNamespace>PhotoRecull.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
-    <Platforms>x64</Platforms>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- x64 by default; -p:Platform=ARM64 builds natively for Windows on Arm. -->
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(Platform)' != 'ARM64'">win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <!-- Unpackaged, so `dotnet run` works; Store builds package it (below). -->
     <WindowsPackageType>None</WindowsPackageType>

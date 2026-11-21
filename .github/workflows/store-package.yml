@@ -1,6 +1,7 @@
 name: Store package
 
-# Builds the Microsoft Store package (.msix) with the built-in Google OAuth client,
+# Builds the Microsoft Store packages (.msix for x64 and Arm64, bundled in one .msixbundle)
+# with the built-in Google OAuth client,
 # for uploading in Partner Center. Run it by hand, or push a tag like v1.2.0.
 on:
   workflow_dispatch:
@@ -42,28 +43,48 @@ jobs:
           [xml]$xml = Get-Content $manifest
           $xml.Package.Identity.Version = "$version.0"
           $xml.Save((Resolve-Path $manifest))
+          "PACKAGE_VERSION=$version.0" >> $env:GITHUB_ENV
           "Package version $version.0"
 
-      - name: Build the package
+      - name: Build the x64 and Arm64 packages
         env:
           # MSBuild reads these as the built-in Google OAuth client's properties.
           PhotoRecullGoogleClientId: ${{ secrets.PHOTORECULLGOOGLECLIENTID }}
           PhotoRecullGoogleClientSecret: ${{ secrets.PHOTORECULLGOOGLECLIENTSECRET }}
-        run: dotnet build src/PhotoRecull.App -c Release -p:Platform=x64 -p:PhotoRecullPackage=true
+        run: |
+          dotnet build src/PhotoRecull.App -c Release -p:Platform=x64 -p:PhotoRecullPackage=true
+          dotnet build src/PhotoRecull.App -c Release -p:Platform=ARM64 -p:PhotoRecullPackage=true
 
       - name: Check the Google client is built in
         shell: pwsh
         # The client goes in as assembly metadata, whose key is stored as plain text.
         run: |
-          $dll = Get-ChildItem src/PhotoRecull.App/bin/x64/Release -Recurse -Filter PhotoRecull.App.dll | Select-Object -First 1
-          if (-not (Select-String -Path $dll.FullName -Pattern 'PhotoRecull.GoogleClientId' -SimpleMatch -Quiet)) {
-            throw "The package has no built-in Google client: add the PHOTORECULLGOOGLECLIENTID and PHOTORECULLGOOGLECLIENTSECRET secrets"
+          foreach ($platform in 'x64', 'ARM64') {
+            $dll = Get-ChildItem src/PhotoRecull.App/bin/$platform/Release -Recurse -Filter PhotoRecull.App.dll | Select-Object -First 1
+            if (-not (Select-String -Path $dll.FullName -Pattern 'PhotoRecull.GoogleClientId' -SimpleMatch -Quiet)) {
+              throw "The $platform package has no built-in Google client: add the PHOTORECULLGOOGLECLIENTID and PHOTORECULLGOOGLECLIENTSECRET secrets"
+            }
           }
+
+      - name: Bundle both into one .msixbundle
+        shell: pwsh
+        # Partner Center takes the bundle as one upload and gives each PC its architecture.
+        # MakeAppx comes with the Windows SDK build tools package the app already uses.
+        run: |
+          $makeAppx = Get-ChildItem "$env:USERPROFILE/.nuget/packages/microsoft.windows.sdk.buildtools" -Recurse -Filter makeappx.exe |
+            Where-Object { $_.Directory.Name -eq 'x64' } | Sort-Object FullName -Descending | Select-Object -First 1
+          $packages = New-Item -ItemType Directory -Force artifacts/bundle-input
+          Get-ChildItem artifacts/store/*/PhotoRecull.App_*.msix | Copy-Item -Destination $packages
+          & $makeAppx.FullName bundle /d $packages /p "artifacts/PhotoRecull_$env:PACKAGE_VERSION.msixbundle" /bv $env:PACKAGE_VERSION /o
+          if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed" }
 
       - uses: actions/upload-artifact@v7
         with:
           name: store-package
-          # The app's package only: the Windows App SDK runtime packages next to it are for
-          # installing locally, and the Store installs that runtime itself.
-          path: artifacts/store/*/PhotoRecull.App_*.msix
+          # The bundle, which is what to upload, and the packages in it. Not the Windows App
+          # SDK runtime packages built next to them: those are for installing locally, and the
+          # Store installs that runtime itself.
+          path: |
+            artifacts/PhotoRecull_*.msixbundle
+            artifacts/store/*/PhotoRecull.App_*.msix
           retention-days: 30
