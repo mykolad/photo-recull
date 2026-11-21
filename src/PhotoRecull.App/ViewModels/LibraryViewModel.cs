@@ -103,6 +103,8 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     private bool CanShowNextYear() => CoverageYear < _today.Year;
 
+    public void ShowCoverageYear(int year) => CoverageYear = Math.Clamp(year, _earliestCoverageYear, _today.Year);
+
     [RelayCommand]
     private Task NewCleanupAsync() => ShellPage.Current?.StartNewCleanupAsync() ?? Task.CompletedTask;
 

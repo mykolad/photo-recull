@@ -109,9 +109,9 @@ public sealed partial class ShellPage : Page
         Navigation.IsPaneOpen = true;
     }
 
-    // Rebuilds Library in place, without the page transition.
-    public void RefreshLibrary() =>
-        ContentFrame.Navigate(typeof(LibraryPage), null, new Microsoft.UI.Xaml.Media.Animation.SuppressNavigationTransitionInfo());
+    // Rebuilds Library in place, without the page transition, keeping the year Coverage shows.
+    public void RefreshLibrary(int coverageYear) =>
+        ContentFrame.Navigate(typeof(LibraryPage), coverageYear, new Microsoft.UI.Xaml.Media.Animation.SuppressNavigationTransitionInfo());
 
     public void SetNavigationLocked(bool isLocked)
     {
