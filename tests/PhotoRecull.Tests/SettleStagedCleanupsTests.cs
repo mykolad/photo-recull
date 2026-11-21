@@ -91,6 +91,20 @@ public class SettleStagedCleanupsTests : IDisposable
     }
 
     [Fact]
+    public void ACleanupWithARunStillGoing_IsLeftAsItIs()
+    {
+        var stageFolder = Path.Combine(_folder, "_staged");
+        var cleanup = StagedCleanup(stageFolder, StagedFile(stageFolder));
+        Directory.Delete(stageFolder, recursive: true);
+        // Staging again, before its first photo is recorded: its stage folder looks empty.
+        _database.StartRun(new CleanupRun(cleanup.Id, DateTimeOffset.Now, CleanupAction.Staged,
+            new TargetSettings("OneDrive", Target), stageFolder, 0, 0, 0));
+
+        Assert.Empty(StagedPhotos.SettleStagedCleanups(_database));
+        Assert.Equal(CleanupState.Staged, StateOf(cleanup));
+    }
+
+    [Fact]
     public void AStagedCleanupWithAPhotoStillStaged_StaysStaged()
     {
         var stageFolder = Path.Combine(_folder, "_staged");
