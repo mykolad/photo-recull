@@ -50,6 +50,23 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     public ObservableCollection<LibraryCardViewModel> Cards { get; } = [];
 
+    // Staged photos deleted or moved by hand (e.g. in File Explorer from "Open folder")
+    // leave a cleanup Staged until something checks its stage folders. Library checks
+    // each time it opens, away from the UI thread, since a NAS can be slow or off.
+    // Returns what to tell the user when a cleanup became Done, or null.
+    public async Task<string?> SettleStagedCleanupsAsync()
+    {
+        if (!_cleanups.Any(c => c.State == CleanupState.Staged))
+            return null;
+        var settled = await Task.Run(() => StagedPhotos.SettleStagedCleanups(AppServices.Database));
+        return settled switch
+        {
+            [] => null,
+            [var cleanup] => $"{DateRangeLabel.Format(cleanup.From, cleanup.To)} is now Done: no staged photos are left.",
+            _ => $"{settled.Count} cleanups are now Done: no staged photos are left.",
+        };
+    }
+
     public IReadOnlyList<CoverageSegment> CoverageSegments { get; }
 
     public IReadOnlyList<NotCleanedGap> NotCleanedGaps { get; }

@@ -74,6 +74,36 @@ public static class StagedPhotos
         return StillStaged(everyStageRun.Where(r => r.Run.CleanupId == cleanupId), new StagePathOwners(everyStageRun));
     }
 
+    // A Staged cleanup whose staged photos have all gone, handled by hand (e.g. deleted
+    // in File Explorer) or by a run cut off after its last photo, is Done. Returns it as
+    // Done, or null while any of its photos is still staged or can't be checked.
+    public static Cleanup? SettledIfNothingIsLeft(Cleanup cleanup, StagedInventory inventory) =>
+        cleanup.State == CleanupState.Staged && inventory.IsVerifiedEmpty
+            ? cleanup with { State = CleanupState.Done, StagedCount = 0, LastActivityAt = DateTimeOffset.Now }
+            : null;
+
+    // Settles every Staged cleanup that has nothing left in its stage folders, as Library
+    // does each time it opens. Returns the cleanups that are now Done.
+    public static List<Cleanup> SettleStagedCleanups(AppStateDatabase database)
+    {
+        var staged = database.LoadCleanups().Where(c => c.State == CleanupState.Staged).ToList();
+        if (staged.Count == 0)
+            return [];
+        var everyStageRun = LoadEveryStageRun(database);
+        var owners = new StagePathOwners(everyStageRun);
+        var settled = new List<Cleanup>();
+        foreach (var cleanup in staged)
+        {
+            var inventory = StillStaged(everyStageRun.Where(r => r.Run.CleanupId == cleanup.Id), owners);
+            if (SettledIfNothingIsLeft(cleanup, inventory) is { } done)
+            {
+                database.SaveCleanup(done);
+                settled.Add(done);
+            }
+        }
+        return settled;
+    }
+
     public static List<(CleanupRun Run, List<RunFile> Files)> LoadEveryStageRun(AppStateDatabase database) =>
         database.LoadRunsNewestFirst()
             .Where(r => r.Action == CleanupAction.Staged)

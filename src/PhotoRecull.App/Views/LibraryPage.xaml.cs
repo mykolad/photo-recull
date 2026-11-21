@@ -17,6 +17,18 @@ public sealed partial class LibraryPage : Page
         };
         Coverage.SegmentClicked += (_, segment) => ViewModel.OpenCleanup(segment.CleanupId);
         ActualThemeChanged += (_, _) => RecreateCardsWithNewThemeBrushes();
+        Loaded += async (_, _) => await ShowStagedCleanupsSettledAsync();
+    }
+
+    // Library is shown at once, then rebuilt if a Staged cleanup turned out to be Done,
+    // unless the user has moved on to another page meanwhile.
+    private async Task ShowStagedCleanupsSettledAsync()
+    {
+        if (await ViewModel.SettleStagedCleanupsAsync() is { } message && ReferenceEquals(Frame?.Content, this))
+        {
+            ShellPage.Current?.RefreshLibrary();
+            ShellPage.Current?.ShowToast(message);
+        }
     }
 
     public LibraryViewModel ViewModel { get; } = new();

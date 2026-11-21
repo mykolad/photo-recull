@@ -109,6 +109,10 @@ public sealed partial class ShellPage : Page
         Navigation.IsPaneOpen = true;
     }
 
+    // Rebuilds Library in place, without the page transition.
+    public void RefreshLibrary() =>
+        ContentFrame.Navigate(typeof(LibraryPage), null, new Microsoft.UI.Xaml.Media.Animation.SuppressNavigationTransitionInfo());
+
     public void SetNavigationLocked(bool isLocked)
     {
         LibraryItem.IsEnabled = HistoryItem.IsEnabled = ManageTargetsButton.IsEnabled = !isLocked;
