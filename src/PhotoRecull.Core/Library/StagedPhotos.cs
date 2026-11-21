@@ -97,6 +97,10 @@ public static class StagedPhotos
         var settled = new List<Cleanup>();
         foreach (var cleanup in staged)
         {
+            // A run going when the runs were read may not have recorded its photos yet, so
+            // its stage folder can look empty; it may also finish before the update below.
+            if (runs.Any(r => r.CleanupId == cleanup.Id && r.Status == RunStatus.InProgress))
+                continue;
             long lastRunId = runs.Where(r => r.CleanupId == cleanup.Id).Select(r => r.Id).DefaultIfEmpty(0).Max();
             var inventory = StillStaged(everyStageRun.Where(r => r.Run.CleanupId == cleanup.Id), owners);
             if (SettledIfNothingIsLeft(cleanup, inventory) is { } done
