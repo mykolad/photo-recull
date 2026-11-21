@@ -63,5 +63,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: store-package
-          path: artifacts/store/**/*.msix
+          # The app's package only: the Windows App SDK runtime packages next to it are for
+          # installing locally, and the Store installs that runtime itself.
+          path: artifacts/store/*/PhotoRecull.App_*.msix
           retention-days: 30

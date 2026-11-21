@@ -43,6 +43,9 @@
     <WindowsPackageType>MSIX</WindowsPackageType>
     <!-- Customers' PCs needn't have .NET installed: the package carries the runtime too. -->
     <SelfContained>true</SelfContained>
+    <!-- The Windows App SDK runtime isn't carried, though: the package depends on its framework
+         package, which the Store installs with the app and shares between apps. -->
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <EnableMsixTooling>true</EnableMsixTooling>
     <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
     <!-- A plain .msix, which Partner Center accepts; the .msixupload wrapper needs Visual Studio's MSBuild. -->
@@ -63,7 +66,12 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <!-- The Windows App SDK's parts the app uses, not the whole SDK: its AI, ML, Search and
+         Widgets parts would add about 40 MB of ONNX Runtime and DirectML to the package. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
   </ItemGroup>
 
   <ItemGroup>
