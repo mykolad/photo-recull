@@ -17,7 +17,7 @@ updates:
     groups:
       windows-app-sdk:
         patterns:
-          - Microsoft.WindowsAppSDK
+          - Microsoft.WindowsAppSDK*
           - Microsoft.Windows.SDK.BuildTools
       tests:
         patterns:
