@@ -122,6 +122,22 @@ public sealed class AppStateDatabase
         transaction.Commit();
     }
 
+    // Marks a Staged cleanup Done once its staged photos were all found gone, changing
+    // nothing else, and only if no run of it started after lastRunId or is still going:
+    // such a run (a delete or move back from Review staged, a stage that hasn't recorded
+    // its first photo yet) may have changed its photos and counts since they were
+    // checked. Returns whether it was marked Done.
+    public bool SettleStagedCleanup(Guid cleanupId, long lastRunId, DateTimeOffset settledAt) =>
+        ScalarOrNull("""
+            UPDATE cleanups SET state = 'Done', staged_count = 0, last_activity_at = $settledAt
+            WHERE id = $id AND state = 'Staged'
+              AND COALESCE((SELECT MAX(id) FROM runs WHERE cleanup_id = $id), 0) = $lastRunId
+              AND NOT EXISTS (SELECT 1 FROM runs WHERE cleanup_id = $id AND status IN ('InProgress', 'Interrupting'));
+            SELECT changes();
+            """,
+            ("$id", cleanupId.ToString()), ("$lastRunId", lastRunId),
+            ("$settledAt", settledAt.ToString("O", CultureInfo.InvariantCulture))) == "1";
+
     // ------------------------------------------------------------------ picks
 
     public PickCacheData? LoadPick(Guid cleanupId)
