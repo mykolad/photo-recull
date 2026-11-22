@@ -95,13 +95,11 @@ public sealed partial class StagedReviewViewModel : ObservableObject
         return inventory;
     }
 
-    // Opening a Staged cleanup whose photos have all gone (handled by hand, or
-    // by a run cut off after its last photo) settles it as Done.
     private void SettleIfNothingIsLeft(StagedInventory inventory)
     {
-        if (_cleanup.State != CleanupState.Staged || !inventory.IsVerifiedEmpty)
+        if (StagedPhotos.SettledIfNothingIsLeft(_cleanup, inventory) is not { } done)
             return;
-        _cleanup = _cleanup with { State = CleanupState.Done, StagedCount = 0, LastActivityAt = DateTimeOffset.Now };
+        _cleanup = done;
         AppServices.Database.SaveCleanup(_cleanup);
         ResultHasFailures = false;
         ResultMessage = "No staged photos are left, so this cleanup is now marked Done.";
