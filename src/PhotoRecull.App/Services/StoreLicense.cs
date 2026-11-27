@@ -18,18 +18,20 @@ public enum PurchaseOutcome
 /// an unlimited free trial, and the trial stages and deletes in one cleanup
 /// (<see cref="TrialAllowance"/>). Every other build (dotnet run, a fork, the command-line
 /// app) is the open-source app and never limited. Setting PHOTORECULL_SIMULATE_TRIAL=1
-/// makes one of those act as a trial, to try the purchase screens without the Store. The
-/// Store build ignores it: there, its simulated purchase would unlock the app for free.
+/// makes one of those act as a trial, with a made-up price and purchase, to try the screens
+/// without the Store. In the Store build it only makes the copy act as unbought, to test the
+/// trial on a PC that owns the app or with a package that isn't from the Store: its price and
+/// Buy stay the Store's own, so the variable can hold the app back but never unlock it.
 /// </summary>
 internal static class StoreLicense
 {
+    private static readonly bool SimulatesTrial =
+        Environment.GetEnvironmentVariable("PHOTORECULL_SIMULATE_TRIAL") == "1";
+
 #if PHOTORECULL_STORE
     public static bool IsLimitedBuild => true;
 #else
     public static bool IsLimitedBuild => SimulatesTrial;
-
-    private static readonly bool SimulatesTrial =
-        Environment.GetEnvironmentVariable("PHOTORECULL_SIMULATE_TRIAL") == "1";
 #endif
 
     // Until the Store answers, a copy counts as bought: nobody who paid is ever held back by
@@ -63,6 +65,9 @@ internal static class StoreLicense
             // back someone who may have paid is worse than missing one sale.
             IsPurchased = true;
         }
+        // Only ever takes a purchase away, so setting it can't unlock anything.
+        if (SimulatesTrial)
+            IsPurchased = false;
 #else
         await Task.CompletedTask;
         IsPurchased = !SimulatesTrial || _simulatedPurchase;

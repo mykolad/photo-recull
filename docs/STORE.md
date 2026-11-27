@@ -57,13 +57,21 @@ is compiled with `PHOTORECULL_STORE`, which `-p:PhotoRecullPackage=true` defines
   rather than hold back someone who paid.
 - **Uninstalling** deletes the app's database, so a reinstall gets a new free cleanup. That's
   accepted: it's one month at a time, and the cleanups' history goes with it.
-- **Trying the screens without the Store:** run a build from source (not the Store build)
-  with the environment variable `PHOTORECULL_SIMULATE_TRIAL=1`. It acts as a trial with a
-  made-up price, and its Buy succeeds after half a second. The Store build ignores the
-  variable, since its simulated purchase would unlock the app for free:
+- **Trying the screens without the Store:** run a build from source with the environment
+  variable `PHOTORECULL_SIMULATE_TRIAL=1`. It acts as a trial with a made-up price, and its
+  Buy succeeds after half a second:
   ```powershell
   $env:PHOTORECULL_SIMULATE_TRIAL = '1'; dotnet run --project src/PhotoRecull.App
   ```
+- **Testing the trial in the Store build:** the same variable makes the Store build act as
+  unbought, whatever its license says: on a PC or account that already owns the app, or
+  with a package registered from the build output. Its price and Buy stay the Store's own,
+  so the variable can only hold the app back, never unlock it. Set it for the user, then
+  start PhotoRecull from the Start menu:
+  ```powershell
+  [Environment]::SetEnvironmentVariable('PHOTORECULL_SIMULATE_TRIAL', '1', 'User')
+  ```
+  Remove it afterwards with the same command and `$null` in place of `'1'`.
 
 ## Build the package
 
@@ -109,9 +117,10 @@ The Store signs what you upload, so the built package isn't signed. To run it lo
 
 Check that Setup, Google sign-in, a cleanup with a saved pick, Stage, Review staged and
 History work. A package registered this way has no Store license, so it may act as an
-unbought trial: Stage and Delete in a second cleanup should ask to buy, and Buy should fail
-with a message (the app isn't in the Store yet), never stage or delete. Settings ›
-PhotoRecull shows the trial.
+unbought trial; if it acts as bought, set `PHOTORECULL_SIMULATE_TRIAL` (above). As a trial,
+Stage and Delete in a second cleanup should ask to buy, and Buy should fail with a message
+(the app isn't in the Store yet), never stage or delete. Settings › PhotoRecull shows the
+trial.
 
 After the app is published, check the purchase for real with the Store's copy: install it
 from the Store on a PC (or a Microsoft account) that hasn't bought it, use the free cleanup,
