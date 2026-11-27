@@ -142,6 +142,39 @@
                     <TextBlock Text="Add folder" />
                 </StackPanel>
             </Button>
+
+            <StackPanel Spacing="4" Margin="0,16,0,0" Visibility="{x:Bind ViewModel.License.IsVisible, Mode=OneWay}">
+                <TextBlock Text="PhotoRecull" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock
+                    Text="Your copy from the Microsoft Store."
+                    Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Border Style="{StaticResource CardBorderStyle}" Visibility="{x:Bind ViewModel.License.IsVisible, Mode=OneWay}">
+                <Grid Padding="20,16" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE719;" FontSize="24" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind ViewModel.License.Title, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock
+                            Text="{x:Bind ViewModel.License.StatusText, Mode=OneWay}"
+                            Style="{StaticResource SecondaryCaptionTextBlockStyle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button
+                        Grid.Column="2"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Content="{x:Bind ViewModel.License.BuyButtonText, Mode=OneWay}"
+                        Command="{x:Bind ViewModel.License.BuyCommand}"
+                        Visibility="{x:Bind ViewModel.License.IsBuyVisible, Mode=OneWay}" />
+                </Grid>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

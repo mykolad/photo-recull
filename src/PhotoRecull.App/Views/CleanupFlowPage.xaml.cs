@@ -105,9 +105,20 @@ public sealed partial class CleanupFlowPage : Page
     // second click while the first is opening would otherwise throw.
     private bool _isConfirming;
 
-    private async void OnStageClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(StageAsync);
+    // A free trial that's used up asks to buy first (StoreLicense); nothing moves until then.
+    private async void OnStageClick(object sender, RoutedEventArgs e) =>
+        await ConfirmOnceAsync(async () =>
+        {
+            if (await PurchaseDialog.AllowActAsync(XamlRoot, ViewModel.CleanupId))
+                await StageAsync();
+        });
 
-    private async void OnDeleteClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DeleteAsync);
+    private async void OnDeleteClick(object sender, RoutedEventArgs e) =>
+        await ConfirmOnceAsync(async () =>
+        {
+            if (await PurchaseDialog.AllowActAsync(XamlRoot, ViewModel.CleanupId))
+                await DeleteAsync();
+        });
 
     private async void OnDiscardClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DiscardAsync);
 

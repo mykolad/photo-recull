@@ -128,8 +128,13 @@ stays whenever one of the photos you kept could be it, in any time zone, so a bu
 such a camera stays whole when you kept one frame. It's only removed when none of the
 photos you kept could be it.
 
+**How much does it cost?**
+The Windows app is a one-time purchase in the Microsoft Store, with a free trial. Try it as
+much as you like: pick, scan and review any month, and stage and delete your first cleanup
+for free. Buy it once to clean up every month after, on every PC with your Microsoft account.
+
 **Is it open source?**
-Yes, under the MIT License. There's also a command-line version.
+Yes, under the MIT License, and the command-line version is free.
 See [Open source](developers.md).
 
 <footer class="site-links">
