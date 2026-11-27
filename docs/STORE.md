@@ -40,7 +40,8 @@ The Windows app ships as an MSIX package. Normal builds stay unpackaged, so
 
 The Store build is a paid app with an unlimited free trial; every other build (`dotnet run`,
 a fork, the command-line app) is the open-source app and is never limited. The Store build
-is compiled with `PHOTORECULL_STORE`, which `-p:PhotoRecullPackage=true` defines.
+gets its license from the Microsoft Store (`Services/LicenseSources/StoreLicenseSource.cs`),
+which `-p:PhotoRecullPackage=true` compiles in instead of the open-source one.
 
 - **What the trial does:** picking, scanning and review without limit. Stage and Delete work
   in one cleanup, the first one a stage or delete starts in, which stays free to finish
@@ -50,8 +51,9 @@ is compiled with `PHOTORECULL_STORE`, which `-p:PhotoRecullPackage=true` defines
   comes from when its first stage or delete started (saved with the cleanup), so picking
   again, or runs after a purchase that was refunded, never move it. Deleting from Review
   staged asks too; moving photos back never does.
-- **How the app knows:** `Services/StoreLicense.cs` asks the Store for the app's license
-  (`StoreContext.GetAppLicenseAsync`): bought means active and not a trial. Its **Buy**
+- **How the app knows:** `Services/StoreLicense.cs` holds what a trial may do, and asks the
+  build's license source. The Store build's, `StoreLicenseSource`, asks the Store for the
+  app's license (`StoreContext.GetAppLicenseAsync`): bought means active and not a trial. Its **Buy**
   buttons, in the purchase prompt and in Settings › PhotoRecull, open the Store's own
   purchase window. If the Store can't be asked at all, the app treats itself as bought,
   rather than hold back someone who paid.
