@@ -89,10 +89,11 @@ public class GoogleTakeoutTests : IDisposable
     public void UnreadableJson_StopsTheRead_NamingTheFile()
     {
         Write("Takeout/Google Photos/Photos from 2026/IMG_1.HEIC.json", Sidecar("IMG_1.HEIC", Taken));
-        var broken = Write("Takeout/Google Photos/Photos from 2026/IMG_2.HEIC.json", "{ \"title\": \"IMG_2.HEIC\", \"photoTak");
+        Write("Takeout/Google Photos/Photos from 2026/IMG_2.HEIC.json", "{ \"title\": \"IMG_2.HEIC\", \"photoTak");
 
+        // The file name, not the whole path: Windows lists it with \ where the test wrote /.
         var error = Assert.Throws<InvalidDataException>(() => GoogleTakeout.ReadCaptureTimes([_folder]));
-        Assert.Contains(broken, error.Message);
+        Assert.Contains("IMG_2.HEIC.json", error.Message);
     }
 
     [Fact]
