@@ -40,6 +40,12 @@ internal static class PurchaseDialog
             Text = "Buy PhotoRecull once to stage and delete in this cleanup and every one after. It's yours on every PC you sign in to with the same Microsoft account. Picking, scanning and review stay free, and nothing more is moved or deleted unless you buy.",
             TextWrapping = TextWrapping.Wrap,
         });
+        content.Children.Add(new TextBlock
+        {
+            Text = "PhotoRecull is open source: buying it supports its development.",
+            Style = (Style)Application.Current.Resources["SecondaryCaptionTextBlockStyle"],
+            TextWrapping = TextWrapping.Wrap,
+        });
         dialog.Content = content;
 
         // The Store's purchase window opens once this dialog has closed: two modal windows

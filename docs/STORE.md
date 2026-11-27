@@ -186,7 +186,9 @@ Deleted it from Google Photos? PhotoRecull removes it from OneDrive, your NAS an
 > analytics.
 >
 > Try it free: pick, scan and review as much as you like, and stage and delete in your first
-> cleanup. Buy PhotoRecull once to clean up every month after.
+> cleanup. Buy PhotoRecull once to clean up every month after: no subscription, and it can
+> pay for itself in the storage it frees. PhotoRecull is open source, and buying it
+> supports its development.
 
 **Features:**
 - Finds copies of photos you deleted from Google Photos in your other backups
