@@ -3,11 +3,19 @@
 title: PhotoRecull
 description: Repeat your Google Photos culls on your other copies.
 theme: jekyll-theme-primer
+# Absolute links in each page's preview tags (og:image, canonical). With an image, shared
+# links show a large card.
+url: "https://photorecull.com"
 
 # sitemap.xml (and robots.txt pointing to it), for Google Search Console and Bing Webmaster Tools.
 plugins:
   - jekyll-sitemap
 defaults:
+  # The picture a shared link shows: the review timeline.
+  - scope:
+      path: ""
+    values:
+      image: /assets/screenshots/review.jpg
   - scope:
       path: "googlef1abe8585635122d.html"
     values:

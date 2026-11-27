@@ -27,6 +27,7 @@ bool assumeYes          = false;
 bool wantStage          = false;   // --stage given (folder may be defaulted)
 bool wantHtml           = false;   // --report given (file may be defaulted)
 bool allCameras         = false;   // --all-cameras: not only iPhone photos
+List<string> takeoutPaths = [];    // --takeout <zip or folder>, any number: instead of the picker
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -53,6 +54,14 @@ for (int i = 0; i < args.Length; i++)
         case "--dry-run":     dryRun          = true;      break;
         case "--delete":      deleteMode      = true;      break;
         case "--all-cameras": allCameras      = true;      break;
+        case "--takeout":
+            if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("ERROR: --takeout needs a Google Takeout .zip file or folder after it.");
+                return 1;
+            }
+            takeoutPaths.Add(args[++i]);
+            break;
         case "--yes":
         case "--force":       assumeYes       = true;      break;
         case "--from":        fromDate        = ParseDateArg(args[++i], "--from", startOfMonth: true);  break;
@@ -99,10 +108,13 @@ if (fromDate.HasValue && toDate.HasValue && fromDate > toDate)
 // forces a fresh pick.
 string? effectiveCache = noCache ? null : (cachePath ?? $"{DefaultLabel(fromDate, toDate)}.json");
 
-// When reusing a cache we never touch Google, so credentials aren't required.
-bool useCache = effectiveCache is not null && File.Exists(effectiveCache) && !repick;
+// A Google Takeout export replaces the picker: no Google sign-in, nothing to cache.
+bool useTakeout = takeoutPaths.Count > 0;
 
-if (!useCache && !File.Exists(credentialsPath))
+// When reusing a cache we never touch Google, so credentials aren't required.
+bool useCache = !useTakeout && effectiveCache is not null && File.Exists(effectiveCache) && !repick;
+
+if (!useTakeout && !useCache && !File.Exists(credentialsPath))
 {
     Console.Error.WriteLine($"""
         ERROR: Google OAuth credentials file not found: {credentialsPath}
@@ -126,7 +138,31 @@ Console.WriteLine($"Date range  : {rangeLabel}");
 
 List<DateTimeOffset> googleTimestamps;
 
-if (useCache)
+if (useTakeout)
+{
+    // Every photo in the export, so no date range to pick in: --from/--to only choose
+    // which of the target's photos are looked at.
+    Console.Write("Reading the Google Takeout export... ");
+    try
+    {
+        var takeout = GoogleTakeout.ReadCaptureTimes(takeoutPaths);
+        googleTimestamps = takeout.Timestamps;
+        Console.WriteLine($"{googleTimestamps.Count} photos and videos in Google Photos"
+            + (takeout.Trashed > 0 ? $" ({takeout.Trashed} in the trash left out)." : "."));
+        if (googleTimestamps.Count == 0)
+        {
+            Console.Error.WriteLine("ERROR: The export has no Google Photos items. Choose Google Photos when you create it, and give every .zip file of it.");
+            return 1;
+        }
+        Console.WriteLine("  Photos deleted from Google Photos after the export still count as kept: export again to clean those up.");
+    }
+    catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine($"\nERROR: Couldn't read the Google Takeout export: {ex.Message}");
+        return 1;
+    }
+}
+else if (useCache)
 {
     // Reuse a previous pick — no picker, no Google auth.
     try
@@ -338,7 +374,7 @@ if (dryRun)
 {
     Console.WriteLine("\nDry run complete. No files were moved or deleted.");
     if (result.Unmatched.Count > 0)
-        PrintNextSteps(targetName, targetFolder, allCameras, fromDate, toDate, effectiveCache, stageFolder);
+        PrintNextSteps(targetName, targetFolder, allCameras, fromDate, toDate, useTakeout ? null : effectiveCache, stageFolder, takeoutPaths);
     return 0;
 }
 
@@ -488,6 +524,16 @@ static void PrintHelp()
           --delete               Permanently delete candidates (requires confirmation)
           --yes, --force         Skip the confirmation prompt for --stage/--delete
 
+        GOOGLE TAKEOUT (instead of picking — your whole library at once):
+          --takeout <path>       A Google Takeout export of Google Photos: one of
+                                 its .zip files, read without extracting, or the
+                                 folder it was extracted to. Repeat for every
+                                 .zip of the export. Replaces the Photos Picker:
+                                 no sign-in, and no photos to select. Every photo
+                                 in it counts as kept, so any date range can be
+                                 cleaned up from one export.
+                                 (takeout.google.com: choose Google Photos, .zip)
+
         PICKER CACHE (on by default — pick once, then review/stage/delete offline):
           By default the pick is saved to <range>.json (e.g. 2026-08.json) and
           reused automatically on later runs, so the picker and Google sign-in
@@ -532,7 +578,7 @@ static bool IsWholeMonth(DateOnly from, DateOnly to) =>
 
 // After a dry run, print the exact command to move the candidates to staging.
 static void PrintNextSteps(string? targetName, string targetFolder, bool allCameras, DateOnly? from, DateOnly? to,
-    string? effectiveCache, string? stageFolder)
+    string? effectiveCache, string? stageFolder, List<string> takeoutPaths)
 {
     var stageDir = stageFolder ?? $"_staged_{DefaultLabel(from, to)}";
 
@@ -544,6 +590,7 @@ static void PrintNextSteps(string? targetName, string targetFolder, bool allCame
             + (allCameras ? " --all-cameras" : "");
         if (from.HasValue) c += $" --from {from:yyyy-MM-dd}";
         if (to.HasValue)   c += $" --to {to:yyyy-MM-dd}";
+        foreach (var takeout in takeoutPaths) c += $" --takeout \"{takeout}\"";
         if (effectiveCache is not null) c += $" --cache \"{effectiveCache}\"";
         return c;
     }
@@ -554,7 +601,9 @@ static void PrintNextSteps(string? targetName, string targetFolder, bool allCame
     Console.WriteLine($"    {BaseCmd()} --stage \"{stageDir}\"");
     Console.WriteLine("  Or delete them permanently (irreversible; add --yes to skip the prompt):");
     Console.WriteLine($"    {BaseCmd()} --delete");
-    Console.WriteLine(effectiveCache is not null
+    Console.WriteLine(takeoutPaths.Count > 0
+        ? "  Both read the same Google Takeout export again — no picking."
+        : effectiveCache is not null
         ? $"  Both reuse the cached pick in {effectiveCache} — no re-picking (use --repick to refresh)."
         : "  (you used --no-cache, so these re-open the picker; drop --no-cache to reuse the pick.)");
 }

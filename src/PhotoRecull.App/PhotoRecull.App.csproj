@@ -43,8 +43,6 @@
   -->
   <PropertyGroup Condition="'$(PhotoRecullPackage)' == 'true'">
     <WindowsPackageType>MSIX</WindowsPackageType>
-    <!-- The Store build is the paid one: its free trial limits staging and deleting (Services/StoreLicense.cs). -->
-    <DefineConstants>$(DefineConstants);PHOTORECULL_STORE</DefineConstants>
     <!-- Customers' PCs needn't have .NET installed: the package carries the runtime too. -->
     <SelfContained>true</SelfContained>
     <!-- The Windows App SDK runtime isn't carried, though: the package depends on its framework
@@ -64,6 +62,18 @@
   </ItemGroup>
   <ItemGroup Condition="'$(PhotoRecullPackage)' != 'true'">
     <None Remove="Package.appxmanifest" />
+  </ItemGroup>
+
+  <!--
+    The license (Services/StoreLicense.cs) comes from one of two sources. The Store build is
+    the paid one, with a free trial: its license is the Microsoft Store's. Every other build
+    is the open-source app, never limited, and has no Store code at all.
+  -->
+  <ItemGroup Condition="'$(PhotoRecullPackage)' == 'true'">
+    <Compile Remove="Services\LicenseSources\OpenSourceLicenseSource.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(PhotoRecullPackage)' != 'true'">
+    <Compile Remove="Services\LicenseSources\StoreLicenseSource.cs" />
   </ItemGroup>
 
   <ItemGroup>

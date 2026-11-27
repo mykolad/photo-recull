@@ -16,6 +16,7 @@ description: Deleted it from Google Photos? PhotoRecull removes it from OneDrive
   <p class="actions">
     <span class="button button-primary">Coming soon to the Microsoft Store</span>
     <a class="button" href="#how-it-works">How it works</a>
+    <a class="button" href="#pricing">Pricing</a>
   </p>
 </div>
 
@@ -98,7 +99,40 @@ PhotoRecull reads each photo's capture time and matches it to Google Photos for 
   <figcaption>A month's cleanup, start to finish, on a demo library. The Library shows which months are cleaned up.</figcaption>
 </figure>
 
+## Pricing
+
+<div class="pricing">
+  <div>
+    <h3>Free trial</h3>
+    <p class="price">Free</p>
+    <p>Pick, scan and review any month, as often as you like, and stage and delete your
+    first cleanup. See exactly what PhotoRecull finds before you pay anything.</p>
+  </div>
+  <div>
+    <h3>PhotoRecull</h3>
+    <p class="price">€9.99 <span>once</span></p>
+    <p>Stage and delete in every cleanup, every month after. One purchase in the Microsoft
+    Store, for every PC you sign in to with your Microsoft account. No subscription.</p>
+  </div>
+</div>
+
+**Why pay for it?** Every photo you deleted from Google Photos is still taking up space in
+your other backups, and that space costs money: a bigger OneDrive plan every month, or
+disks in your NAS. Years of photos you deleted add up to gigabytes in every backup, so a
+one-time €9.99 can pay for itself in the storage it gives back.
+
+**Why is an open-source app paid?** Buying the Store app is how you support PhotoRecull's
+development. The code stays open source under the MIT License, and the command-line
+version stays free. The Store app is the one that's ready to use: Google sign-in built in,
+nothing to set up, and updates through the Store.
+
 ## Questions
+
+**Do I have to select every photo I kept, by hand?**
+Yes, in Google's own Photos Picker. Since 2025 Google no longer lets apps read your whole
+library, so you show PhotoRecull what you kept. Working one month at a time keeps each pick
+short, PhotoRecull remembers every pick, and the review catches anything you forgot to
+select: press **Keep** on it.
 
 **Does PhotoRecull change anything in Google Photos?**
 No. It only has read access to the photos you select in the Photos Picker, and of those it
@@ -111,14 +145,11 @@ folder: OneDrive, a NAS such as Synology, or any folder File Explorer can open.
 
 **Can I undo it?**
 Yes, if you stage first: photos move to a review folder and nothing is deleted, so you can
-move any back. In the Windows app, deleting from your PC sends photos to the Recycle Bin,
-unless Windows can't recycle a file (say, it's bigger than the Recycle Bin), in which case
-Windows asks before deleting it for good; the command-line version's `--delete` is always
-permanent. Deleting from a NAS over the network skips the Windows Recycle Bin,
-so turn on the NAS's own recycle bin for the shared folder first (on Synology: Control
-Panel › Shared Folder › Edit; on QNAP: Network Recycle Bin). PhotoRecull warns you before
-it deletes there, and looks for the recycle bin's folder, but a folder only shows it was
-turned on once: check it still is.
+move any back. In the Windows app, deleting from your PC sends photos to the Recycle Bin;
+if Windows can't recycle a file, it asks before deleting it for good. The command-line
+version's `--delete` is always permanent. Deleting from a NAS skips the Windows Recycle
+Bin, so turn on the NAS's own recycle bin first:
+[how to, and what PhotoRecull checks](nas-recycle-bin.md).
 
 **What about photos from other phones or cameras?**
 By default PhotoRecull only touches iPhone photos: an iPhone saves the time zone with its
@@ -128,14 +159,9 @@ stays whenever one of the photos you kept could be it, in any time zone, so a bu
 such a camera stays whole when you kept one frame. It's only removed when none of the
 photos you kept could be it.
 
-**How much does it cost?**
-The Windows app is a one-time purchase in the Microsoft Store, with a free trial. Try it as
-much as you like: pick, scan and review any month, and stage and delete your first cleanup
-for free. Buy it once to clean up every month after, on every PC with your Microsoft account.
-
 **Is it open source?**
-Yes, under the MIT License, and the command-line version is free.
-See [Open source](developers.md).
+Yes, under the MIT License, and the command-line version is free. Buying the Store app
+supports its development; see [Pricing](#pricing) and [Open source](developers.md).
 
 <footer class="site-links">
   <a href="privacy">Privacy policy</a> ·
