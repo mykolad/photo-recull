@@ -55,6 +55,32 @@ filter, so in the browser you select the surviving photos for that range yoursel
 Omit both flags to scan the entire library (not recommended — the manual pick becomes
 huge). Process one month at a time.
 
+### Google Takeout (instead of picking)
+
+| Flag | Description |
+|------|-------------|
+| `--takeout <path>` | A [Google Takeout](https://takeout.google.com) export of Google Photos: one of its `.zip` files, read without extracting, or the folder it was extracted to. Repeat it for every `.zip` of the export. |
+
+Picking the photos you kept is the slow part, and Takeout skips it: an export holds every
+photo and video in your Google Photos library, each with a JSON file of its capture time.
+PhotoRecull reads those capture times and matches them exactly as it matches a pick. There's
+no Google sign-in and nothing to select, so you can clean up years at once:
+
+```bash
+dotnet run --project src/PhotoRecull.Cli -- --path "<Camera Roll folder>" --from 2020-01 --to 2025-12 --takeout takeout-001.zip --takeout takeout-002.zip
+```
+
+- **Create the export** at [takeout.google.com](https://takeout.google.com): deselect all,
+  select **Google Photos**, and choose **.zip** (a `.tgz` export must be extracted first).
+  Google emails you when it's ready, which can take hours for a large library.
+- **What counts as kept:** every item in the export, once: an album's own copy of a photo
+  counts once, and items the export marks as in the trash are left out.
+- **New:** compare a dry run with `--takeout` against one with a pick, for a month you
+  know, before you stage or delete from a Takeout run.
+- **It's a snapshot:** a photo deleted from Google Photos after the export still counts as
+  kept, so it stays. Cull first, then export.
+- `--takeout` replaces the picker, so `--repick`, `--cache` and `--credentials` don't apply.
+
 ### Picker cache
 
 Caching is **on by default**: your pick is saved to `<range>.json` (e.g.

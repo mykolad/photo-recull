@@ -54,6 +54,15 @@ dotnet run --project src/PhotoRecull.Cli -- --onedrive "<Camera Roll folder>" --
 #    or re-run with --delete (permanent).
 ```
 
+No picking at all: give it a [Google Takeout](https://takeout.google.com) export of Google
+Photos instead, and clean up any range at once:
+
+```bash
+dotnet run --project src/PhotoRecull.Cli -- --onedrive "<Camera Roll folder>" --from 2020-01 --to 2025-12 --takeout takeout-001.zip --takeout takeout-002.zip
+```
+
+See [docs/USAGE.md](docs/USAGE.md#google-takeout-instead-of-picking).
+
 Any other backup folder works the same way with `--path`, such as Synology Photos' mobile
 backup on a NAS (File Explorer must already be able to open it). Only that month's
 folders are read:
