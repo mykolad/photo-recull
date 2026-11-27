@@ -4,7 +4,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-*Effective date: 16 November 2026*
+*Effective date: 27 November 2026*
 
 PhotoRecull is open-source software that runs entirely on your own computer. It has no
 servers, no accounts and no analytics. This policy explains what data it accesses and what
@@ -14,7 +14,8 @@ it does with it.
 
 - PhotoRecull reads only the **capture time** of the Google Photos items you select.
 - That data stays on your computer. It's never sent to the developer or anyone else.
-- PhotoRecull only talks to Google, to sign you in and to read the items you picked.
+- PhotoRecull only talks to Google, to sign you in and to read the items you picked, and,
+  in the Microsoft Store app, to the Microsoft Store, to check whether you've bought it.
 - The sign-in token Google issues is encrypted on your computer.
 
 ## Data from your Google account
@@ -83,6 +84,15 @@ PhotoRecull protects Google user data with these security measures:
 PhotoRecull reads the folders you point it to: file names and photo metadata such as capture
 time and camera make and model. It creates thumbnails for a review report saved on your
 computer. It moves or deletes files only when you explicitly choose to stage or delete them.
+
+## Microsoft Store purchases
+
+The Windows app from the Microsoft Store asks the Microsoft Store whether you've bought it,
+and its **Buy** button opens the Store's own purchase window. Windows does both, with the
+Microsoft account you use in the Store; PhotoRecull only learns whether the app is bought
+and its price. It sends the Store nothing about your photos, folders or Google account.
+Payment and billing are handled by Microsoft, under the
+[Microsoft Privacy Statement](https://privacy.microsoft.com/privacystatement).
 
 ## Command-line app and builds from source
 

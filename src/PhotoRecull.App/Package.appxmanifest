@@ -2,8 +2,8 @@
 <!--
   The Microsoft Store package's manifest, used only by Store builds
   (-p:PhotoRecullPackage=true). Identity Name and Publisher, and
-  PublisherDisplayName, come from Partner Center (Product management >
-  Product identity) once the app name is reserved: see docs/STORE.md.
+  PublisherDisplayName, are the reserved app's values from Partner Center
+  (Product management > Product identity): see docs/STORE.md.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -12,13 +12,13 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="PhotoRecull.Placeholder"
-    Publisher="CN=PhotoRecull Placeholder"
+    Name="53119mykolad.PhotoRecull"
+    Publisher="CN=15C476D5-4965-4FA2-9B11-2A4E6839B433"
     Version="1.0.0.0" />
 
   <Properties>
     <DisplayName>PhotoRecull</DisplayName>
-    <PublisherDisplayName>PhotoRecull</PublisherDisplayName>
+    <PublisherDisplayName>mykolad</PublisherDisplayName>
     <Logo>Assets\Store\StoreLogo.png</Logo>
   </Properties>
 

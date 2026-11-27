@@ -37,6 +37,8 @@ public sealed partial class SettingsViewModel
 
     public GooglePhotosSettingsViewModel GooglePhotos { get; } = new();
 
+    public LicenseSettingsViewModel License { get; } = new();
+
     private bool _isClosed;
 
     // A folder check still running when the page is left would otherwise save
@@ -47,6 +49,7 @@ public sealed partial class SettingsViewModel
     {
         _isClosed = true;
         GooglePhotos.SignInCancelCommand.Execute(null);
+        License.Detach();
     }
 
     // A new folder is saved once it's found, like a changed one.

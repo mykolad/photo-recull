@@ -105,9 +105,29 @@ public sealed partial class CleanupFlowPage : Page
     // second click while the first is opening would otherwise throw.
     private bool _isConfirming;
 
-    private async void OnStageClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(StageAsync);
+    // A free trial that's used up asks to buy first (StoreLicense); nothing moves until then.
+    private async void OnStageClick(object sender, RoutedEventArgs e) =>
+        await ConfirmOnceAsync(async () =>
+        {
+            if (await ViewModel.MayActAsync(id => PurchaseDialog.AllowActAsync(XamlRoot, id)))
+                await StageAsync();
+        });
 
-    private async void OnDeleteClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DeleteAsync);
+    private async void OnDeleteClick(object sender, RoutedEventArgs e) =>
+        await ConfirmOnceAsync(async () =>
+        {
+            if (await ViewModel.MayActAsync(id => PurchaseDialog.AllowActAsync(XamlRoot, id)))
+                await DeleteAsync();
+        });
+
+    // A retry stages or deletes too, so it's asked about like Stage and Delete: always
+    // allowed in the free cleanup or a bought copy, not after a refund in another cleanup.
+    private async void OnRetryFailedClick(object sender, RoutedEventArgs e) =>
+        await ConfirmOnceAsync(async () =>
+        {
+            if (await ViewModel.MayActAsync(id => PurchaseDialog.AllowActAsync(XamlRoot, id)))
+                await ViewModel.RetryFailedCommand.ExecuteAsync(null);
+        });
 
     private async void OnDiscardClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DiscardAsync);
 

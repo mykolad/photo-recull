@@ -417,6 +417,28 @@ public class AppStateDatabaseTests : IDisposable
         Assert.Equal(expected, upgraded.LoadSettings().Targets);
         Assert.Equal(expected, Assert.Single(upgraded.LoadCleanups()).Targets);
         Assert.Equal(expected[1], Assert.Single(upgraded.LoadRunsNewestFirst()).Target);
+        Assert.Equal(new DateTimeOffset(2026, 9, 1, 10, 5, 0, TimeSpan.Zero), Assert.Single(upgraded.LoadCleanups()).FirstRunAt);
+    }
+
+    [Fact]
+    public void FirstRunAt_IsTheFirstRunsStart_KeptByLaterRunsAndPicks()
+    {
+        var database = new AppStateDatabase(DatabasePath);
+        var cleanup = CleanupFor(new(2026, 8, 1), new(2026, 8, 31));
+        database.SavePickWithCleanup(cleanup, [DateTimeOffset.UnixEpoch]);
+        Assert.Null(Assert.Single(database.LoadCleanups()).FirstRunAt);
+
+        var oneDrive = new TargetSettings("OneDrive", @"C:\Camera Roll");
+        var firstRun = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.FromHours(2));
+        database.StartRun(new CleanupRun(cleanup.Id, firstRun, CleanupAction.Staged, oneDrive, @"C:\_staged", 0, 0, 0));
+        database.StartRun(new CleanupRun(cleanup.Id, firstRun.AddDays(1), CleanupAction.Deleted, oneDrive, null, 0, 0, 0));
+        database.RecordRunsWithCleanup(cleanup with { State = CleanupState.Done },
+            [new CleanupRun(cleanup.Id, firstRun.AddDays(2), CleanupAction.Deleted, oneDrive, null, 1, 0, 10)]);
+        database.SavePickWithCleanup(cleanup with { PickedAt = firstRun.AddDays(3) }, [DateTimeOffset.UnixEpoch]);
+
+        var loaded = Assert.Single(database.LoadCleanups());
+        Assert.True(loaded.HasEverRun);
+        Assert.Equal(firstRun, loaded.FirstRunAt);
     }
 
     [Fact]

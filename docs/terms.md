@@ -4,16 +4,30 @@ title: Terms of Service
 
 # Terms of Service
 
-*Effective date: 27 October 2026*
+*Effective date: 27 November 2026*
 
 By using PhotoRecull you agree to these terms.
 
 ## The software
 
-PhotoRecull is free, open-source software, licensed under the
+PhotoRecull is open-source software, licensed under the
 [MIT License](https://github.com/mykolad/photo-recull/blob/master/LICENSE). It runs on your
 own computer. These terms come on top of the license and don't restrict any rights it
 grants you.
+
+## The Microsoft Store app
+
+The Windows app from the Microsoft Store is paid, with a free trial. The trial picks,
+scans and reviews without limit, and stages and deletes in one cleanup: the first one you
+stage or delete in. Buying it once unlocks staging and deleting in every cleanup, on every
+PC you sign in to with the same Microsoft account.
+
+The Microsoft Store sells the app, takes the payment and handles refunds, under the
+[Microsoft Store Terms of Sale](https://www.microsoft.com/en-us/storedocs/terms-of-sale).
+To ask for a refund, find PhotoRecull in your Microsoft account's
+[order history](https://account.microsoft.com/billing/orders) and request one there.
+
+The command-line app, and the Windows app built from its source code, stay free.
 
 ## Your responsibility for your files
 

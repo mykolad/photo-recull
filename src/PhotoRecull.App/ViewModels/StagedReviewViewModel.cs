@@ -47,6 +47,21 @@ public sealed partial class StagedReviewViewModel : ObservableObject
 
     public string Title => DateRangeLabel.Format(_cleanup.From, _cleanup.To);
 
+    // Before Delete: locked as during a run while the Store license is read and any
+    // purchase prompt is open. Moving photos back is never asked about.
+    public async Task<bool> MayDeleteAsync(Func<Guid?, Task<bool>> allowAct)
+    {
+        IsActing = true;
+        try
+        {
+            return await allowAct(_cleanup.Id);
+        }
+        finally
+        {
+            IsActing = false;
+        }
+    }
+
     public ObservableCollection<StagedTileViewModel> Photos { get; } = [];
 
     public bool HasPhotos => Photos.Count > 0;

@@ -46,6 +46,10 @@ public sealed partial class StagedReviewPage : Page
         _isConfirming = true;
         try
         {
+            // The free trial's one cleanup, or a bought copy; after a refund, another
+            // cleanup's staged photos ask to buy first (StoreLicense).
+            if (!await ViewModel.MayDeleteAsync(id => PurchaseDialog.AllowActAsync(XamlRoot, id)))
+                return;
             int count = ViewModel.Photos.Count;
             var dialog = ConfirmDialogContent.Create(XamlRoot, $"Delete {count:N0} staged photo{(count == 1 ? "" : "s")}?");
             dialog.PrimaryButtonText = "Delete";

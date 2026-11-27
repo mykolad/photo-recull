@@ -91,6 +91,10 @@ To run the Windows app: `dotnet run --project src/PhotoRecull.App`. It keeps its
 cleanups, picks and Google sign-in in a SQLite database, `%LOCALAPPDATA%\PhotoRecull\photorecull.db`. See [docs/SETUP.md](docs/SETUP.md#windows-app-built-in-google-client)
 for giving it a built-in Google client.
 
+The Microsoft Store build is paid, with a free trial that stages and deletes in one cleanup;
+builds from source and the command-line app are never limited. See
+[docs/STORE.md](docs/STORE.md#paid-with-a-free-trial).
+
 ## Tests
 
 ```bash

@@ -688,6 +688,22 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         }
     }
 
+    // Before Stage or Delete: the review is locked as during a run while the Store
+    // license is read and any purchase prompt is open, so the flow can't be left or
+    // changed behind it.
+    public async Task<bool> MayActAsync(Func<Guid?, Task<bool>> allowAct)
+    {
+        IsActing = true;
+        try
+        {
+            return await allowAct(_cleanup?.Id);
+        }
+        finally
+        {
+            IsActing = false;
+        }
+    }
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PickAgainCommand), nameof(BackToLibraryCommand), nameof(ViewHistoryCommand))]
     public partial bool IsActing { get; set; }
