@@ -61,8 +61,6 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
     public bool IsReviewStep => Step is CleanupFlowStep.Review or CleanupFlowStep.Confirm;
     public bool IsResultStep => Step == CleanupFlowStep.Result;
 
-    public Guid? CleanupId => _cleanup?.Id;
-
     public string Title => _cleanup is null ? "New cleanup" : DateRangeLabel.Format(_cleanup.From, _cleanup.To);
 
     public string RangeDaysLine => _cleanup is null
@@ -683,6 +681,22 @@ public sealed partial class CleanupFlowViewModel : ObservableObject
         try
         {
             return await NasRecycleBinFoldersAsync(CandidatesPerTarget().Select(t => t.Target).ToList());
+        }
+        finally
+        {
+            IsActing = false;
+        }
+    }
+
+    // Before Stage or Delete: the review is locked as during a run while the Store
+    // license is read and any purchase prompt is open, so the flow can't be left or
+    // changed behind it.
+    public async Task<bool> MayActAsync(Func<Guid?, Task<bool>> allowAct)
+    {
+        IsActing = true;
+        try
+        {
+            return await allowAct(_cleanup?.Id);
         }
         finally
         {

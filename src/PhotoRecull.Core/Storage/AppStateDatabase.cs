@@ -83,7 +83,7 @@ public sealed class AppStateDatabase
             SELECT id, from_day, to_day, state, picked_count, picked_at, last_activity_at, targets,
                    earliest_picked_day, latest_picked_day, to_remove_count, kept_by_user_count,
                    staged_count, removed_count, freed_bytes,
-                   has_ever_run
+                   has_ever_run, first_run_at
             FROM cleanups
             ORDER BY from_day, to_day
             """;
@@ -109,6 +109,7 @@ public sealed class AppStateDatabase
                 RemovedCount = reader.GetInt32(13),
                 FreedBytes = reader.GetInt64(14),
                 HasEverRun = reader.GetBoolean(15),
+                FirstRunAt = reader.IsDBNull(16) ? null : DateTimeOffset.Parse(reader.GetString(16), CultureInfo.InvariantCulture),
             });
         }
         return cleanups;
@@ -252,8 +253,11 @@ public sealed class AppStateDatabase
         using (var markRun = connection.CreateCommand())
         {
             markRun.Transaction = transaction;
-            markRun.CommandText = "UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId";
+            markRun.CommandText = "UPDATE cleanups SET has_ever_run = 1, first_run_at = COALESCE(first_run_at, $firstRanAt) WHERE id = $cleanupId";
             markRun.Parameters.AddWithValue("$cleanupId", cleanup.Id.ToString());
+            markRun.Parameters.AddWithValue("$firstRanAt", runs.Count == 0
+                ? DBNull.Value
+                : runs.Min(r => r.RanAt).ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
             markRun.ExecuteNonQuery();
         }
         using var insert = connection.CreateCommand();
@@ -324,7 +328,7 @@ public sealed class AppStateDatabase
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            UPDATE cleanups SET has_ever_run = 1 WHERE id = $cleanupId;
+            UPDATE cleanups SET has_ever_run = 1, first_run_at = COALESCE(first_run_at, $ranAt) WHERE id = $cleanupId;
             INSERT INTO runs (cleanup_id, ran_at, action, target_name, target_folder, destination,
                               succeeded_count, failed_count, freed_bytes, status, photos_recorded, went_to_recycle_bin)
             VALUES ($cleanupId, $ranAt, $action, $targetName, $targetFolder, $destination, 0, 0, 0, 'InProgress', 1, $recycled);
@@ -665,6 +669,13 @@ public sealed class AppStateDatabase
                 'FolderPath', json_extract(target.value, '$.FolderPath')))
             FROM json_each(cleanups.targets) AS target)
         WHERE targets IS NOT NULL;
+        """,
+        """
+        -- When the cleanup's first stage or delete started, kept like has_ever_run after
+        -- its runs are removed from History. The Store build's free trial is the cleanup
+        -- that ran first.
+        ALTER TABLE cleanups ADD COLUMN first_run_at TEXT;
+        UPDATE cleanups SET first_run_at = (SELECT MIN(ran_at) FROM runs WHERE runs.cleanup_id = cleanups.id);
         """,
     ];
 

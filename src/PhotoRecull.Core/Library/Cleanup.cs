@@ -32,6 +32,11 @@ public record Cleanup(
     // run starts, so it outlasts the run's History entry being removed.
     public bool HasEverRun { get; init; }
 
+    // When its first stage or delete started, saved with HasEverRun and never changed
+    // after. Null if it never ran, or ran before this was saved and History no longer
+    // has its runs.
+    public DateTimeOffset? FirstRunAt { get; init; }
+
     // Only a cleanup that has never staged or deleted: once a run has started,
     // files may have moved even if no photo completed (a Live Photo's video
     // went, then its photo failed), there's no going back to before, and History

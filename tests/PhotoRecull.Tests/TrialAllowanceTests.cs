@@ -5,11 +5,12 @@ namespace PhotoRecull.Tests;
 
 public class TrialAllowanceTests
 {
-    private static Cleanup CleanupPickedOn(int day, bool hasEverRun) =>
+    private static Cleanup CleanupPickedOn(int day, bool hasEverRun, int? firstRunDay = null) =>
         new(Guid.NewGuid(), new(2026, 10, 1), new(2026, 10, 31), CleanupState.ReadyToAct, PickedCount: 1,
             PickedAt: new DateTimeOffset(2026, 11, day, 12, 0, 0, TimeSpan.Zero), LastActivityAt: DateTimeOffset.UtcNow)
         {
             HasEverRun = hasEverRun,
+            FirstRunAt = hasEverRun ? new DateTimeOffset(2026, 11, firstRunDay ?? day, 13, 0, 0, TimeSpan.Zero) : null,
         };
 
     [Fact]
@@ -52,13 +53,26 @@ public class TrialAllowanceTests
     }
 
     [Fact]
-    public void SeveralCleanupsRan_TheEarliestPickedIsTheFreeOne()
+    public void SeveralCleanupsRan_TheOneThatRanFirstIsFree_WhicheverWasPickedFirst()
     {
-        // A purchase that was refunded leaves several that ran; only one stays free.
-        var later = CleanupPickedOn(8, hasEverRun: true);
-        var earlier = CleanupPickedOn(3, hasEverRun: true);
+        // Picked A, then picked and staged B in the trial; bought, ran A, then the purchase
+        // was refunded. B stays free to finish, and A isn't.
+        var a = CleanupPickedOn(1, hasEverRun: true, firstRunDay: 10);
+        var b = CleanupPickedOn(2, hasEverRun: true, firstRunDay: 3);
 
-        Assert.Equal(earlier, TrialAllowance.FreeCleanup([later, earlier]));
-        Assert.False(TrialAllowance.MayAct(later.Id, [later, earlier]));
+        Assert.Equal(b, TrialAllowance.FreeCleanup([a, b]));
+        Assert.True(TrialAllowance.MayAct(b.Id, [a, b]));
+        Assert.False(TrialAllowance.MayAct(a.Id, [a, b]));
+    }
+
+    [Fact]
+    public void ACleanupWithNoFirstRunTime_ComesAfterThoseWithOne()
+    {
+        // Ran before first runs were saved, and History no longer has its runs.
+        var unknown = CleanupPickedOn(1, hasEverRun: true) with { FirstRunAt = null };
+        var known = CleanupPickedOn(5, hasEverRun: true);
+
+        Assert.Equal(known, TrialAllowance.FreeCleanup([unknown, known]));
+        Assert.Equal(unknown, TrialAllowance.FreeCleanup([unknown]));
     }
 }

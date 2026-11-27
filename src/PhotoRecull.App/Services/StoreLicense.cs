@@ -18,7 +18,8 @@ public enum PurchaseOutcome
 /// an unlimited free trial, and the trial stages and deletes in one cleanup
 /// (<see cref="TrialAllowance"/>). Every other build (dotnet run, a fork, the command-line
 /// app) is the open-source app and never limited. Setting PHOTORECULL_SIMULATE_TRIAL=1
-/// makes one act as a trial, to try the purchase screens without the Store.
+/// makes one of those act as a trial, to try the purchase screens without the Store. The
+/// Store build ignores it: there, its simulated purchase would unlock the app for free.
 /// </summary>
 internal static class StoreLicense
 {

@@ -11,11 +11,18 @@ namespace PhotoRecull.Core.Licensing;
 public static class TrialAllowance
 {
     /// <summary>
-    /// The cleanup the trial's free stage and delete went to, if one has used it: the first
-    /// cleanup that ever ran.
+    /// The cleanup the trial's free stage and delete went to, if one has used it: the cleanup
+    /// whose first stage or delete started first. Picking again doesn't change it, and nor
+    /// do later runs after a purchase that was refunded.
     /// </summary>
     public static Cleanup? FreeCleanup(IEnumerable<Cleanup> cleanups) =>
-        cleanups.Where(c => c.HasEverRun).OrderBy(c => c.PickedAt).FirstOrDefault();
+        cleanups
+            .Where(c => c.HasEverRun)
+            // A cleanup that ran before first runs were saved, and has no runs left in
+            // History, has no time: it comes after those that do, oldest pick first.
+            .OrderBy(c => c.FirstRunAt ?? DateTimeOffset.MaxValue)
+            .ThenBy(c => c.PickedAt)
+            .FirstOrDefault();
 
     /// <summary>
     /// Whether a trial may stage or delete in <paramref name="cleanupId"/>: when no cleanup has

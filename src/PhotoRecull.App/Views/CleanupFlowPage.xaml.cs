@@ -109,14 +109,14 @@ public sealed partial class CleanupFlowPage : Page
     private async void OnStageClick(object sender, RoutedEventArgs e) =>
         await ConfirmOnceAsync(async () =>
         {
-            if (await PurchaseDialog.AllowActAsync(XamlRoot, ViewModel.CleanupId))
+            if (await ViewModel.MayActAsync(id => PurchaseDialog.AllowActAsync(XamlRoot, id)))
                 await StageAsync();
         });
 
     private async void OnDeleteClick(object sender, RoutedEventArgs e) =>
         await ConfirmOnceAsync(async () =>
         {
-            if (await PurchaseDialog.AllowActAsync(XamlRoot, ViewModel.CleanupId))
+            if (await ViewModel.MayActAsync(id => PurchaseDialog.AllowActAsync(XamlRoot, id)))
                 await DeleteAsync();
         });
 

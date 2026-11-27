@@ -46,7 +46,10 @@ is compiled with `PHOTORECULL_STORE`, which `-p:PhotoRecullPackage=true` defines
   in one cleanup, the first one a stage or delete starts in, which stays free to finish
   (deleting what it staged, moving photos back, Run again). Stage or Delete in any other
   cleanup asks the user to buy first; nothing moves until they do.
-  The rule is `PhotoRecull.Core.Licensing.TrialAllowance`.
+  The rule is `PhotoRecull.Core.Licensing.TrialAllowance`. Which cleanup is the free one
+  comes from when its first stage or delete started (saved with the cleanup), so picking
+  again, or runs after a purchase that was refunded, never move it. Deleting from Review
+  staged asks too; moving photos back never does.
 - **How the app knows:** `Services/StoreLicense.cs` asks the Store for the app's license
   (`StoreContext.GetAppLicenseAsync`): bought means active and not a trial. Its **Buy**
   buttons, in the purchase prompt and in Settings › PhotoRecull, open the Store's own
@@ -54,9 +57,10 @@ is compiled with `PHOTORECULL_STORE`, which `-p:PhotoRecullPackage=true` defines
   rather than hold back someone who paid.
 - **Uninstalling** deletes the app's database, so a reinstall gets a new free cleanup. That's
   accepted: it's one month at a time, and the cleanups' history goes with it.
-- **Trying the screens without the Store:** run any build with the environment variable
-  `PHOTORECULL_SIMULATE_TRIAL=1`. It acts as a trial with a made-up price, and its Buy
-  succeeds after half a second:
+- **Trying the screens without the Store:** run a build from source (not the Store build)
+  with the environment variable `PHOTORECULL_SIMULATE_TRIAL=1`. It acts as a trial with a
+  made-up price, and its Buy succeeds after half a second. The Store build ignores the
+  variable, since its simulated purchase would unlock the app for free:
   ```powershell
   $env:PHOTORECULL_SIMULATE_TRIAL = '1'; dotnet run --project src/PhotoRecull.App
   ```
