@@ -14,20 +14,22 @@ public record TakeoutRead(List<DateTimeOffset> Timestamps, int SidecarsRead, int
 /// extracting) or the folder they were extracted to.
 ///
 /// Takeout is a snapshot: a photo deleted from Google Photos after the export still counts
-/// as kept. That only ever keeps a copy, never removes one.
+/// as kept. That only ever keeps a copy, never removes one. For the same reason, anything
+/// that could leave a photo out stops the read instead: a .json that can't be read, or a
+/// sidecar whose capture time can't be.
 /// </summary>
 public static class GoogleTakeout
 {
     /// <summary>Reads every .zip file and folder given; a folder is read with its subfolders.</summary>
     public static TakeoutRead ReadCaptureTimes(IEnumerable<string> paths, CancellationToken cancellationToken = default)
     {
-        var seen = new HashSet<(string Title, long Seconds)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         var timestamps = new List<DateTimeOffset>();
         int sidecars = 0, trashed = 0;
 
-        void Add(Stream json)
+        void Add(Stream json, string name)
         {
-            switch (ReadSidecar(json))
+            switch (ReadSidecar(json, name))
             {
                 case Sidecar { IsTrashed: true }:
                     sidecars++;
@@ -35,11 +37,11 @@ public static class GoogleTakeout
                     break;
                 case Sidecar sidecar:
                     sidecars++;
-                    // An album's folder holds its own copy of each photo and sidecar: the
-                    // same photo, with the same title and time, counts once. Two burst
-                    // frames kept in the same second have different titles.
-                    if (seen.Add((sidecar.Title, sidecar.Seconds)))
-                        timestamps.Add(DateTimeOffset.FromUnixTimeSeconds(sidecar.Seconds));
+                    // An album's folder can hold its own copy of a photo and its sidecar:
+                    // the same item, with the same Google Photos link, counts once. Without
+                    // a link every sidecar counts, which can only keep more.
+                    if (sidecar.Url is null || seen.Add(sidecar.Url))
+                        timestamps.Add(sidecar.TakenAt);
                     break;
             }
         }
@@ -52,7 +54,7 @@ public static class GoogleTakeout
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     using var stream = File.OpenRead(file);
-                    Add(stream);
+                    Add(stream, file);
                 }
             }
             else if (File.Exists(path) && path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
@@ -64,7 +66,7 @@ public static class GoogleTakeout
                     if (!entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                         continue;
                     using var stream = entry.Open();
-                    Add(stream);
+                    Add(stream, $"{path} › {entry.FullName}");
                 }
             }
             else
@@ -77,43 +79,55 @@ public static class GoogleTakeout
         return new TakeoutRead(timestamps, sidecars, trashed);
     }
 
-    private sealed record Sidecar(string Title, long Seconds, bool IsTrashed);
+    private sealed record Sidecar(DateTimeOffset TakenAt, string? Url, bool IsTrashed);
 
-    // Null for JSON that isn't a photo's sidecar: an album's metadata.json, Takeout's own
-    // files, or one that can't be read.
-    private static Sidecar? ReadSidecar(Stream json)
+    // Null for JSON that isn't a photo's sidecar: one with no photoTakenTime, such as an
+    // album's metadata.json or Takeout's own files. JSON that can't be read, or a
+    // photoTakenTime that can't, throws: that photo would otherwise be left out, and its
+    // copies in the backups would look deleted.
+    private static Sidecar? ReadSidecar(Stream json, string name)
     {
+        JsonDocument document;
         try
         {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("photoTakenTime", out var taken)
-                || taken.ValueKind != JsonValueKind.Object
-                || !taken.TryGetProperty("timestamp", out var timestamp)
-                || !TryReadSeconds(timestamp, out long seconds)
-                || seconds <= 0)
-                return null;
-            string title = root.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
-            bool isTrashed = root.TryGetProperty("trashed", out var trashed) && trashed.ValueKind == JsonValueKind.True;
-            return new Sidecar(title, seconds, isTrashed);
+            document = JsonDocument.Parse(json);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            return null;
+            throw new InvalidDataException($"Can't read {name}: it isn't valid JSON. Export again, or remove it if it isn't Google Photos'.", ex);
+        }
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("photoTakenTime", out var taken))
+                return null;
+            if (taken.ValueKind != JsonValueKind.Object
+                || !taken.TryGetProperty("timestamp", out var timestamp)
+                || !TryReadSeconds(timestamp, out long seconds))
+                throw new InvalidDataException($"Can't read the capture time in {name}.");
+            // Zero is Takeout's "no capture time": such an item has nothing to match by.
+            if (seconds == 0)
+                return null;
+            string? url = root.TryGetProperty("url", out var u) && u.ValueKind == JsonValueKind.String && u.GetString() is { Length: > 0 } link ? link : null;
+            bool isTrashed = root.TryGetProperty("trashed", out var trashed) && trashed.ValueKind == JsonValueKind.True;
+            return new Sidecar(DateTimeOffset.FromUnixTimeSeconds(seconds), url, isTrashed);
         }
     }
 
-    // Takeout writes the seconds as a string ("1695123456"); a number is read too.
+    // Takeout writes the seconds as a string ("1695123456"); a number is read too. Before
+    // 1970 they're negative. Out of DateTimeOffset's range counts as unreadable.
     private static bool TryReadSeconds(JsonElement value, out long seconds)
     {
         seconds = 0;
-        return value.ValueKind switch
+        bool read = value.ValueKind switch
         {
-            JsonValueKind.String => long.TryParse(value.GetString(), System.Globalization.NumberStyles.None,
+            JsonValueKind.String => long.TryParse(value.GetString(), System.Globalization.NumberStyles.AllowLeadingSign,
                 System.Globalization.CultureInfo.InvariantCulture, out seconds),
             JsonValueKind.Number => value.TryGetInt64(out seconds),
             _ => false,
         };
+        return read
+            && seconds >= DateTimeOffset.MinValue.ToUnixTimeSeconds()
+            && seconds <= DateTimeOffset.MaxValue.ToUnixTimeSeconds();
     }
 }

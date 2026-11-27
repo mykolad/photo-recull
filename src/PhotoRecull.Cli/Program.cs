@@ -54,7 +54,14 @@ for (int i = 0; i < args.Length; i++)
         case "--dry-run":     dryRun          = true;      break;
         case "--delete":      deleteMode      = true;      break;
         case "--all-cameras": allCameras      = true;      break;
-        case "--takeout":     takeoutPaths.Add(args[++i]);  break;
+        case "--takeout":
+            if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine("ERROR: --takeout needs a Google Takeout .zip file or folder after it.");
+                return 1;
+            }
+            takeoutPaths.Add(args[++i]);
+            break;
         case "--yes":
         case "--force":       assumeYes       = true;      break;
         case "--from":        fromDate        = ParseDateArg(args[++i], "--from", startOfMonth: true);  break;

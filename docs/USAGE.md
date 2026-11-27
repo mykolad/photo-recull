@@ -74,7 +74,9 @@ dotnet run --project src/PhotoRecull.Cli -- --path "<Camera Roll folder>" --from
   select **Google Photos**, and choose **.zip** (a `.tgz` export must be extracted first).
   Google emails you when it's ready, which can take hours for a large library.
 - **What counts as kept:** every item in the export, once: an album's own copy of a photo
-  counts once, and items the export marks as in the trash are left out.
+  (same Google Photos link) counts once, and items the export marks as in the trash are
+  left out. A `.json` file that can't be read stops the run, naming the file, rather than
+  leave a photo out.
 - **New:** compare a dry run with `--takeout` against one with a pick, for a month you
   know, before you stage or delete from a Takeout run.
 - **It's a snapshot:** a photo deleted from Google Photos after the export still counts as

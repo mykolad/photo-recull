@@ -11,13 +11,14 @@ public class GoogleTakeoutTests : IDisposable
 
     private static readonly DateTimeOffset Taken = new(2026, 10, 25, 9, 23, 23, TimeSpan.Zero);
 
-    private static string Sidecar(string title, DateTimeOffset taken, bool trashed = false) => $$"""
+    // Each item has its own Google Photos link unless one is given (an album's copy of a
+    // photo has the same link), or none at all with url: "".
+    private static string Sidecar(string title, DateTimeOffset taken, bool trashed = false, string? url = null) => $$"""
         {
           "title": "{{title}}",
           "description": "",
           "creationTime": { "timestamp": "{{taken.AddDays(1).ToUnixTimeSeconds()}}", "formatted": "" },
-          "photoTakenTime": { "timestamp": "{{taken.ToUnixTimeSeconds()}}", "formatted": "" },
-          "url": "https://photos.google.com/photo/example"{{(trashed ? ",\n  \"trashed\": true" : "")}}
+          "photoTakenTime": { "timestamp": "{{taken.ToUnixTimeSeconds()}}", "formatted": "" }{{(url == "" ? "" : $",\n  \"url\": \"{url ?? $"https://photos.google.com/photo/{Guid.NewGuid():N}"}\"")}}{{(trashed ? ",\n  \"trashed\": true" : "")}}
         }
         """;
 
@@ -43,10 +44,11 @@ public class GoogleTakeoutTests : IDisposable
     }
 
     [Fact]
-    public void AlbumCopies_CountOnce_ButBurstFramesInTheSameSecondCountTwice()
+    public void AnAlbumsCopy_CountsOnce_ByItsGooglePhotosLink()
     {
-        Write("Takeout/Google Photos/Photos from 2026/IMG_4821.HEIC.json", Sidecar("IMG_4821.HEIC", Taken));
-        Write("Takeout/Google Photos/Holiday/IMG_4821.HEIC.json", Sidecar("IMG_4821.HEIC", Taken));
+        const string link = "https://photos.google.com/photo/AF1Qip-4821";
+        Write("Takeout/Google Photos/Photos from 2026/IMG_4821.HEIC.json", Sidecar("IMG_4821.HEIC", Taken, url: link));
+        Write("Takeout/Google Photos/Holiday/IMG_4821.HEIC.json", Sidecar("IMG_4821.HEIC", Taken, url: link));
         Write("Takeout/Google Photos/Photos from 2026/IMG_4823.HEIC.json", Sidecar("IMG_4823.HEIC", Taken));
 
         var read = GoogleTakeout.ReadCaptureTimes([_folder]);
@@ -55,12 +57,58 @@ public class GoogleTakeoutTests : IDisposable
     }
 
     [Fact]
-    public void TrashedPhotos_AlbumMetadataAndUnreadableJson_AreLeftOut()
+    public void TwoItemsWithTheSameNameAndSecond_BothCount()
+    {
+        // Two cameras' IMG_0001.JPG taken in the same second are two items in Google Photos:
+        // counting them once would let only one of their copies stay.
+        Write("Takeout/Google Photos/Photos from 2026/IMG_0001.JPG.json", Sidecar("IMG_0001.JPG", Taken));
+        Write("Takeout/Google Photos/Photos from 2026/IMG_0001(1).JPG.json", Sidecar("IMG_0001.JPG", Taken));
+
+        Assert.Equal([Taken, Taken], GoogleTakeout.ReadCaptureTimes([_folder]).Timestamps);
+    }
+
+    [Fact]
+    public void SidecarsWithoutALink_EachCount()
+    {
+        Write("Takeout/Google Photos/Photos from 2026/IMG_1.HEIC.json", Sidecar("IMG_1.HEIC", Taken, url: ""));
+        Write("Takeout/Google Photos/Holiday/IMG_1.HEIC.json", Sidecar("IMG_1.HEIC", Taken, url: ""));
+
+        Assert.Equal([Taken, Taken], GoogleTakeout.ReadCaptureTimes([_folder]).Timestamps);
+    }
+
+    [Fact]
+    public void PhotosFromBefore1970_AreRead()
+    {
+        var old = new DateTimeOffset(1965, 7, 4, 15, 30, 0, TimeSpan.Zero);
+        Write("Takeout/Google Photos/Photos from 1965/scan.jpg.json", Sidecar("scan.jpg", old));
+
+        Assert.Equal([old], GoogleTakeout.ReadCaptureTimes([_folder]).Timestamps);
+    }
+
+    [Fact]
+    public void UnreadableJson_StopsTheRead_NamingTheFile()
+    {
+        Write("Takeout/Google Photos/Photos from 2026/IMG_1.HEIC.json", Sidecar("IMG_1.HEIC", Taken));
+        var broken = Write("Takeout/Google Photos/Photos from 2026/IMG_2.HEIC.json", "{ \"title\": \"IMG_2.HEIC\", \"photoTak");
+
+        var error = Assert.Throws<InvalidDataException>(() => GoogleTakeout.ReadCaptureTimes([_folder]));
+        Assert.Contains(broken, error.Message);
+    }
+
+    [Fact]
+    public void AnUnreadableCaptureTime_StopsTheRead()
+    {
+        Write("Takeout/Google Photos/Photos from 2026/IMG_1.HEIC.json", """{ "title": "IMG_1.HEIC", "photoTakenTime": { "timestamp": "soon" } }""");
+
+        Assert.Throws<InvalidDataException>(() => GoogleTakeout.ReadCaptureTimes([_folder]));
+    }
+
+    [Fact]
+    public void TrashedPhotos_AlbumMetadataAndItemsWithoutATime_AreLeftOut()
     {
         Write("Takeout/Google Photos/Photos from 2026/IMG_1.HEIC.json", Sidecar("IMG_1.HEIC", Taken));
         Write("Takeout/Google Photos/Trash/IMG_2.HEIC.json", Sidecar("IMG_2.HEIC", Taken.AddHours(1), trashed: true));
         Write("Takeout/Google Photos/Holiday/metadata.json", """{ "title": "Holiday", "date": { "timestamp": "1700000000" } }""");
-        Write("Takeout/Google Photos/Photos from 2026/broken.json", "{ not json");
         Write("Takeout/Google Photos/Photos from 2026/IMG_3.HEIC.json", """{ "title": "IMG_3.HEIC", "photoTakenTime": { "timestamp": "0" } }""");
 
         var read = GoogleTakeout.ReadCaptureTimes([_folder]);
