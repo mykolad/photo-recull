@@ -145,8 +145,10 @@ folder: OneDrive, a NAS such as Synology, or any folder File Explorer can open.
 
 **Can I undo it?**
 Yes, if you stage first: photos move to a review folder and nothing is deleted, so you can
-move any back. Deleting from your PC sends photos to the Recycle Bin. Deleting from a NAS
-skips the Windows Recycle Bin, so turn on the NAS's own recycle bin first:
+move any back. In the Windows app, deleting from your PC sends photos to the Recycle Bin;
+if Windows can't recycle a file, it asks before deleting it for good. The command-line
+version's `--delete` is always permanent. Deleting from a NAS skips the Windows Recycle
+Bin, so turn on the NAS's own recycle bin first:
 [how to, and what PhotoRecull checks](nas-recycle-bin.md).
 
 **What about photos from other phones or cameras?**
