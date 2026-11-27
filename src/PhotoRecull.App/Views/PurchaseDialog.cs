@@ -37,7 +37,7 @@ internal static class PurchaseDialog
         });
         content.Children.Add(new TextBlock
         {
-            Text = "Buy PhotoRecull once to stage and delete in this cleanup and every one after. It's yours on every PC you sign in to with the same Microsoft account. Picking, scanning and review stay free, and nothing in this cleanup has moved.",
+            Text = "Buy PhotoRecull once to stage and delete in this cleanup and every one after. It's yours on every PC you sign in to with the same Microsoft account. Picking, scanning and review stay free, and nothing more is moved or deleted unless you buy.",
             TextWrapping = TextWrapping.Wrap,
         });
         dialog.Content = content;
