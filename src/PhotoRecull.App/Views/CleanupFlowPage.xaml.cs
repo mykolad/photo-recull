@@ -120,6 +120,15 @@ public sealed partial class CleanupFlowPage : Page
                 await DeleteAsync();
         });
 
+    // A retry stages or deletes too, so it's asked about like Stage and Delete: always
+    // allowed in the free cleanup or a bought copy, not after a refund in another cleanup.
+    private async void OnRetryFailedClick(object sender, RoutedEventArgs e) =>
+        await ConfirmOnceAsync(async () =>
+        {
+            if (await ViewModel.MayActAsync(id => PurchaseDialog.AllowActAsync(XamlRoot, id)))
+                await ViewModel.RetryFailedCommand.ExecuteAsync(null);
+        });
+
     private async void OnDiscardClick(object sender, RoutedEventArgs e) => await ConfirmOnceAsync(DiscardAsync);
 
     private async Task DiscardAsync()
